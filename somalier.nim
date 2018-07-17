@@ -21,17 +21,20 @@ proc alts*(c:count): int8 {.inline.} =
   ## AB < 0.15 is called as hom-ref
   ## AB > 0.75 is hom-alt
   ## 0.15 <= AB <= 0.75 is het
-  if c.nref == 0 and c.nalt == 0:
+  if c.nref + c.nalt < 5:
     return -1
   if c.nalt == 0:
     return 0
 
   var ab = c.ab
 
-  if ab < 0.1:
+  if ab < 0.05:
     return 0
-  if ab > 0.7:
+  if ab > 0.9:
     return 2
+
+  if ab < 0.25 or ab > 0.75: return -1 # exclude mid-range hets.
+
   return 1
 
 proc count_alleles(b:Bam, site:Site): count =
@@ -80,7 +83,7 @@ proc get_bam_alts(bams:seq[BAM], site:Site, nalts: var seq[int8]): bool =
     var c = bam.count_alleles(site)
     if c.alts != -1:
       nknown += 1
-    if c.nref  > 0:
+    if c.nref > 0:
       nref = 1
     nalts.add(c.alts)
   if nref == 0:
@@ -194,10 +197,10 @@ iterator site_relatedness(bams:seq[Bam], sample_names: seq[string], sites:seq[Si
       yield relation(sample_a: sample_names[sj],
                      sample_b: sample_names[sk],
                      hets_a: hets[sj], hets_b: hets[sk],
-                     ibs0: ibs[sk * n_samples + sj],
+                     ibs0: ibs[sj * n_samples + sk],
+                     shared_hets: ibs[sk * n_samples + sj],
                      ibs2: n[sk * n_samples + sj],
                      n: n[sj * n_samples + sk],
-                     shared_hets: ibs[sk * n_samples + sj],
                      rel: relatedness)
 
 
