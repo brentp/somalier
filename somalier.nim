@@ -1,5 +1,7 @@
+{.experimental.}
 import parseopt
 import ospaths
+import threadpool
 import hts
 import strutils
 
@@ -61,14 +63,16 @@ proc count_alleles(b:Bam, site:Site): count =
 
 proc writeHelp() =
   stderr.write """
-somalier vcf [options] <vcf/bcf>...
+somalier vcf [options] <bam/cram>...
 
 Arguments:
-  <vcf/bcf> file(s) containing variant calls
+  <bam/cram> file(s) for samples of interest.
 
 Options:
 
-  -s --sites <txt>    optional text file with lines of sites to use for relatedness estimation.
+  -s --sites <txt>        text file with lines of sites to use for relatedness estimation.
+  -t --threads <int>        number of processors to use for parallelization.
+  -f --fasta <reference>  path to reference fasta file.
 
   """
 
@@ -91,7 +95,7 @@ proc get_bam_alts(bams:seq[BAM], site:Site, nalts: var seq[int8], min_depth:int=
     stderr.write_line "[somalier] no reference alleles found at: ", $site
 
 
-  result = nknown.float / bams.len.float >= 0.7
+  result = nknown.float / bams.len.float >= 0.66
 
 proc get_alts(vcfs:seq[VCF], site:string, nalts: var seq[int8], cache: var seq[int32]): bool =
   if nalts.len != 0:
@@ -117,7 +121,7 @@ proc get_alts(vcfs:seq[VCF], site:string, nalts: var seq[int8], cache: var seq[i
 
     nknown += found
 
-  result = nknown.float / n.float >= 0.7
+  result = nknown.float / n.float >= 0.66
 
 proc krelated(alts: seq[int8], ibs: var seq[uint16], n: var seq[uint16], hets: var seq[uint16], n_samples: int): int =
 
@@ -165,52 +169,72 @@ type relation = object
   ibs2: uint16
   n: uint16
 
-iterator site_relatedness(bams:seq[Bam], sample_names: seq[string], sites:seq[Site]): relation =
+type relation_matrices {.shallow.} = object
+   ibs: seq[uint16]
+   n: seq[uint16]
+   hets: seq[uint16]
+   n_samples: int
+
+proc relmatrix(paths:seq[string], sites:seq[Site], p: ptr relation_matrices): bool {.thread.} =
+
+  var bams = newSeq[Bam](len(paths))
+  for i, p in paths:
+    var b:Bam
+    open(b, p, threads=2, index=true)
+    bams[i] = b
 
   var nalts = newSeqOfCap[int8](16)
+  var rel = p[]
+  if rel.hets == nil:
+    return false
+
+  zeroMem(rel.hets[0].addr, sizeof(rel.hets[0]) * rel.hets.len)
+  zeroMem(rel.n[0].addr, sizeof(rel.n[0]) * rel.n.len)
+  zeroMem(rel.ibs[0].addr, sizeof(rel.ibs[0]) * rel.ibs.len)
 
   var n_samples = bams.len
 
-  var ibs = newSeq[uint16](n_samples * n_samples)
-  var n = newSeq[uint16](n_samples * n_samples)
-  var hets = newSeq[uint16](n_samples)
-
-  for i, s in sites:
-    if i mod 50 == 0:
-      stderr.write_line "site: " & $i & " of " & $len(sites) & " @ " & $s
+  # TODO: allow mix of BAM/VCF
+  for s in sites:
     if not get_bam_alts(bams, s, nalts):
       continue
 
-    discard krelated(nalts, ibs, n, hets, n_samples)
+    discard krelated(nalts, rel.ibs, rel.n, rel.hets, n_samples)
 
-  for sj in 0..<n_samples - 1:
-    for sk in sj + 1..<n_samples:
+  return true
+
+
+iterator relatedness(r:relation_matrices, sample_names:seq[string]): relation =
+
+  for sj in 0..<r.n_samples - 1:
+    for sk in sj + 1..<r.n_samples:
       if sj == sk: quit "logic error"
 
-      var bottom = min(hets[sk], hets[sj]).float64
+      var bottom = min(r.hets[sk], r.hets[sj]).float64
       if bottom == 0:
-        bottom = max(hets[sk], hets[sj]).float64
+        bottom = max(r.hets[sk], r.hets[sj]).float64
       if bottom == 0:
         # can't calculate relatedness
         bottom = -1'f64
 
-      var relatedness = (ibs[sk * n_samples + sj].float64 - 2 * ibs[sj * n_samples + sk].float64) / bottom
+      var grelatedness = (r.ibs[sk * r.n_samples + sj].float64 - 2 * r.ibs[sj * r.n_samples + sk].float64) / bottom
 
       yield relation(sample_a: sample_names[sj],
                      sample_b: sample_names[sk],
-                     hets_a: hets[sj], hets_b: hets[sk],
-                     ibs0: ibs[sj * n_samples + sk],
-                     shared_hets: ibs[sk * n_samples + sj],
-                     ibs2: n[sk * n_samples + sj],
-                     n: n[sj * n_samples + sk],
-                     rel: relatedness)
+                     hets_a: r.hets[sj], hets_b: r.hets[sk],
+                     ibs0: r.ibs[sj * r.n_samples + sk],
+                     shared_hets: r.ibs[sk * r.n_samples + sj],
+                     ibs2: r.n[sk * r.n_samples + sj],
+                     n: r.n[sj * r.n_samples + sk],
+                     rel: grelatedness)
 
 
-proc toSite(toks: seq[string], rseq:var string): Site =
+proc toSite(toks: seq[string], fai:Fai): Site =
   result = Site()
   result.chrom = toks[0]
   result.position = parseInt(toks[1]) - 1
-  result.ref_allele = rseq[result.position]
+  var base = fai.get(result.chrom, result.position, result.position)
+  result.ref_allele = base[0]
 
 
 proc main() =
@@ -218,20 +242,23 @@ proc main() =
   var p = initOptParser()
 
   var
-    vcf_paths = newSeq[string]()
+    bv_paths = newSeq[string]()
     sites_path: string
     fasta_path: string
+    threads = 1
 
   for kind, key, val in p.getopt():
     case kind
     of cmdArgument:
-      vcf_paths.add(key)
+      bv_paths.add(key)
     of cmdLongOption, cmdShortOption:
       case key
       of "help", "h":
         writeHelp()
       of "vcf":
         continue
+      of "threads":
+        threads = parseInt(val)
       of "sites", "s":
         sites_path = val
       of "fasta", "f":
@@ -248,43 +275,106 @@ proc main() =
     echo "must set fasta path"
     writeHelp()
     quit(2)
-
-  
+  if threads < 1: threads = 1
 
   var
     fai: Fai
-    cseq: string
     sites = newSeqOfCap[Site](10000)
-    last_chrom: string = ""
 
   if not open(fai, fasta_path):
     quit "couldn't open fasta with fai:" & fasta_path
 
   for line in sites_path.lines:
     var toks = line.strip().split(":")
-    if toks[0] != last_chrom:
-      #echo "getting chrom:", toks[0]
-      last_chrom = toks[0]
-      cseq = fai.get(last_chrom)
+    #if toks[0] != last_chrom:
+    #  #echo "getting chrom:", toks[0]
+    #  last_chrom = toks[0]
+    #  cseq = fai.get(last_chrom)
 
-    sites.add(toSite(toks, cseq))
+    sites.add(toSite(toks, fai))
 
   if len(sites) > 65535:
     quit "cant use more than 65535 sites"
 
-  var vcfs = newSeq[VCF](len(vcf_paths))
-  var bams = newSeq[Bam](len(vcf_paths))
-  var sample_names = newSeq[string](len(vcf_paths))
+  var sample_names = newSeq[string](len(bv_paths))
 
-  for i, path in vcf_paths:
-    var bam:Bam
-    open(bam, path, index=true, threads=2)
-    bams[i] = bam
+  for i, path in bv_paths:
+    #var bam:Bam
+    #open(bam, path, index=true, threads=2)
+    #bams[i] = bam
     var s = splitFile(path)
     sample_names[i] = s.name
+  var
+    n_samples = sample_names.len
+    batch_size = 30 #(len(sites) / threads).int
 
-  for rel in site_relatedness(bams, sample_names, sites):
+
+  if threads > len(sites):
+    quit "can't use more threads than sites"
+  if threads < 2:
+    batch_size = len(sites)
+  elif threads * batch_size > sites.len:
+    if batch_size > 20:
+      batch_size = 20
+  if threads * batch_size > sites.len:
+    stderr.write_line "[somalier] setting to lower number of threads to avoid tiny batches of work"
+    threads = (sites.len / batch_size).int
+  var
+    results = newSeq[relation_matrices](threads)
+    responses = newSeq[FlowVarBase](threads)
+
+  stderr.write_line "[somalier] batch-size:", batch_size, " sites:", len(sites), " threads: " & $threads
+
+  # aggregated from all threads.
+  var final = relation_matrices(ibs: newSeq[uint16](n_samples * n_samples),
+                              n: newSeq[uint16](n_samples * n_samples),
+                              hets: newSeq[uint16](n_samples),
+                              n_samples:n_samples)
+
+
+  for j in 0..<responses.len:
+    results[j].ibs = newSeq[uint16](n_samples * n_samples)
+    results[j].n = newSeq[uint16](n_samples * n_samples)
+    results[j].hets = newSeq[uint16](n_samples)
+    results[j].n_samples = n_samples
+    responses[j] = spawn relmatrix(bv_paths, sites[(j * batch_size)..<((j + 1) * batch_size)], results[j].addr)
+
+
+  var jobi = responses.len
+  while results.len != 0:
+    var index = awaitAny(responses)
+    if index == -1:
+      quit "[somalier] got unexpected value from await"
+    var relm = results[index]
+
+    if final.n_samples != relm.n_samples:
+      quit "[somalier] got differing numbers of samples"
+
+    for i, v in relm.n:
+      final.n[i] += v
+    for i, v in relm.hets:
+      final.hets[i] += v
+    for i, v in relm.ibs:
+      final.ibs[i] += v
+
+    # send of next job
+    if jobi * batch_size < sites.len:
+      var
+        imin = jobi * batch_size
+        imax = min(sites.len, (jobi + 1) * batch_size)
+      #echo "sending ", imin, "..", imax, " of ", sites.len, " to index:", index
+      responses[index] = spawn relmatrix(bv_paths, sites[imin..<imax], results[index].addr)
+    else:
+      results.del(index)
+      responses.del(index)
+      #echo "deleting ", index, "left: ", results.len
+
+    jobi += 1
+    
+
+  for rel in relatedness(final, sample_names):
     echo rel
+
 
 when isMainModule:
   main()
