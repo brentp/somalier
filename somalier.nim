@@ -16,12 +16,12 @@ type count* = object
 proc ab*(c:count): float {.inline.} =
   return c.nalt.float / (c.nalt + c.nref).float
 
-proc alts*(c:count): int8 {.inline.} =
+proc alts*(c:count, min_depth:int): int8 {.inline.} =
   ## give an estimate of number of alts from counts of ref and alt
   ## AB < 0.15 is called as hom-ref
   ## AB > 0.75 is hom-alt
   ## 0.15 <= AB <= 0.75 is het
-  if c.nref + c.nalt < 5:
+  if c.nref + c.nalt < min_depth:
     return -1
   if c.nalt == 0:
     return 0
@@ -72,7 +72,7 @@ Options:
 
   """
 
-proc get_bam_alts(bams:seq[BAM], site:Site, nalts: var seq[int8]): bool =
+proc get_bam_alts(bams:seq[BAM], site:Site, nalts: var seq[int8], min_depth:int=6): bool =
   if nalts.len != 0:
     nalts.set_len(0)
 
@@ -81,16 +81,17 @@ proc get_bam_alts(bams:seq[BAM], site:Site, nalts: var seq[int8]): bool =
 
   for bam in bams:
     var c = bam.count_alleles(site)
-    if c.alts != -1:
+    var calts = c.alts(min_depth)
+    if calts != -1:
       nknown += 1
     if c.nref > 0:
       nref = 1
-    nalts.add(c.alts)
+    nalts.add(calts)
   if nref == 0:
     stderr.write_line "[somalier] no reference alleles found at: ", $site
 
 
-  result = nknown.float / bams.len.float >= 0.8
+  result = nknown.float / bams.len.float >= 0.7
 
 proc get_alts(vcfs:seq[VCF], site:string, nalts: var seq[int8], cache: var seq[int32]): bool =
   if nalts.len != 0:
@@ -116,7 +117,7 @@ proc get_alts(vcfs:seq[VCF], site:string, nalts: var seq[int8], cache: var seq[i
 
     nknown += found
 
-  result = nknown.float / n.float >= 0.8
+  result = nknown.float / n.float >= 0.7
 
 proc krelated(alts: seq[int8], ibs: var seq[uint16], n: var seq[uint16], hets: var seq[uint16], n_samples: int): int =
 
@@ -175,7 +176,8 @@ iterator site_relatedness(bams:seq[Bam], sample_names: seq[string], sites:seq[Si
   var hets = newSeq[uint16](n_samples)
 
   for i, s in sites:
-    echo i, "/", len(sites), " ", s
+    if i mod 50 == 0:
+      stderr.write_line "site: " & $i & " of " & $len(sites) & " @ " & $s
     if not get_bam_alts(bams, s, nalts):
       continue
 
@@ -202,7 +204,6 @@ iterator site_relatedness(bams:seq[Bam], sample_names: seq[string], sites:seq[Si
                      ibs2: n[sk * n_samples + sj],
                      n: n[sj * n_samples + sk],
                      rel: relatedness)
-
 
 
 proc toSite(toks: seq[string], rseq:var string): Site =
@@ -262,7 +263,7 @@ proc main() =
   for line in sites_path.lines:
     var toks = line.strip().split(":")
     if toks[0] != last_chrom:
-      echo "getting chrom:", toks[0]
+      #echo "getting chrom:", toks[0]
       last_chrom = toks[0]
       cseq = fai.get(last_chrom)
 
