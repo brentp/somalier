@@ -1,9 +1,10 @@
 {.experimental.}
+
+import hts
 import parseopt
 import ospaths
-import threadpool
-import hts
 import strutils
+import threadpool
 
 
 type Site* = object
@@ -63,7 +64,7 @@ proc count_alleles(b:Bam, site:Site): count =
 
 proc writeHelp() =
   stderr.write """
-somalier vcf [options] <bam/cram>...
+somalier rel [options] <bam/cram>...
 
 Arguments:
   <bam/cram> file(s) for samples of interest.
@@ -123,7 +124,7 @@ proc get_alts(vcfs:seq[VCF], site:string, nalts: var seq[int8], cache: var seq[i
 
   result = nknown.float / n.float >= 0.66
 
-proc krelated(alts: seq[int8], ibs: var seq[uint16], n: var seq[uint16], hets: var seq[uint16], n_samples: int): int =
+proc krelated(alts: var seq[int8], ibs: var seq[uint16], n: var seq[uint16], hets: var seq[uint16], n_samples: int): int =
 
   if alts[n_samples - 1] == 1:
     hets[n_samples-1] += 1
@@ -169,24 +170,34 @@ type relation = object
   ibs2: uint16
   n: uint16
 
-type relation_matrices {.shallow.} = object
+type relation_matrices = ref object
+   sites_tested: int
    ibs: seq[uint16]
    n: seq[uint16]
    hets: seq[uint16]
    n_samples: int
 
-proc relmatrix(paths:seq[string], sites:seq[Site], p: ptr relation_matrices): bool {.thread.} =
+proc relmatrix(paths:seq[string], sites:seq[Site], p: ptr relation_matrices, threads:int, idx:int): bool {.thread.} =
+  result = true
 
   var bams = newSeq[Bam](len(paths))
   for i, p in paths:
     var b:Bam
-    open(b, p, threads=2, index=true)
+    open(b, p, index=true, threads=threads)
     bams[i] = b
 
   var nalts = newSeqOfCap[int8](16)
   var rel = p[]
-  if rel.hets == nil:
+  if rel == nil:
     return false
+  rel.sites_tested = 0
+
+  var bad = false
+
+  if rel.hets == nil:
+    stderr.write_line "skipped:", len(sites), " ", $(rel.n == nil), " ", $(rel.ibs == nil)
+    result = false
+    return
 
   zeroMem(rel.hets[0].addr, sizeof(rel.hets[0]) * rel.hets.len)
   zeroMem(rel.n[0].addr, sizeof(rel.n[0]) * rel.n.len)
@@ -196,12 +207,14 @@ proc relmatrix(paths:seq[string], sites:seq[Site], p: ptr relation_matrices): bo
 
   # TODO: allow mix of BAM/VCF
   for s in sites:
+    rel.sites_tested += 1
     if not get_bam_alts(bams, s, nalts):
       continue
 
     discard krelated(nalts, rel.ibs, rel.n, rel.hets, n_samples)
 
-  return true
+  #p[] = rel
+  #stderr.write_line "in index:", idx, " tested ", (p[]).sites_tested
 
 
 iterator relatedness(r:relation_matrices, sample_names:seq[string]): relation =
@@ -250,12 +263,12 @@ proc main() =
   for kind, key, val in p.getopt():
     case kind
     of cmdArgument:
+      if key == "rel": continue
       bv_paths.add(key)
     of cmdLongOption, cmdShortOption:
       case key
       of "help", "h":
         writeHelp()
-      of "vcf":
         continue
       of "threads":
         threads = parseInt(val)
@@ -306,24 +319,24 @@ proc main() =
     sample_names[i] = s.name
   var
     n_samples = sample_names.len
-    batch_size = 30 #(len(sites) / threads).int
+    batch_size = 8 #(len(sites) / threads).int
 
 
   if threads > len(sites):
     quit "can't use more threads than sites"
   if threads < 2:
     batch_size = len(sites)
-  elif threads * batch_size > sites.len:
-    if batch_size > 20:
-      batch_size = 20
   if threads * batch_size > sites.len:
     stderr.write_line "[somalier] setting to lower number of threads to avoid tiny batches of work"
     threads = (sites.len / batch_size).int
+  var jobs = (sites.len / batch_size).int
+
   var
     results = newSeq[relation_matrices](threads)
     responses = newSeq[FlowVarBase](threads)
 
-  stderr.write_line "[somalier] batch-size:", batch_size, " sites:", len(sites), " threads: " & $threads
+
+  stderr.write_line "[somalier] batch-size:", batch_size, " sites:", len(sites), " threads:" & $threads, " jobs:", $jobs
 
   # aggregated from all threads.
   var final = relation_matrices(ibs: newSeq[uint16](n_samples * n_samples),
@@ -331,13 +344,14 @@ proc main() =
                               hets: newSeq[uint16](n_samples),
                               n_samples:n_samples)
 
-
   for j in 0..<responses.len:
+    results[j] = relation_matrices()
     results[j].ibs = newSeq[uint16](n_samples * n_samples)
     results[j].n = newSeq[uint16](n_samples * n_samples)
     results[j].hets = newSeq[uint16](n_samples)
     results[j].n_samples = n_samples
-    responses[j] = spawn relmatrix(bv_paths, sites[(j * batch_size)..<((j + 1) * batch_size)], results[j].addr)
+    results[j].sites_tested = 0
+    responses[j] = spawn relmatrix(bv_paths, sites[(j * batch_size)..<((j + 1) * batch_size)], results[j].addr, 1, j)
 
 
   var jobi = responses.len
@@ -350,31 +364,40 @@ proc main() =
     if final.n_samples != relm.n_samples:
       quit "[somalier] got differing numbers of samples"
 
+    #stderr.write_line "got ", $relm.sites_tested, " for index ", $index
+    final.sites_tested += relm.sites_tested
+
     for i, v in relm.n:
       final.n[i] += v
+      if relm.sites_tested == 0 and v > 0'u16:
+        quit "WTF n"
     for i, v in relm.hets:
       final.hets[i] += v
+      if relm.sites_tested == 0 and v > 0'u16:
+        quit "WTF hets"
     for i, v in relm.ibs:
       final.ibs[i] += v
+      if relm.sites_tested == 0 and v > 0'u16:
+        quit "WTF ibs"
 
-    # send of next job
-    if jobi * batch_size < sites.len:
+    # send next job
+    if (jobi * batch_size) < sites.len:
       var
         imin = jobi * batch_size
         imax = min(sites.len, (jobi + 1) * batch_size)
       #echo "sending ", imin, "..", imax, " of ", sites.len, " to index:", index
-      responses[index] = spawn relmatrix(bv_paths, sites[imin..<imax], results[index].addr)
+      responses[index] = spawn relmatrix(bv_paths, sites[imin..<imax], results[index].addr, 2, jobi)
     else:
       results.del(index)
       responses.del(index)
-      #echo "deleting ", index, "left: ", results.len
 
     jobi += 1
     
-
+  stderr.write_line "[somalier] sites tested:", $final.sites_tested
   for rel in relatedness(final, sample_names):
     echo rel
 
 
 when isMainModule:
+  GC_disableMarkAndSweep()
   main()
