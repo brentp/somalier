@@ -155,7 +155,7 @@ proc krelated(alts: var seq[int8], ibs: var seq[uint16], n: var seq[uint16], het
         if aj != ak and aj + ak == 2:
           ibs[j * n_samples + k] += 1
       # ibs2
-      if aj == ak:
+      if aj == ak: #and not is_het:
         n[k * n_samples + j] += 1
   return nused
 
@@ -170,7 +170,7 @@ type relation = object
   ibs2: uint16
   n: uint16
 
-type relation_matrices = ref object
+type relation_matrices = object
    sites_tested: int
    ibs: seq[uint16]
    n: seq[uint16]
@@ -188,8 +188,8 @@ proc relmatrix(paths:seq[string], sites:seq[Site], p: ptr relation_matrices, thr
 
   var nalts = newSeqOfCap[int8](16)
   var rel = p[]
-  if rel == nil:
-    return false
+  #if rel == nil:
+  #  return false
   rel.sites_tested = 0
 
   var bad = false
@@ -213,7 +213,7 @@ proc relmatrix(paths:seq[string], sites:seq[Site], p: ptr relation_matrices, thr
 
     discard krelated(nalts, rel.ibs, rel.n, rel.hets, n_samples)
 
-  #p[] = rel
+  p[] = rel
   #stderr.write_line "in index:", idx, " tested ", (p[]).sites_tested
 
 
@@ -319,24 +319,22 @@ proc main() =
     sample_names[i] = s.name
   var
     n_samples = sample_names.len
-    batch_size = 8 #(len(sites) / threads).int
-
-
-  if threads > len(sites):
-    quit "can't use more threads than sites"
   if threads < 2:
-    batch_size = len(sites)
-  if threads * batch_size > sites.len:
-    stderr.write_line "[somalier] setting to lower number of threads to avoid tiny batches of work"
-    threads = (sites.len / batch_size).int
-  var jobs = (sites.len / batch_size).int
+    threads = 1
+
+  var batch_size = (sites.len / threads).int
+
+  if threads * batch_size < sites.len:
+    batch_size += 1
+
+  if threads * batch_size < sites.len:
+    quit "logic error. batch size too small"
 
   var
     results = newSeq[relation_matrices](threads)
     responses = newSeq[FlowVarBase](threads)
 
-
-  stderr.write_line "[somalier] batch-size:", batch_size, " sites:", len(sites), " threads:" & $threads, " jobs:", $jobs
+  stderr.write_line "[somalier] batch-size:", batch_size, " sites:", len(sites), " threads:" & $threads
 
   # aggregated from all threads.
   var final = relation_matrices(ibs: newSeq[uint16](n_samples * n_samples),
@@ -351,48 +349,44 @@ proc main() =
     results[j].hets = newSeq[uint16](n_samples)
     results[j].n_samples = n_samples
     results[j].sites_tested = 0
-    responses[j] = spawn relmatrix(bv_paths, sites[(j * batch_size)..<((j + 1) * batch_size)], results[j].addr, 1, j)
+    var imin = j * batch_size
+    var imax = min(sites.len, (j + 1) * batch_size)
+    #stderr.write_line "sending:", $imin, "..<", $imax
+    responses[j] = spawn relmatrix(bv_paths, sites[imin..<imax], results[j].addr, 1, j)
 
 
-  var jobi = responses.len
-  while results.len != 0:
-    var index = awaitAny(responses)
-    if index == -1:
-      quit "[somalier] got unexpected value from await"
+  for index, fv in responses:
+    await(fv)
+    #  quit "[somalier] got unexpected value from await"
     var relm = results[index]
 
     if final.n_samples != relm.n_samples:
       quit "[somalier] got differing numbers of samples"
+    stderr.write_line "[somalier] got index:", $index
 
     #stderr.write_line "got ", $relm.sites_tested, " for index ", $index
     final.sites_tested += relm.sites_tested
 
     for i, v in relm.n:
       final.n[i] += v
-      if relm.sites_tested == 0 and v > 0'u16:
-        quit "WTF n"
+      #if relm.sites_tested == 0 and v > 0'u16:
+      #  quit "WTF n"
     for i, v in relm.hets:
       final.hets[i] += v
-      if relm.sites_tested == 0 and v > 0'u16:
-        quit "WTF hets"
+      #if relm.sites_tested == 0 and v > 0'u16:
+      #  quit "WTF hets"
     for i, v in relm.ibs:
       final.ibs[i] += v
-      if relm.sites_tested == 0 and v > 0'u16:
-        quit "WTF ibs"
+      #if relm.sites_tested == 0 and v > 0'u16:
+      #  quit "WTF ibs"
 
-    # send next job
-    if (jobi * batch_size) < sites.len:
-      var
-        imin = jobi * batch_size
-        imax = min(sites.len, (jobi + 1) * batch_size)
-      #echo "sending ", imin, "..", imax, " of ", sites.len, " to index:", index
-      responses[index] = spawn relmatrix(bv_paths, sites[imin..<imax], results[index].addr, 2, jobi)
-    else:
-      results.del(index)
-      responses.del(index)
+    #results.del(index)
+    #responses.del(index)
 
-    jobi += 1
-    
+  for i, r in results:
+    if r.sites_tested == 0:
+      stderr.write_line "[somalier] tested 0 sites for batch:", $i
+
   stderr.write_line "[somalier] sites tested:", $final.sites_tested
   for rel in relatedness(final, sample_names):
     echo rel
