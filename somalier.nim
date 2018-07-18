@@ -289,7 +289,15 @@ proc `%`*(v:uint16): JsonNode =
   result.kind = JInt
   result.num = v.int64
 
-proc update(groups: var seq[seq[string]], a: string, b: string) =
+proc update(groups: var seq[seq[string]], rel: relation) =
+  var
+    phi = rel.rel
+    conc = rel.hom_alt_concordance
+    a = rel.sample_a
+    b = rel.sample_b
+  if phi < 0.85 and conc < 0.9:
+    return
+
   for grp in groups.mitems:
     for sample in grp:
       if sample == a:
@@ -468,18 +476,19 @@ proc main() =
     quit "couldn't open output file"
 
   fh_tsv.write_line '#', header.replace("$", "")
+  var last: JsonNode
 
   echo "["
   for rel in relatedness(final, sample_names):
     var 
-      phi = rel.rel
-      conc = rel.hom_alt_concordance
       j = % rel
-    echo j
+    if last != nil:
+      echo last, ","
+    last = j
     fh_tsv.write_line $rel
 
-    if phi > 0.85 or conc > 0.9:
-      groups.update(rel.sample_a, rel.sampleb)
+    groups.update(rel)
+  echo last
   echo "]"
 
   groups.write_to(output_prefix)
