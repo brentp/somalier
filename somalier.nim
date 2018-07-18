@@ -289,6 +289,30 @@ proc `%`*(v:uint16): JsonNode =
   result.kind = JInt
   result.num = v.int64
 
+proc update(groups: var seq[seq[string]], a: string, b: string) =
+  for grp in groups.mitems:
+    for sample in grp:
+      if sample == a:
+        if grp.find(b) == -1:
+          grp.add(b)
+        return
+      if sample == b:
+        if grp.find(a) == -1:
+          grp.add(a)
+        return
+  groups.add(@[a, b])
+
+proc write_to(groups: seq[seq[string]], output_prefix: string) =
+  stderr.write_line("[somalier] wrote text output to: ",  output_prefix & "tsv")
+  var
+    fh_groups:File
+  if not open(fh_groups, output_prefix & "groups.tsv", fmWrite):
+    quit "couldn't open output file"
+  for group in groups:
+    fh_groups.write_line join(group, ",")
+  fh_groups.close()
+
+
 proc main() =
 
   var p = initOptParser()
@@ -435,25 +459,32 @@ proc main() =
 
   stderr.write_line "[somalier] sites tested:", $final.sites_tested
 
+
   var
     fh_tsv:File
-    fh_groups:File
+    groups = newSeqOfCap[seq[string]](10)
+
   if not open(fh_tsv, output_prefix & "tsv", fmWrite):
-    quit "couldn't open output file"
-  if not open(fh_groups, output_prefix & "groups.tsv", fmWrite):
     quit "couldn't open output file"
 
   fh_tsv.write_line '#', header.replace("$", "")
 
   echo "["
   for rel in relatedness(final, sample_names):
-    var j = % rel
+    var 
+      phi = rel.rel
+      conc = rel.hom_alt_concordance
+      j = % rel
     echo j
     fh_tsv.write_line $rel
+
+    if phi > 0.85 or conc > 0.9:
+      groups.update(rel.sample_a, rel.sampleb)
   echo "]"
+
+  groups.write_to(output_prefix)
+
   fh_tsv.close()
-  fh_groups.close()
-  stderr.write_line("[somalier] wrote text output to: ",  output_prefix & "tsv")
   stderr.write_line("[somalier] wrote groups to: ",  output_prefix & "groups.tsv")
 
 
