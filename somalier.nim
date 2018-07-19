@@ -213,6 +213,7 @@ type relation_matrices = object
    homs: seq[uint16]
    shared_hom_alts: seq[uint16]
    samples: seq[string]
+   clusters: seq[seq[int]]
 
 proc n_samples(r: relation_matrices): int {.inline.} =
   return r.samples.len
@@ -325,13 +326,21 @@ proc cluster(r: var relation_matrices) =
       dist[sj][sk] = -tmp
       dist[sk][sj] = -tmp
 
-  var results = hcluster(dist, -0.5)
+  var clusters = hcluster(dist, -0.5)
 
   var order = newSeqOfCap[int](n)
-  for cluster in results:
+  for cluster in clusters:
     order.add(cluster)
   r.reorder(order)
 
+  # now set the clusters to match the new order
+  r.clusters = newSeq[seq[int]](len(clusters))
+  var off = 0
+  for i, c in clusters:
+    r.clusters[i] = newSeq[int](c.len)
+    for j in 0..<r.clusters[i].len:
+      r.clusters[i][j] = j + off
+    off += r.clusters[i].len
 
 proc toSite(toks: seq[string], fai:Fai): Site =
   result = Site()
@@ -346,36 +355,18 @@ proc `%`*(v:uint16): JsonNode =
   result.kind = JInt
   result.num = v.int64
 
-proc update(groups: var seq[seq[string]], rel: relation) =
-  var
-    phi = rel.rel
-    conc = rel.hom_alt_concordance
-    a = rel.sample_a
-    b = rel.sample_b
-  if phi < 0.85 and conc < 0.9:
-    return
-
-  for grp in groups.mitems:
-    for sample in grp:
-      if sample == a:
-        if grp.find(b) == -1:
-          grp.add(b)
-        return
-      if sample == b:
-        if grp.find(a) == -1:
-          grp.add(a)
-        return
-  groups.add(@[a, b])
-
-proc write_to(groups: seq[seq[string]], output_prefix: string) =
-  stderr.write_line("[somalier] wrote text output to: ",  output_prefix & "tsv")
+proc write_groups(r: relation_matrices, output_prefix: string) =
   var
     fh_groups:File
   if not open(fh_groups, output_prefix & "groups.tsv", fmWrite):
     quit "couldn't open output file"
-  for group in groups:
-    fh_groups.write_line join(group, ",")
+  for group in r.clusters:
+    var s = newSeqOfCap[string](group.len)
+    for i in group:
+      s.add(r.samples[i])
+    fh_groups.write_line join(s, ",")
   fh_groups.close()
+  stderr.write_line("[somalier] wrote text output to: ",  output_prefix & "tsv")
 
 
 proc main() =
@@ -430,11 +421,6 @@ proc main() =
 
   for line in sites_path.lines:
     var toks = line.strip().split(":")
-    #if toks[0] != last_chrom:
-    #  #echo "getting chrom:", toks[0]
-    #  last_chrom = toks[0]
-    #  cseq = fai.get(last_chrom)
-
     sites.add(toSite(toks, fai))
   fai = nil
 
@@ -526,31 +512,19 @@ proc main() =
 
   var
     fh_tsv:File
-    groups = newSeqOfCap[seq[string]](10)
 
   if not open(fh_tsv, output_prefix & "tsv", fmWrite):
     quit "couldn't open output file"
 
   fh_tsv.write_line '#', header.replace("$", "")
-  var last: JsonNode
 
   var j = % final
   echo $j
 
-  echo "["
   for rel in relatedness(final):
-    var 
-      j = % rel
-    if last != nil:
-      echo last, ","
-    last = j
     fh_tsv.write_line $rel
 
-    groups.update(rel)
-  echo last
-  echo "]"
-
-  groups.write_to(output_prefix)
+  final.write_groups(output_prefix)
 
   fh_tsv.close()
   stderr.write_line("[somalier] wrote groups to: ",  output_prefix & "groups.tsv")
