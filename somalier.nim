@@ -1,6 +1,8 @@
 {.experimental.}
 
+import ./cluster
 import hts
+import math
 import json
 import parseopt
 import ospaths
@@ -210,7 +212,10 @@ type relation_matrices = object
    hets: seq[uint16]
    homs: seq[uint16]
    shared_hom_alts: seq[uint16]
-   n_samples: int
+   samples: seq[string]
+
+proc n_samples(r: relation_matrices): int {.inline.} =
+  return r.samples.len
 
 proc relmatrix(paths:seq[string], sites:seq[Site], p: ptr relation_matrices, threads:int, idx:int): bool {.thread.} =
   result = true
@@ -223,8 +228,6 @@ proc relmatrix(paths:seq[string], sites:seq[Site], p: ptr relation_matrices, thr
 
   var nalts = newSeqOfCap[int8](16)
   var rel = p[]
-
-  var bad = false
 
   if rel.hets == nil:
     stderr.write_line "skipped:", len(sites), " ", $(rel.n == nil), " ", $(rel.ibs == nil)
@@ -250,7 +253,8 @@ proc relmatrix(paths:seq[string], sites:seq[Site], p: ptr relation_matrices, thr
   #stderr.write_line "in index:", idx, " tested ", (p[]).sites_tested
 
 
-iterator relatedness(r:relation_matrices, sample_names:seq[string]): relation =
+iterator relatedness(r:relation_matrices): relation =
+  var sample_names = r.samples
 
   for sj in 0..<r.n_samples - 1:
     for sk in sj + 1..<r.n_samples:
@@ -274,6 +278,59 @@ iterator relatedness(r:relation_matrices, sample_names:seq[string]): relation =
                      shared_hom_alts: r.shared_hom_alts[sj * r.n_samples + sk],
                      ibs2: r.n[sk * r.n_samples + sj],
                      n: r.n[sj * r.n_samples + sk])
+
+proc at[T](arr:var seq[T], n:int, i:int, j:int): T {.inline.} =
+  return arr[i * n + j]
+
+proc set[T](arr:var seq[T], n:int, i:int, j:int, val:T) {.inline.} =
+  arr[i * n + j] = val
+
+proc reorder_flat[T](arr:var seq[T], order: seq[int], n:int): seq[T] =
+  result = newSeq[T](arr.len)
+
+  for i in 0..<n:
+    for j in 0..<n:
+      result.set(n, i, j, arr.at(n, order[i], order[j]))
+
+proc reorder_1d[T](arr:seq[T], order: seq[int]): seq[T] =
+  result = newSeq[T](arr.len)
+  for i, o in order:
+    result[i] = arr[o]
+
+proc reorder(r:var relation_matrices, order: seq[int]) =
+  var n = r.n_samples
+
+  r.ibs = reorder_flat(r.ibs, order, n)
+  r.n = reorder_flat(r.n, order, n)
+  r.shared_hom_alts = reorder_flat(r.shared_hom_alts, order, n)
+  r.samples = reorder_1d(r.samples, order)
+  r.homs = reorder_1d(r.homs, order)
+  r.hets = reorder_1d(r.hets, order)
+
+proc cluster(r: var relation_matrices) =
+  ## re-order based on the complete linkage so that a heatmap is clustered properly.
+  var n = r.n_samples
+  var dist = newSeq[seq[float32]](n) # note that this is actually similarity, not distance.
+
+  for sj in 0..<n:
+    dist[sj] = newSeq[float32](n)
+    dist[sj][sj] = float32.high
+  
+  for sj in 0..<(n - 1):
+    for sk in (sj + 1)..<n:
+      if sj == sk:
+        quit "logic error"
+      var bottom = min(r.hets[sj], r.hets[sk]).float32
+      var tmp = (r.ibs[sk * n + sj].float32 - 2 * r.ibs[sj * n + sk].float32) / bottom
+      dist[sj][sk] = -tmp
+      dist[sk][sj] = -tmp
+
+  var results = hcluster(dist, -0.5)
+
+  var order = newSeqOfCap[int](n)
+  for cluster in results:
+    order.add(cluster)
+  r.reorder(order)
 
 
 proc toSite(toks: seq[string], fai:Fai): Site =
@@ -379,6 +436,7 @@ proc main() =
     #  cseq = fai.get(last_chrom)
 
     sites.add(toSite(toks, fai))
+  fai = nil
 
   if len(sites) > 65535:
     quit "cant use more than 65535 sites"
@@ -416,7 +474,7 @@ proc main() =
                               shared_hom_alts: newSeq[uint16](n_samples * n_samples),
                               hets: newSeq[uint16](n_samples),
                               homs: newSeq[uint16](n_samples),
-                              n_samples:n_samples)
+                              samples: sample_names)
 
   for j in 0..<responses.len:
     results[j] = relation_matrices()
@@ -425,7 +483,6 @@ proc main() =
     results[j].shared_hom_alts = newSeq[uint16](n_samples * n_samples)
     results[j].hets = newSeq[uint16](n_samples)
     results[j].homs = newSeq[uint16](n_samples)
-    results[j].n_samples = n_samples
     results[j].sites_tested = 0
     var imin = j * batch_size
     var imax = min(sites.len, (j + 1) * batch_size)
@@ -438,8 +495,8 @@ proc main() =
     #  quit "[somalier] got unexpected value from await"
     var relm = results[index]
 
-    if final.n_samples != relm.n_samples:
-      quit "[somalier] got differing numbers of samples"
+    #if final.n_samples != relm.n_samples:
+    #  quit "[somalier] got differing numbers of samples"
     #stderr.write_line "[somalier] got index:", $index
 
     #stderr.write_line "got ", $relm.sites_tested, " for index ", $index
@@ -455,8 +512,6 @@ proc main() =
       final.homs[i] += v
     for i, v in relm.ibs:
       final.ibs[i] += v
-      #if relm.sites_tested == 0 and v > 0'u16:
-      #  quit "WTF ibs"
 
     #results.del(index)
     #responses.del(index)
@@ -467,6 +522,7 @@ proc main() =
 
   stderr.write_line "[somalier] sites tested:", $final.sites_tested
 
+  final.cluster()
 
   var
     fh_tsv:File
@@ -478,8 +534,11 @@ proc main() =
   fh_tsv.write_line '#', header.replace("$", "")
   var last: JsonNode
 
+  var j = % final
+  echo $j
+
   echo "["
-  for rel in relatedness(final, sample_names):
+  for rel in relatedness(final):
     var 
       j = % rel
     if last != nil:
