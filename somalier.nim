@@ -280,30 +280,37 @@ iterator relatedness(r:relation_matrices): relation =
                      ibs2: r.n[sk * r.n_samples + sj],
                      n: r.n[sj * r.n_samples + sk])
 
-proc at[T](arr:var seq[T], n:int, i:int, j:int): T {.inline.} =
-  return arr[i * n + j]
-
-proc set[T](arr:var seq[T], n:int, i:int, j:int, val:T) {.inline.} =
-  arr[i * n + j] = val
-
-proc reorder_flat[T](arr:var seq[T], order: seq[int], n:int): seq[T] =
-  result = newSeq[T](arr.len)
-
-  for i in 0..<n:
-    for j in 0..<n:
-      result.set(n, i, j, arr.at(n, order[i], order[j]))
-
 proc reorder_1d[T](arr:seq[T], order: seq[int]): seq[T] =
   result = newSeq[T](arr.len)
   for i, o in order:
     result[i] = arr[o]
 
+proc reorder_flat[T](arr:var seq[T], order: seq[int], n:int): seq[T] =
+  result = newSeq[T](arr.len)
+
+  for j in 0..<n:
+    for i in 0..<n:
+      var
+        oi = order[i]
+        oj = order[j]
+      # these flips are required because we store different data in the upper
+      # and lower halves of the matrix
+      if i < j and oi > oj or i > j and oi < oj:
+        var tmp = oi
+        oi = oj
+        oj = tmp
+
+      result[i*n+j] = arr[oi * n + oj]
+
+
 proc reorder(r:var relation_matrices, order: seq[int]) =
+  # after clustering, we have to re-order similar samples together. 
   var n = r.n_samples
 
   r.ibs = reorder_flat(r.ibs, order, n)
   r.n = reorder_flat(r.n, order, n)
   r.shared_hom_alts = reorder_flat(r.shared_hom_alts, order, n)
+
   r.samples = reorder_1d(r.samples, order)
   r.homs = reorder_1d(r.homs, order)
   r.hets = reorder_1d(r.hets, order)
@@ -434,7 +441,7 @@ proc main() =
     #open(bam, path, index=true, threads=2)
     #bams[i] = bam
     var s = splitFile(path)
-    sample_names[i] = s.name
+    sample_names[i] = s.name.split("_")[0]
   var
     n_samples = sample_names.len
   if threads < 2:
@@ -499,16 +506,14 @@ proc main() =
     for i, v in relm.ibs:
       final.ibs[i] += v
 
-    #results.del(index)
-    #responses.del(index)
-
   for i, r in results:
     if r.sites_tested == 0:
       stderr.write_line "[somalier] tested 0 sites for batch:", $i
 
   stderr.write_line "[somalier] sites tested:", $final.sites_tested
 
-  final.cluster()
+  final.cluster
+  #final.clusters = @[@[1]]
 
   var
     fh_tsv:File
