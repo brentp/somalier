@@ -1,6 +1,7 @@
 {.experimental.}
 
 import ./cluster
+import os
 import hts
 import math
 import json
@@ -82,8 +83,8 @@ Options:
   """
 
 proc get_bam_alts(bams:seq[BAM], site:Site, nalts: var seq[int8], min_depth:int=6): bool =
-  if nalts.len != 0:
-    nalts.set_len(0)
+  if bams.len == 0:
+    return true
 
   var nknown = 0
   var nref = 0
@@ -109,13 +110,26 @@ proc get_bam_alts(bams:seq[BAM], site:Site, nalts: var seq[int8], min_depth:int=
 
   result = nknown.float / bams.len.float >= 0.7
 
-proc get_alts(vcfs:seq[VCF], site:string, nalts: var seq[int8], cache: var seq[int32]): bool =
-  if nalts.len != 0:
-    nalts.set_len(0)
+proc get_depths(v:Variant, cache: var seq[int32]): seq[int32] =
+  for c in cache.mitems:
+    c = 0
+  if v.format.ints("AD", cache) == Status.OK:
+    result = newSeq[int32](v.n_samples)
+    for i in 0..<v.n_samples:
+      result[i] = cache[2*i] + cache[2*i+1]
+    return
 
-  var sp = site.split(":")
-  var p1 = parseInt(sp[1])
-  var q = sp[0] & ":" & $p1 & "-" & $(p1 + 1)
+  if v.format.ints("DP", cache) == Status.OK:
+    result = newSeq[int32](v.n_samples)
+    copyMem(result[0].addr, cache[0].addr, sizeof(cache[0]) * cache.len)
+    return 
+
+  return nil
+
+
+proc get_vcf_alts(vcfs:seq[VCF], site:Site, nalts: var seq[int8], cache: var seq[int32], min_depth:int): bool =
+  if len(vcfs) == 0:
+    return true
 
   var nknown: int
   var n:int
@@ -123,13 +137,17 @@ proc get_alts(vcfs:seq[VCF], site:string, nalts: var seq[int8], cache: var seq[i
   for vcf in vcfs:
     var found = 0
     n += vcf.n_samples
-    for v in vcf.query(q):
-      if v.REF != sp[2]: continue
-      var alts = v.format.genotypes(cache).alts
-      for alt in alts:
-        if alt != -1:
-          found += 1
-      nalts.add(alts)
+    {.gcsafe.}:
+      for v in vcf.query(site.chrom & ":" & $(site.position + 1) & "-" & $(site.position + 2)):
+        if v.REF[0] != site.ref_allele: continue
+        var alts = v.format.genotypes(cache).alts
+        var dps = get_depths(v, cache)
+        for k, alt in alts.mpairs:
+          if dps != nil and dps[k] < min_depth:
+            alt = -1
+          if alt != -1:
+            found += 1
+        nalts.add(alts)
 
     nknown += found
 
@@ -221,11 +239,18 @@ proc n_samples(r: relation_matrices): int {.inline.} =
 proc relmatrix(paths:seq[string], sites:seq[Site], p: ptr relation_matrices, threads:int, idx:int): bool {.thread.} =
   result = true
 
-  var bams = newSeq[Bam](len(paths))
-  for i, p in paths:
-    var b:Bam
-    open(b, p, index=true, threads=threads)
-    bams[i] = b
+  var bams = newSeqOfCap[Bam](len(paths))
+  var vcfs = newSeqOfCap[VCF](2)
+  for i, path in paths:
+    if path.endsWith(".bam") or path.endsWith(".cram"):
+      var b:Bam
+      open(b, path, index=true, threads=threads)
+      bams.add(b)
+    else:
+      var vcf: VCF
+      if not open(vcf, path):
+        quit "could not open " & $path
+      vcfs.add(vcf)
 
   var nalts = newSeqOfCap[int8](16)
   var rel = p[]
@@ -239,14 +264,20 @@ proc relmatrix(paths:seq[string], sites:seq[Site], p: ptr relation_matrices, thr
   #zeroMem(rel.hets[0].addr, sizeof(rel.hets[0]) * rel.hets.len)
   #zeroMem(rel.n[0].addr, sizeof(rel.n[0]) * rel.n.len)
   #zeroMem(rel.ibs[0].addr, sizeof(rel.ibs[0]) * rel.ibs.len)
+  var cache = newSeq[int32](vcfs.len)
+  var min_depth:int = 6
 
   var n_samples = bams.len
+  for v in vcfs:
+    n_samples += v.n_samples
 
-  # TODO: allow mix of BAM/VCF
   for s in sites:
     rel.sites_tested += 1
-    if not get_bam_alts(bams, s, nalts):
+    nalts.set_len(0)
+    if not (get_bam_alts(bams, s, nalts, min_depth) and get_vcf_alts(vcfs, s, nalts, cache, min_depth)):
       continue
+
+
 
     discard krelated(nalts, rel.ibs, rel.n, rel.hets, rel.homs, rel.shared_hom_alts, n_samples)
 
@@ -375,6 +406,31 @@ proc write_groups(r: relation_matrices, output_prefix: string) =
   fh_groups.close()
   stderr.write_line("[somalier] wrote text output to: ",  output_prefix & "tsv")
 
+proc get_sample_names(path: string, fasta: string): seq[string] =
+  if path.endsWith(".bam") or path.endsWith(".cram"):
+    var bam: Bam
+    open(bam, path)
+    var txt = newString(bam.hdr.hdr.l_text)
+    copyMem(txt[0].addr, bam.hdr.hdr.text, txt.len)
+    for line in txt.split("\n"):
+      if line.startsWith("@RG") and "\tSM:" in line:
+        var t = line.split("\tSM:")[1].split("\t")[0].strip()
+        # TODO: don't do this.
+        t = t.split("_")[0]
+        return @[t]
+
+
+  elif path.endsWith("vcf.gz") or path.endswith(".bcf") or path.endsWith(".bcf.gz") or path.endsWith("vcf.bgz"):
+    var vcf: VCF
+    if not open(vcf, path):
+      quit "could not open " & $path
+    return vcf.samples
+
+  stderr.write_line "[somalier] warning couldn't find samples for " & path & " using file names to guess."
+  var s = splitFile(path)
+  # TODO: remove s.name
+  return @[s.name.split("_")[0]]
+
 
 proc main() =
 
@@ -426,7 +482,7 @@ proc main() =
   if not open(fai, fasta_path):
     quit "couldn't open fasta with fai:" & fasta_path
 
-  for line in sites_path.lines:
+  for line in sites_path.expandTilde.expandFilename.lines:
     var toks = line.strip().split(":")
     sites.add(toSite(toks, fai))
   fai = nil
@@ -434,14 +490,10 @@ proc main() =
   if len(sites) > 65535:
     quit "cant use more than 65535 sites"
 
-  var sample_names = newSeq[string](len(bv_paths))
+  var sample_names = newSeqOfCap[string](len(bv_paths))
 
   for i, path in bv_paths:
-    #var bam:Bam
-    #open(bam, path, index=true, threads=2)
-    #bams[i] = bam
-    var s = splitFile(path)
-    sample_names[i] = s.name.split("_")[0]
+    sample_names.add(get_sample_names(path, fasta_path))
   var
     n_samples = sample_names.len
   if threads < 2:
