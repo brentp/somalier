@@ -82,11 +82,11 @@ Options:
 
   """
 
-proc get_bam_alts(bams:seq[BAM], site:Site, nalts: var seq[int8], min_depth:int=6): bool =
+proc get_bam_alts(bams:seq[BAM], site:Site, nalts: var seq[int8], min_depth:int=6): int =
+  ## returns number of known genotypes
   if bams.len == 0:
-    return true
+    return 0
 
-  var nknown = 0
   var nref = 0
   var nalt = 0
 
@@ -94,7 +94,7 @@ proc get_bam_alts(bams:seq[BAM], site:Site, nalts: var seq[int8], min_depth:int=
     var c = bam.count_alleles(site)
     var calts = c.alts(min_depth)
     if calts != -1:
-      nknown += 1
+      result += 1
     if c.nref > 0:
       nref = 1
     if c.nalt > 0:
@@ -102,13 +102,11 @@ proc get_bam_alts(bams:seq[BAM], site:Site, nalts: var seq[int8], min_depth:int=
     nalts.add(calts)
   if nref == 0:
     stderr.write_line "[somalier] no reference alleles found at: ", $site
-    return false
+    return 0
   if nalt == 0:
     stderr.write_line "[somalier] no alternate alleles found at: ", $site
-    return false
+    return 0
 
-
-  result = nknown.float / bams.len.float >= 0.7
 
 proc get_depths(v:Variant, cache: var seq[int32]): seq[int32] =
   for c in cache.mitems:
@@ -127,11 +125,10 @@ proc get_depths(v:Variant, cache: var seq[int32]): seq[int32] =
   return nil
 
 
-proc get_vcf_alts(vcfs:seq[VCF], site:Site, nalts: var seq[int8], cache: var seq[int32], min_depth:int): bool =
+proc get_vcf_alts(vcfs:seq[VCF], site:Site, nalts: var seq[int8], cache: var seq[int32], min_depth:int): int =
   if len(vcfs) == 0:
-    return true
+    return 0
 
-  var nknown: int
   var n:int
 
   for vcf in vcfs:
@@ -149,9 +146,8 @@ proc get_vcf_alts(vcfs:seq[VCF], site:Site, nalts: var seq[int8], cache: var seq
             found += 1
         nalts.add(alts)
 
-    nknown += found
+    result += found
 
-  result = nknown.float / n.float >= 0.7
 
 proc krelated(alts: var seq[int8], ibs: var seq[uint16], n: var seq[uint16], hets: var seq[uint16], homs: var seq[uint16], shared_hom_alts: var seq[uint16], n_samples: int): int =
 
@@ -236,15 +232,18 @@ type relation_matrices = object
 proc n_samples(r: relation_matrices): int {.inline.} =
   return r.samples.len
 
-proc relmatrix(paths:seq[string], sites:seq[Site], p: ptr relation_matrices, threads:int, idx:int): bool {.thread.} =
+proc bam_like(path:string): bool {.inline.} =
+    return path.endsWith(".bam") or path.endsWith(".cram")
+
+proc relmatrix(paths:seq[string], sites:seq[Site], p: ptr relation_matrices, idx:int): bool {.thread.} =
   result = true
 
   var bams = newSeqOfCap[Bam](len(paths))
   var vcfs = newSeqOfCap[VCF](2)
   for i, path in paths:
-    if path.endsWith(".bam") or path.endsWith(".cram"):
+    if path.bam_like:
       var b:Bam
-      open(b, path, index=true, threads=threads)
+      open(b, path, index=true)
       bams.add(b)
     else:
       var vcf: VCF
@@ -260,10 +259,6 @@ proc relmatrix(paths:seq[string], sites:seq[Site], p: ptr relation_matrices, thr
     result = false
     return
 
-  # not needed because we dont re-use.
-  #zeroMem(rel.hets[0].addr, sizeof(rel.hets[0]) * rel.hets.len)
-  #zeroMem(rel.n[0].addr, sizeof(rel.n[0]) * rel.n.len)
-  #zeroMem(rel.ibs[0].addr, sizeof(rel.ibs[0]) * rel.ibs.len)
   var cache = newSeq[int32](vcfs.len)
   var min_depth:int = 6
 
@@ -273,16 +268,14 @@ proc relmatrix(paths:seq[string], sites:seq[Site], p: ptr relation_matrices, thr
 
   for s in sites:
     rel.sites_tested += 1
-    nalts.set_len(0)
-    if not (get_bam_alts(bams, s, nalts, min_depth) and get_vcf_alts(vcfs, s, nalts, cache, min_depth)):
+    nalts = nalts[0..<0]
+    #if (get_bam_alts(bams, s, nalts, min_depth) + get_vcf_alts(vcfs, s, nalts, cache, min_depth)).float / n_samples.float < 0.7:
+    if get_bam_alts(bams, s, nalts, min_depth).float / n_samples.float < 0.7:
       continue
-
-
 
     discard krelated(nalts, rel.ibs, rel.n, rel.hets, rel.homs, rel.shared_hom_alts, n_samples)
 
   p[] = rel
-  #stderr.write_line "in index:", idx, " tested ", (p[]).sites_tested
 
 
 iterator relatedness(r:relation_matrices): relation =
@@ -407,7 +400,7 @@ proc write_groups(r: relation_matrices, output_prefix: string) =
   stderr.write_line("[somalier] wrote text output to: ",  output_prefix & "tsv")
 
 proc get_sample_names(path: string, fasta: string): seq[string] =
-  if path.endsWith(".bam") or path.endsWith(".cram"):
+  if path.bam_like:
     var bam: Bam
     open(bam, path)
     var txt = newString(bam.hdr.hdr.l_text)
@@ -490,10 +483,19 @@ proc main() =
   if len(sites) > 65535:
     quit "cant use more than 65535 sites"
 
+  ## need to track samples names from bams first, then vcfs since
+  ## thats the order for the alts array.
   var sample_names = newSeqOfCap[string](len(bv_paths))
+  var non_bam_sample_names = newSeqOfCap[string](len(bv_paths))
 
   for i, path in bv_paths:
-    sample_names.add(get_sample_names(path, fasta_path))
+    if path.bam_like:
+      sample_names.add(get_sample_names(path, fasta_path))
+    else:
+      non_bam_sample_names.add(get_sample_names(path, fasta_path))
+
+  sample_names.add(non_bam_sample_names)
+
   var
     n_samples = sample_names.len
   if threads < 2:
@@ -531,8 +533,7 @@ proc main() =
     results[j].sites_tested = 0
     var imin = j * batch_size
     var imax = min(sites.len, (j + 1) * batch_size)
-    #stderr.write_line "sending:", $imin, "..<", $imax
-    responses[j] = spawn relmatrix(bv_paths, sites[imin..<imax], results[j].addr, 1, j)
+    responses[j] = spawn relmatrix(bv_paths, sites[imin..<imax], results[j].addr, j)
 
 
   for index, fv in responses:
@@ -540,11 +541,6 @@ proc main() =
     #  quit "[somalier] got unexpected value from await"
     var relm = results[index]
 
-    #if final.n_samples != relm.n_samples:
-    #  quit "[somalier] got differing numbers of samples"
-    #stderr.write_line "[somalier] got index:", $index
-
-    #stderr.write_line "got ", $relm.sites_tested, " for index ", $index
     final.sites_tested += relm.sites_tested
 
     for i, v in relm.n:
@@ -588,5 +584,4 @@ proc main() =
 
 
 when isMainModule:
-  GC_disableMarkAndSweep()
   main()
