@@ -378,7 +378,30 @@ proc toSite(toks: seq[string], fai:Fai): Site =
   result.chrom = toks[0]
   result.position = parseInt(toks[1]) - 1
   var base = fai.get(result.chrom, result.position, result.position)
+  if base != toks[3]:
+    quit "reference base from sites file:" & toks[3] & " does not match that from reference: " & base
   result.ref_allele = base[0]
+
+proc readSites(path: string, fai:var Fai): seq[Site] =
+  result = newSeqOfCap[Site](8192)
+  var kstr = kstring_t(l:0, m:0, s:nil)
+  var hf = hts_open(path.cstring, "r")
+
+  while hts_getline(hf, cint(10), kstr.addr) > 0:
+    var line  = $kstr.s
+    if line[0] == '#': continue
+    var sep = '\t'
+    # handle ":" or tab. with ":", there is no id field.
+    if line.count(sep) == 0:
+      sep = ':'
+    var toks = line.strip().split(sep)
+    if sep == ':':
+      toks.insert(".", 2)
+
+    result.add(toSite(toks, fai))
+    if len(result) > 65535:
+      quit "cant use more than 65535 sites"
+  fai = nil
 
 
 proc `%`*(v:uint16): JsonNode =
@@ -468,20 +491,11 @@ proc main() =
     quit(2)
   if threads < 1: threads = 1
 
-  var
-    fai: Fai
-    sites = newSeqOfCap[Site](10000)
-
+  var fai: Fai
   if not open(fai, fasta_path):
     quit "couldn't open fasta with fai:" & fasta_path
+  var sites = readSites(sites_path, fai)
 
-  for line in sites_path.expandTilde.expandFilename.lines:
-    var toks = line.strip().split(":")
-    sites.add(toSite(toks, fai))
-  fai = nil
-
-  if len(sites) > 65535:
-    quit "cant use more than 65535 sites"
 
   ## need to track samples names from bams first, then vcfs since
   ## thats the order for the alts array.
