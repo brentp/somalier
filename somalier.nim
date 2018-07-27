@@ -6,6 +6,7 @@ import hts
 import math
 import json
 import parseopt
+import algorithm
 import ospaths
 import strutils
 import threadpool
@@ -75,9 +76,13 @@ Arguments:
 
 Options:
 
-  -s --sites <txt>        text file with lines of sites to use for relatedness estimation.
-  -t --threads <int>      number of processors to use for parallelization.
+  -s --sites <vcf>        vcf file with lines of sites to use for relatedness estimation.
+  -t --threads <int>      optional number of processors to use for parallelization.
   -f --fasta <reference>  path to reference fasta file.
+  -g --groups <path>      optional path to expected groups of samples (e.g. tumor normal pairs).
+                          specified as comma-separated groups per line e.g.:
+                            normal1,tumor1a,tumor1b
+                            normal2,tumor2a
   -o --output <prefix>    output prefix for results.
 
   """
@@ -227,7 +232,7 @@ type relation_matrices = object
    homs: seq[uint16]
    shared_hom_alts: seq[uint16]
    samples: seq[string]
-   clusters: seq[seq[int]]
+   clusters: seq[seq[string]]
 
 proc n_samples(r: relation_matrices): int {.inline.} =
   return r.samples.len
@@ -266,14 +271,21 @@ proc relmatrix(paths:seq[string], sites:seq[Site], p: ptr relation_matrices, idx
   for v in vcfs:
     n_samples += v.n_samples
 
+  var last_chrom = ""
+  var last_pos = -20000
+
   for s in sites:
+    if s.chrom == last_chrom and s.position - last_pos < 100:
+      continue
+
     rel.sites_tested += 1
     nalts = nalts[0..<0]
-    #if (get_bam_alts(bams, s, nalts, min_depth) + get_vcf_alts(vcfs, s, nalts, cache, min_depth)).float / n_samples.float < 0.7:
-    if get_bam_alts(bams, s, nalts, min_depth).float / n_samples.float < 0.7:
+    if (get_bam_alts(bams, s, nalts, min_depth) + get_vcf_alts(vcfs, s, nalts, cache, min_depth)).float / n_samples.float < 0.7:
       continue
 
     discard krelated(nalts, rel.ibs, rel.n, rel.hets, rel.homs, rel.shared_hom_alts, n_samples)
+    last_chrom = s.chrom
+    last_pos = s.position
 
   p[] = rel
 
@@ -365,12 +377,12 @@ proc cluster(r: var relation_matrices) =
   r.reorder(order)
 
   # now set the clusters to match the new order
-  r.clusters = newSeq[seq[int]](len(clusters))
+  r.clusters = newSeq[seq[string]](len(clusters))
   var off = 0
   for i, c in clusters:
-    r.clusters[i] = newSeq[int](c.len)
+    r.clusters[i] = newSeq[string](c.len)
     for j in 0..<r.clusters[i].len:
-      r.clusters[i][j] = j + off
+      r.clusters[i][j] = r.samples[j + off]
     off += r.clusters[i].len
 
 proc toSite(toks: seq[string], fai:Fai): Site =
@@ -381,6 +393,11 @@ proc toSite(toks: seq[string], fai:Fai): Site =
   if base != toks[3]:
     quit "reference base from sites file:" & toks[3] & " does not match that from reference: " & base
   result.ref_allele = base[0]
+
+proc siteOrder(a:Site, b:Site): int =
+  if a.chrom == b.chrom:
+    return cmp(a.position, b.position)
+  return cmp(a.chrom, b.chrom)
 
 proc readSites(path: string, fai:var Fai): seq[Site] =
   result = newSeqOfCap[Site](8192)
@@ -399,9 +416,10 @@ proc readSites(path: string, fai:var Fai): seq[Site] =
       toks.insert(".", 2)
 
     result.add(toSite(toks, fai))
-    if len(result) > 65535:
-      quit "cant use more than 65535 sites"
+  if len(result) > 65535:
+    stderr.write_line "warning:cant use more than 65535 sites"
   fai = nil
+  sort(result, siteOrder)
 
 
 proc `%`*(v:uint16): JsonNode =
@@ -409,16 +427,28 @@ proc `%`*(v:uint16): JsonNode =
   result.kind = JInt
   result.num = v.int64
 
+proc readGroups(path:string): seq[seq[string]] =
+  result = newSeq[seq[string]]()
+  if path == "":
+    return
+
+  # expand out a,b,c to a,b, a,c, b,c
+  for line in path.lines:
+    var row = line.strip().split(",")
+    for i, x in row[0..<row.high]:
+      for j, y in row[(i+1)..row.high]:
+        result.add(@[x, y])
+
 proc write_groups(r: relation_matrices, output_prefix: string) =
   var
     fh_groups:File
   if not open(fh_groups, output_prefix & "groups.tsv", fmWrite):
     quit "couldn't open output file"
   for group in r.clusters:
-    var s = newSeqOfCap[string](group.len)
-    for i in group:
-      s.add(r.samples[i])
-    fh_groups.write_line join(s, ",")
+    #var s = newSeqOfCap[string](group.len)
+    #for i in group:
+    #  s.add(r.samples[i])
+    fh_groups.write_line join(group, ",")
   fh_groups.close()
   stderr.write_line("[somalier] wrote text output to: ",  output_prefix & "tsv")
 
@@ -456,6 +486,7 @@ proc main() =
     bv_paths = newSeq[string]()
     sites_path: string
     fasta_path: string
+    groups_path: string = ""
     output_prefix: string = "somalier."
     threads = 1
 
@@ -477,6 +508,8 @@ proc main() =
         sites_path = val
       of "fasta", "f":
         fasta_path = val
+      of "groups", "g":
+        groups_path = val
       else:
         writeHelp()
     of cmdEnd:
@@ -495,7 +528,7 @@ proc main() =
   if not open(fai, fasta_path):
     quit "couldn't open fasta with fai:" & fasta_path
   var sites = readSites(sites_path, fai)
-
+  var groups = readGroups(groups_path)
 
   ## need to track samples names from bams first, then vcfs since
   ## thats the order for the alts array.
@@ -586,6 +619,12 @@ proc main() =
   fh_tsv.write_line '#', header.replace("$", "")
 
   var j = % final
+  if groups.len > 0:
+    j["expected-relatedness"] = % [{
+      "value": %1,
+      "pairs" : %groups
+    }]
+
   echo $j
 
   for rel in relatedness(final):
