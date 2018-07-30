@@ -87,7 +87,7 @@ Options:
 
   """
 
-proc get_bam_alts(bams:seq[BAM], site:Site, nalts: var seq[int8], min_depth:int=6): int =
+proc get_bam_alts(bams:seq[BAM], site:Site, nalts: var seq[int8], min_depth:int=6, report:bool=true): int =
   ## returns number of known genotypes
   if bams.len == 0:
     return 0
@@ -106,11 +106,13 @@ proc get_bam_alts(bams:seq[BAM], site:Site, nalts: var seq[int8], min_depth:int=
       nalt = 1
     nalts.add(calts)
   if nref == 0:
-    stderr.write_line "[somalier] no reference alleles found at: ", $site
-    return 0
+    if report:
+      stderr.write_line "[somalier] no reference alleles found at: ", $site
+    return -1
   if nalt == 0:
-    stderr.write_line "[somalier] no alternate alleles found at: ", $site
-    return 0
+    if report:
+      stderr.write_line "[somalier] no alternate alleles found at: ", $site
+    return -1
 
 
 proc get_depths(v:Variant, cache: var seq[int32]): seq[int32] =
@@ -210,7 +212,7 @@ type relation = object
   n: uint16
 
 proc hom_alt_concordance(r: relation): float64 {.inline.} =
-  return r.shared_hom_alts.float64 / min(r.hom_alts_a, r.hom_alts_b).float64 
+  return (r.shared_hom_alts.float64 - 2 * r.ibs0.float64) / min(r.hom_alts_a, r.hom_alts_b).float64
 
 proc rel(r:relation): float64 {.inline.} =
   return (r.shared_hets.float64 - 2 * r.ibs0.float64) / min(r.hets_a, r.hets_b).float64
@@ -273,6 +275,7 @@ proc relmatrix(paths:seq[string], sites:seq[Site], p: ptr relation_matrices, idx
 
   var last_chrom = ""
   var last_pos = -20000
+  var missing = 0 # just track how many missing sites and don't report after 20 per thread.
 
   for s in sites:
     if s.chrom == last_chrom and s.position - last_pos < 100:
@@ -280,7 +283,13 @@ proc relmatrix(paths:seq[string], sites:seq[Site], p: ptr relation_matrices, idx
 
     rel.sites_tested += 1
     nalts = nalts[0..<0]
-    if (get_bam_alts(bams, s, nalts, min_depth) + get_vcf_alts(vcfs, s, nalts, cache, min_depth)).float / n_samples.float < 0.7:
+    var alt_count = get_bam_alts(bams, s, nalts, min_depth, report=(missing < 20)) + get_vcf_alts(vcfs, s, nalts, cache, min_depth)
+
+    if alt_count.float / n_samples.float < 0.7:
+      if alt_count < 0:
+        missing += 1
+      if missing == 20:
+        stderr.write_line "[somalier] not reporting further missing sites from this thread."
       continue
 
     discard krelated(nalts, rel.ibs, rel.n, rel.hets, rel.homs, rel.shared_hom_alts, n_samples)
@@ -385,14 +394,18 @@ proc cluster(r: var relation_matrices) =
       r.clusters[i][j] = r.samples[j + off]
     off += r.clusters[i].len
 
-proc toSite(toks: seq[string], fai:Fai): Site =
+{.push checks: off, optimization:speed.}
+proc toSite(toks: seq[string]): Site =
   result = Site()
   result.chrom = toks[0]
   result.position = parseInt(toks[1]) - 1
-  var base = fai.get(result.chrom, result.position, result.position)
-  if base != toks[3]:
-    quit "reference base from sites file:" & toks[3] & " does not match that from reference: " & base
-  result.ref_allele = base[0]
+  result.ref_allele = toks[3][0]
+
+proc checkSiteRef(s:Site, fai:var Fai) =
+  var fa_allele = fai.get(s.chrom, s.position, s.position)[0]
+  if s.ref_allele != fa_allele:
+    quit "reference base from sites file:" & s.ref_allele & " does not match that from reference: " & fa_allele
+{.pop.}
 
 proc siteOrder(a:Site, b:Site): int =
   if a.chrom == b.chrom:
@@ -415,11 +428,17 @@ proc readSites(path: string, fai:var Fai): seq[Site] =
     if sep == ':':
       toks.insert(".", 2)
 
-    result.add(toSite(toks, fai))
+    result.add(toSite(toks))
   if len(result) > 65535:
     stderr.write_line "warning:cant use more than 65535 sites"
-  fai = nil
   sort(result, siteOrder)
+  # check reference after sorting so we get much faster access.
+  for i, r in result:
+    if i mod 5000 == 0 and i > 0:
+      stderr.write_line "[somalier] checked reference for " & $i & " sites"
+
+    checkSiteRef(r, fai)
+  fai = nil
 
 
 proc `%`*(v:uint16): JsonNode =
@@ -462,7 +481,7 @@ proc get_sample_names(path: string, fasta: string): seq[string] =
       if line.startsWith("@RG") and "\tSM:" in line:
         var t = line.split("\tSM:")[1].split("\t")[0].strip()
         # TODO: don't do this.
-        t = t.split("_")[0]
+        #t = t.split("_")[0]
         return @[t]
 
 
