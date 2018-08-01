@@ -240,7 +240,7 @@ var traces_a = []
 for (i in x_data) {
 
     traces_a.push({
-        name: "relatedness " + rel_pairs_value_2_rel.get(parseInt(i)),
+        name: rel_pairs_value_2_rel.get(parseInt(i)) == 0 ? "unrelated" : "identical",
         x: x_data[i],
         y: y_data[i],
         text: sample_pairs,
