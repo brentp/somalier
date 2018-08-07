@@ -5,11 +5,12 @@ import os
 import hts
 import math
 import json
-import parseopt
+import ./parseopt3
 import algorithm
 import ospaths
 import strutils
 import threadpool
+import ./results_html
 
 
 type Site* = object
@@ -434,7 +435,7 @@ proc readSites(path: string, fai:var Fai): seq[Site] =
   sort(result, siteOrder)
   # check reference after sorting so we get much faster access.
   for i, r in result:
-    if i mod 5000 == 0 and i > 0:
+    if i mod 10000 == 0 and i > 0:
       stderr.write_line "[somalier] checked reference for " & $i & " sites"
 
     checkSiteRef(r, fai)
@@ -631,9 +632,12 @@ proc main() =
 
   var
     fh_tsv:File
+    fh_html:File
 
   if not open(fh_tsv, output_prefix & "tsv", fmWrite):
     quit "couldn't open output file"
+  if not open(fh_html, output_prefix & "html", fmWrite):
+    quit "couldn't open html output file"
 
   fh_tsv.write_line '#', header.replace("$", "")
 
@@ -644,7 +648,13 @@ proc main() =
       "pairs" : %groups
     }]
 
-  echo $j
+  
+
+  fh_html.write(tmpl_html.replace("<INPUT_JSON>", $j))
+  fh_html.close()
+  stderr.write_line("[somalier] wrote interactive HTML output to: ",  output_prefix & "html")
+
+
 
   for rel in relatedness(final):
     fh_tsv.write_line $rel

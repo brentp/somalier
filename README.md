@@ -3,7 +3,7 @@
 Existing software for checking relatedness requires jointly-called germ-line variant calls,
 but cancer projects have only somatic calls between tumor-normal pairs.
 
-`somalier` makes checking any number of samples for identity easy:
+`somalier` makes checking any number of samples for identity easy **directly from the alignments**:
 
 ```
 somalier -o results/my-project --sites:$vcf *.cram
@@ -33,7 +33,7 @@ Options:
                           specified as comma-separated groups per line e.g.:
                             normal1,tumor1a,tumor1b
                             normal2,tumor2a
-  -o --output <prefix>    output prefix for results.
+  -o --output <prefix>    output prefix for results. (default: "somalier")
 ```
 
 ## How it works
@@ -80,6 +80,10 @@ https://academic.oup.com/bioinformatics/article/33/4/596/2624551
 
 ## TODO
 
-1. link plots
-2. guess which samples are normal.
-[x] label as related/unrelated instead of 0 or 1
++ [ ]  link plots
++ [ ] guess which samples are normal.
+
+## Acknowledgement
+
+This work was motivated by interaction and discussions with Preeti Aahir
+

@@ -1,0 +1,9 @@
+src/somalier
+nimcache
+*.bam
+*.cram
+*.bai
+*.crai
+profile_results.txt
+t.*.bed.gz
+t.*.bed.gz.csi
