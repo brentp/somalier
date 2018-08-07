@@ -1,6 +1,7 @@
+#!/bin/bash
 set -euo pipefail
 
-NIM_VERSION=v0.17.2
+NIM_VERSION=v0.18.0
 NIMBLE_VERSION=v0.8.10
 
 base=$(pwd)
@@ -35,4 +36,4 @@ cd $base
 git clone --depth 1 git://github.com/brentp/somalier.git
 cd somalier
 nim c --threads:on -d:release src/somalier.nim 
-cp ./somalier /io
+cp ./src/somalier /io

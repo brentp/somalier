@@ -6,7 +6,7 @@ but cancer projects have only somatic calls between tumor-normal pairs.
 `somalier` makes checking any number of samples for identity easy **directly from the alignments**:
 
 ```
-somalier -o results/my-project --sites:$vcf *.cram
+somalier --threads 4 --sites sites.vcf.gz -f:/data/human/g1k_v37_decoy.fa *.cram
 ```
 
 where sites is a VCF of variant sites (provided by somalier for hg19).
@@ -14,6 +14,10 @@ The interactive output that's produced (similar to [peddy](https://github.com/br
 makes it fast and easy to detect mismatched samples and sample-swaps.
 
 An optional argument lets the user specify expected groups of samples.
+
+## Install
+
+get a binary from [here](https://github.com/brentp/somalier/releases)
 
 
 ## Usage
