@@ -15,6 +15,9 @@ makes it fast and easy to detect mismatched samples and sample-swaps.
 
 An optional argument lets the user specify expected groups of samples.
 
+`--sites` is a VCF of known polymorphic sites in VCF format. A good set is provided in
+the [releases](https://github.com/brentp/somalier/releases) but any set of common variants will work.
+
 ## Install
 
 get a binary from [here](https://github.com/brentp/somalier/releases)
