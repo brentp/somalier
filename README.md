@@ -19,6 +19,9 @@ An optional argument lets the user specify expected groups of samples.
 
 get a binary from [here](https://github.com/brentp/somalier/releases)
 
+`somalier` requires `libhts.so` from [htslib](https://htslib.org) to be in
+a standard location or indicated with the `LD_LIBRARY_PATH` environment variable.
+
 
 ## Usage
 
