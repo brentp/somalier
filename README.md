@@ -6,7 +6,7 @@ but cancer projects have only somatic calls between tumor-normal pairs.
 `somalier` makes checking any number of samples for identity easy:
 
 ```
-somalier -o results/my-project --sites $vcf *.cram
+somalier -o results/my-project --sites:$vcf *.cram
 ```
 
 where sites is a VCF of variant sites (provided by somalier for hg19).
@@ -60,8 +60,16 @@ cancers. The interactive output allows toggling between any of these measures.
 
 ## Example
 
-![example](readme-fig.png)
+![example](https://user-images.githubusercontent.com/1739/43783575-4863f13c-9a1f-11e8-9cf8-622f784edc69.png)
 
+Here, each point is a pair of samples. We can see that the expected identical sample-pairs (e.g. tumor-normal pairs) specified by the user
+and drawn in red mostly cluster together on the right. Unrelateds cluster on the lower left. The sample-swaps are the blue points that cluster with
+the red. In the somalier output, the user can **hover to see which sample-pairs are involved each point**
+
+
+## License
+
+`somalier` is free and unrestricted for non-commercial use. For commercial use, please contact [bpedersen@base2genomics.com]
 
 ## Other Work
 
