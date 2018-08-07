@@ -1,4 +1,4 @@
-# somalier: checking cancer sample matching from BAMs/CRAMs
+# somalier: check cancer sample-matching from BAMs/CRAMs
 
 Existing software for checking relatedness requires jointly-called germ-line variant calls,
 but cancer projects have only somatic calls between tumor-normal pairs.
