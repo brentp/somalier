@@ -104,6 +104,7 @@ when isMainModule:
   var saved = newSeqOfCap[vf](100000)
 
   for v in vcf:
+    if v.REF == "C": continue
     if v.CHROM != last_chrom:
       last_chrom = v.CHROM
       last_pos = -2000
@@ -116,6 +117,7 @@ when isMainModule:
     if v.start - last_pos < 2000:
       continue
     if $last_chrom == "X" or $last_chrom == "Y": continue
+    if $last_chrom == "chrX" or $last_chrom == "chrY": continue
 
     if v.REF.len > 1 or v.ALT.len > 1 or v.ALT[0].len > 1: continue
     var f = v.FILTER
