@@ -46,7 +46,7 @@ proc alts*(c:count, min_depth:int): int8 {.inline.} =
 
   return 1
 
-proc count_alleles(b:Bam, site:Site): count =
+proc count_alleles(b:Bam, site:Site): count {.inline.} =
   for aln in b.query(site.chrom, site.position, site.position + 1):
     var off = aln.start
     var qoff = 0
@@ -119,18 +119,16 @@ proc get_bam_alts(bams:seq[BAM], site:Site, nalts: var seq[int8], min_depth:int=
 proc get_depths(v:Variant, cache: var seq[int32]): seq[int32] =
   for c in cache.mitems:
     c = 0
-  if v.format.ints("AD", cache) == Status.OK:
+  if v.format.get("AD", cache) == Status.OK:
     result = newSeq[int32](v.n_samples)
     for i in 0..<v.n_samples:
       result[i] = cache[2*i] + cache[2*i+1]
     return
 
-  if v.format.ints("DP", cache) == Status.OK:
+  if v.format.get("DP", cache) == Status.OK:
     result = newSeq[int32](v.n_samples)
     copyMem(result[0].addr, cache[0].addr, sizeof(cache[0]) * cache.len)
-    return 
-
-  return nil
+    return
 
 
 proc get_vcf_alts(vcfs:seq[VCF], site:Site, nalts: var seq[int8], cache: var seq[int32], min_depth:int): int =
@@ -148,7 +146,7 @@ proc get_vcf_alts(vcfs:seq[VCF], site:Site, nalts: var seq[int8], cache: var seq
         var alts = v.format.genotypes(cache).alts
         var dps = get_depths(v, cache)
         for k, alt in alts.mpairs:
-          if dps != nil and dps[k] < min_depth:
+          if dps.len != 0 and dps[k] < min_depth:
             alt = -1
           if alt != -1:
             found += 1
@@ -255,15 +253,15 @@ proc relmatrix(paths:seq[string], sites:seq[Site], p: ptr relation_matrices, idx
       bams.add(b)
     else:
       var vcf: VCF
-      if not open(vcf, path):
+      if not open(vcf, path, samples=(@[])):
         quit "could not open " & $path
       vcfs.add(vcf)
 
   var nalts = newSeqOfCap[int8](16)
   var rel = p[]
 
-  if rel.hets == nil:
-    stderr.write_line "skipped:", len(sites), " ", $(rel.n == nil), " ", $(rel.ibs == nil)
+  if rel.hets.len == 0:
+    stderr.write_line "skipped:", len(sites), " ", $(rel.n.len == 0), " ", $(rel.ibs.len == 0)
     result = false
     return
 
@@ -279,7 +277,7 @@ proc relmatrix(paths:seq[string], sites:seq[Site], p: ptr relation_matrices, idx
   var missing = 0 # just track how many missing sites and don't report after 20 per thread.
 
   for s in sites:
-    if s.chrom == last_chrom and s.position - last_pos < 100:
+    if s.chrom == last_chrom and s.position - last_pos < 1000:
       continue
 
     rel.sites_tested += 1
@@ -534,11 +532,11 @@ proc main() =
         writeHelp()
     of cmdEnd:
       assert(false)
-  if sites_path == nil or sites_path == "":
+  if sites_path == "":
     echo "must set sites path"
     writeHelp()
     quit(2)
-  if fasta_path == nil or fasta_path == "":
+  if fasta_path == "":
     echo "must set fasta path"
     writeHelp()
     quit(2)
@@ -604,7 +602,7 @@ proc main() =
 
 
   for index, fv in responses:
-    await(fv)
+    blockUntil(fv)
     #  quit "[somalier] got unexpected value from await"
     var relm = results[index]
 
