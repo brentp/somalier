@@ -1,13 +1,11 @@
 {.experimental.}
 
-import ./cluster
 import os
 import hts
 import math
 import json
 import ./parseopt3
 import algorithm
-import ospaths
 import strutils
 import threadpool
 import ./results_html
@@ -324,74 +322,6 @@ iterator relatedness(r:relation_matrices): relation =
                      ibs2: r.n[sk * r.n_samples + sj],
                      n: r.n[sj * r.n_samples + sk])
 
-proc reorder_1d[T](arr:seq[T], order: seq[int]): seq[T] =
-  result = newSeq[T](arr.len)
-  for i, o in order:
-    result[i] = arr[o]
-
-proc reorder_flat[T](arr:var seq[T], order: seq[int], n:int): seq[T] =
-  result = newSeq[T](arr.len)
-
-  for j in 0..<n:
-    for i in 0..<n:
-      var
-        oi = order[i]
-        oj = order[j]
-      # these flips are required because we store different data in the upper
-      # and lower halves of the matrix
-      if i < j and oi > oj or i > j and oi < oj:
-        var tmp = oi
-        oi = oj
-        oj = tmp
-
-      result[i*n+j] = arr[oi * n + oj]
-
-
-proc reorder(r:var relation_matrices, order: seq[int]) =
-  # after clustering, we have to re-order similar samples together. 
-  var n = r.n_samples
-
-  r.ibs = reorder_flat(r.ibs, order, n)
-  r.n = reorder_flat(r.n, order, n)
-  r.shared_hom_alts = reorder_flat(r.shared_hom_alts, order, n)
-
-  r.samples = reorder_1d(r.samples, order)
-  r.homs = reorder_1d(r.homs, order)
-  r.hets = reorder_1d(r.hets, order)
-
-proc cluster(r: var relation_matrices) =
-  ## re-order based on the complete linkage so that a heatmap is clustered properly.
-  var n = r.n_samples
-  var dist = newSeq[seq[float32]](n) # note that this is actually similarity, not distance.
-
-  for sj in 0..<n:
-    dist[sj] = newSeq[float32](n)
-    dist[sj][sj] = float32.high
-  
-  for sj in 0..<(n - 1):
-    for sk in (sj + 1)..<n:
-      if sj == sk:
-        quit "logic error"
-      var bottom = min(r.hets[sj], r.hets[sk]).float32
-      var tmp = (r.ibs[sk * n + sj].float32 - 2 * r.ibs[sj * n + sk].float32) / bottom
-      dist[sj][sk] = -tmp
-      dist[sk][sj] = -tmp
-
-  var clusters = hcluster(dist, -0.5)
-
-  var order = newSeqOfCap[int](n)
-  for cluster in clusters:
-    order.add(cluster)
-  r.reorder(order)
-
-  # now set the clusters to match the new order
-  r.clusters = newSeq[seq[string]](len(clusters))
-  var off = 0
-  for i, c in clusters:
-    r.clusters[i] = newSeq[string](c.len)
-    for j in 0..<r.clusters[i].len:
-      r.clusters[i][j] = r.samples[j + off]
-    off += r.clusters[i].len
 
 {.push checks: off, optimization:speed.}
 proc toSite(toks: seq[string]): Site =
@@ -457,19 +387,6 @@ proc readGroups(path:string): seq[seq[string]] =
       for j, y in row[(i+1)..row.high]:
         result.add(@[x, y])
 
-proc write_groups(r: relation_matrices, output_prefix: string) =
-  var
-    fh_groups:File
-  if not open(fh_groups, output_prefix & "groups.tsv", fmWrite):
-    quit "couldn't open output file"
-  for group in r.clusters:
-    #var s = newSeqOfCap[string](group.len)
-    #for i in group:
-    #  s.add(r.samples[i])
-    fh_groups.write_line join(group, ",")
-  fh_groups.close()
-  stderr.write_line("[somalier] wrote text output to: ",  output_prefix & "tsv")
-
 proc get_sample_names(path: string, fasta: string): seq[string] =
   if path.bam_like:
     var bam: Bam
@@ -517,7 +434,7 @@ proc main() =
       case key
       of "help", "h":
         writeHelp()
-        continue
+        quit(0)
       of "threads", "t":
         threads = parseInt(val)
       of "output", "o":
@@ -625,7 +542,7 @@ proc main() =
 
   stderr.write_line "[somalier] sites tested:", $final.sites_tested
 
-  final.cluster
+  #final.cluster
   #final.clusters = @[@[1]]
 
   var
@@ -646,18 +563,12 @@ proc main() =
       "pairs" : %groups
     }]
 
-  
-
   fh_html.write(tmpl_html.replace("<INPUT_JSON>", $j))
   fh_html.close()
   stderr.write_line("[somalier] wrote interactive HTML output to: ",  output_prefix & "html")
 
-
-
   for rel in relatedness(final):
     fh_tsv.write_line $rel
-
-  final.write_groups(output_prefix)
 
   fh_tsv.close()
   stderr.write_line("[somalier] wrote groups to: ",  output_prefix & "groups.tsv")

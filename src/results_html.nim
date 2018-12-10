@@ -446,19 +446,6 @@ there.
     <div id="plota" style="width: 100%; height: 90%"></div>
 </div>
 
-<div class = "six columns">
-    <select id="plotb_select">
-        <option value="shared_hets">shared hets</option>
-        <option value="shared_hom_alts">shared hom-alts</option>
-        <option value="concordance" selected >homozygous concordance</option>
-        <option value="relatedness">relatedness</option>
-        <option value="ibs0">IBS0</option>
-        <option value="ibs2">IBS2</option>
-    </select>
-
-    <div id="plotb" style="width: 100%; height: 90%"></div>
-</div>
-
     <script>
 
 var input = <INPUT_JSON>
@@ -563,53 +550,9 @@ var colorscaleValue = [
   [1,   '#001f3f']
 ];
 
-var metric_b = jQuery("#plotb_select").val()
 
 var sample_pairs = get_xy_samples(input)
 
-var heat_data = {
-    z: get_heat_data(input, metric_b),
-    type: 'heatmap',
-    x: input.samples,
-    colorscale: colorscaleValue,
-    y: input.samples,
-    zsmooth: false,
-}
-
-var layout_b = {
-    title: jQuery("#plotb_select option:selected").text(),
-    autosize: true,
-    xaxis: {
-        tickangle: 90,
-    },
-    hovermode: 'closest',
-    shapes: [],
-}
-
-// add the rectangles around each cluster.
-var coff = 0
-input.clusters.forEach(function(cluster) {
-    if(cluster.length == 1) { 
-        coff += 1
-        return 
-    }
-    layout_b.shapes.push({
-        type: "rect",
-        xref: "x",
-        yref: "y",
-        x0: coff - 0.5,
-        y0: coff - 0.5,
-        x1: coff + cluster.length - 0.5,
-        y1: coff + cluster.length - 0.5,
-        //fillcolor: '#d3d3d3',
-        //opacity: 0.5,
-        line: {width: 1.8, color: '#a41414'},
-    })
-    coff += cluster.length
-
-});
-
-var traces_b = []
 var traces_a = []
 
 
@@ -667,17 +610,8 @@ for (i in x_data) {
     })
 }
 
-traces_b.push(heat_data)
-
-Plotly.newPlot('plotb', traces_b, layout_b)
 Plotly.newPlot('plota', traces_a, layout_a)
 
-jQuery('#plotb_select').on('change', function() {
-    var metric = this.value
-    layout_b.title = jQuery("#plotb_select option:selected").text();
-    heat_data.z = get_heat_data(input, metric)
-    Plotly.redraw('plotb')
-})
 jQuery('#plotax_select').on('change', function() {
     var metric = this.value
     layout_a.xaxis.title = jQuery("#plotax_select option:selected").text();
@@ -701,7 +635,6 @@ jQuery('#plotay_select').on('change', function() {
 
 window.onresize = function() {
     Plotly.Plots.resize('plota');
-    Plotly.Plots.resize('plotb');
 };
 </script>
 </body>
