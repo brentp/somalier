@@ -4,12 +4,12 @@ import os
 import hts
 import math
 import json
+import times
 import ./parseopt3
 import algorithm
 import strutils
 import threadpool
 import ./results_html
-
 
 type Site* = object
   ref_allele: char
@@ -231,7 +231,6 @@ type relation_matrices = object
    homs: seq[uint16]
    shared_hom_alts: seq[uint16]
    samples: seq[string]
-   clusters: seq[seq[string]]
 
 proc n_samples(r: relation_matrices): int {.inline.} =
   return r.samples.len
@@ -239,7 +238,7 @@ proc n_samples(r: relation_matrices): int {.inline.} =
 proc bam_like(path:string): bool {.inline.} =
     return path.endsWith(".bam") or path.endsWith(".cram")
 
-proc relmatrix(paths:seq[string], sites:seq[Site], p: ptr relation_matrices, idx:int): bool {.thread.} =
+proc relmatrix(paths:seq[string], sites:seq[Site], p: ptr relation_matrices, idx:int): bool {.thread, gcsafe.} =
   result = true
 
   var bams = newSeqOfCap[Bam](len(paths))
@@ -272,7 +271,7 @@ proc relmatrix(paths:seq[string], sites:seq[Site], p: ptr relation_matrices, idx
 
   var last_chrom = ""
   var last_pos = -20000
-  var missing = 0 # just track how many missing sites and don't report after 20 per thread.
+  var missing = 0 # just track how many missing sites and don't report after 10 per thread.
 
   for s in sites:
     if s.chrom == last_chrom and s.position - last_pos < 1000:
@@ -280,16 +279,19 @@ proc relmatrix(paths:seq[string], sites:seq[Site], p: ptr relation_matrices, idx
 
     rel.sites_tested += 1
     nalts = nalts[0..<0]
-    var alt_count = get_bam_alts(bams, s, nalts, min_depth, report=(missing < 20)) + get_vcf_alts(vcfs, s, nalts, cache, min_depth)
+    var t0 = cpuTime()
+    var alt_count = get_bam_alts(bams, s, nalts, min_depth, report=(missing < 10)) + get_vcf_alts(vcfs, s, nalts, cache, min_depth)
+    t0 = cpuTime()
 
     if alt_count.float / n_samples.float < 0.7:
       if alt_count < 0:
         missing += 1
-      if missing == 20:
+      if missing == 10:
         stderr.write_line "[somalier] not reporting further missing sites from this thread."
       continue
 
     discard krelated(nalts, rel.ibs, rel.n, rel.hets, rel.homs, rel.shared_hom_alts, n_samples)
+
     last_chrom = s.chrom
     last_pos = s.position
 
@@ -483,19 +485,20 @@ proc main() =
   if threads < 2:
     threads = 1
 
-  var batch_size = (sites.len / threads).int
-
-  if threads * batch_size < sites.len:
+  var batch_size = (sites.len.float64 / threads.float64).int
+  if batch_size * threads < sites.len:
     batch_size += 1
-
-  if threads * batch_size < sites.len:
-    quit "logic error. batch size too small"
+    threads = (sites.len / batch_size).int
+    if batch_size * threads < sites.len:
+      threads += 1
 
   var
     results = newSeq[relation_matrices](threads)
     responses = newSeq[FlowVarBase](threads)
 
   stderr.write_line "[somalier] batch-size:", batch_size, " sites:", len(sites), " threads:" & $threads
+  setMinPoolSize(threads)
+  setMaxPoolSize(threads + 1)
 
   # aggregated from all threads.
   var final = relation_matrices(ibs: newSeq[uint16](n_samples * n_samples),
@@ -515,8 +518,9 @@ proc main() =
     results[j].sites_tested = 0
     var imin = j * batch_size
     var imax = min(sites.len, (j + 1) * batch_size)
-    responses[j] = spawn relmatrix(bv_paths, sites[imin..<imax], results[j].addr, j)
 
+    doAssert imin < imax
+    responses[j] = spawn relmatrix(bv_paths, sites[imin..<imax], results[j].addr, j)
 
   for index, fv in responses:
     blockUntil(fv)
@@ -541,9 +545,6 @@ proc main() =
       stderr.write_line "[somalier] tested 0 sites for batch:", $i
 
   stderr.write_line "[somalier] sites tested:", $final.sites_tested
-
-  #final.cluster
-  #final.clusters = @[@[1]]
 
   var
     fh_tsv:File

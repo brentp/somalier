@@ -23,7 +23,7 @@ RUN yum install -y git curl wget zlib-devel xz-devel bzip2-devel openssl-devel l
     ldconfig
 
 RUN cd / && \
-    git clone -b devel --depth 1000 git://github.com/nim-lang/nim nim && \
+    git clone -b devel --depth 10 git://github.com/nim-lang/nim nim && \
     cd nim && \
     chmod +x ./build_all.sh && \
     scl enable devtoolset-2 ./build_all.sh && \
@@ -31,7 +31,7 @@ RUN cd / && \
     echo 'PATH=/nim/bin:$PATH' >> ~/.bashrc && \
     echo 'PATH=/nim/bin:$PATH' >> ~/.bash_profile && \
     cd / && \
-    git clone --depth 1 git://github.com/brentp/somalier.git && \
+    git clone -b cleanup --depth 1 git://github.com/brentp/somalier.git && \
     cd somalier && \
     nimble install -y hts && \
     source scl_source enable devtoolset-2  && \
