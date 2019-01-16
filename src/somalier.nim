@@ -86,33 +86,18 @@ Options:
 
   """
 
-proc get_bam_alts(bams:seq[BAM], site:Site, nalts: var seq[int8], min_depth:int=6, report:bool=true): int =
-  ## returns number of known genotypes
-  if bams.len == 0:
-    return 0
 
-  var nref = 0
-  var nalt = 0
-
-  for bam in bams:
+proc get_alts(bam:Bam, sites:seq[Site], nalts: ptr seq[int8], min_depth:int=6): bool =
+  ## count alternate alleles in a single bam at each site.
+  for i, site in sites:
     var c = bam.count_alleles(site)
-    var calts = c.alts(min_depth)
-    if calts != -1:
-      result += 1
-    if c.nref > 0:
-      nref = 1
-    if c.nalt > 0:
-      nalt = 1
-    nalts.add(calts)
-  if nref == 0:
-    if report:
-      stderr.write_line "[somalier] no reference alleles found at: ", $site
-    return -1
-  if nalt == 0:
-    if report:
-      stderr.write_line "[somalier] no alternate alleles found at: ", $site
-    return -1
+    nalts[][i] = c.alts(min_depth)
 
+proc get_bam_alts(path:string, sites:seq[Site], nalts: ptr seq[int8], min_depth:int=6): bool =
+  var bam: Bam
+  if not open(bam, path, index=true):
+    quit "couldn't open :" & $path
+  return bam.get_alts(sites, nalts, min_depth)
 
 proc get_depths(v:Variant, cache: var seq[int32]): seq[int32] =
   for c in cache.mitems:
@@ -153,7 +138,7 @@ proc get_vcf_alts(vcfs:seq[VCF], site:Site, nalts: var seq[int8], cache: var seq
     result += found
 
 
-proc krelated(alts: var seq[int8], ibs: var seq[uint16], n: var seq[uint16], hets: var seq[uint16], homs: var seq[uint16], shared_hom_alts: var seq[uint16], n_samples: int): int =
+proc krelated(alts: var seq[int8], ibs: var seq[uint16], n: var seq[uint16], hets: var seq[uint16], homs: var seq[uint16], shared_hom_alts: var seq[uint16], n_samples: int): int {.inline.} =
 
   if alts[n_samples - 1] == 1:
     hets[n_samples-1] += 1
@@ -238,6 +223,7 @@ proc n_samples(r: relation_matrices): int {.inline.} =
 proc bam_like(path:string): bool {.inline.} =
     return path.endsWith(".bam") or path.endsWith(".cram")
 
+#[
 proc relmatrix(paths:seq[string], sites:seq[Site], p: ptr relation_matrices, idx:int): bool {.thread, gcsafe.} =
   result = true
 
@@ -280,13 +266,13 @@ proc relmatrix(paths:seq[string], sites:seq[Site], p: ptr relation_matrices, idx
     rel.sites_tested += 1
     nalts = nalts[0..<0]
     var t0 = cpuTime()
-    var alt_count = get_bam_alts(bams, s, nalts, min_depth, report=(missing < 10)) + get_vcf_alts(vcfs, s, nalts, cache, min_depth)
+    var alt_count = get_bams_alts(bams, s, nalts, min_depth, report=(missing < 5)) + get_vcf_alts(vcfs, s, nalts, cache, min_depth)
     t0 = cpuTime()
 
     if alt_count.float / n_samples.float < 0.7:
       if alt_count < 0:
         missing += 1
-      if missing == 10:
+      if missing == 5:
         stderr.write_line "[somalier] not reporting further missing sites from this thread."
       continue
 
@@ -297,6 +283,7 @@ proc relmatrix(paths:seq[string], sites:seq[Site], p: ptr relation_matrices, idx
 
   p[] = rel
 
+]#
 
 iterator relatedness(r:relation_matrices): relation =
   var sample_names = r.samples
@@ -423,6 +410,7 @@ proc main() =
     bv_paths = newSeq[string]()
     sites_path: string
     fasta_path: string
+    min_depth = 6
     groups_path: string = ""
     output_prefix: string = "somalier."
     threads = 1
@@ -485,18 +473,14 @@ proc main() =
   if threads < 2:
     threads = 1
 
-  var batch_size = (sites.len.float64 / threads.float64).int
-  if batch_size * threads < sites.len:
-    batch_size += 1
-    threads = (sites.len / batch_size).int
-    if batch_size * threads < sites.len:
-      threads += 1
+  if threads > n_samples:
+    threads = n_samples
 
   var
-    results = newSeq[relation_matrices](threads)
+    results = newSeq[seq[int8]](threads)
     responses = newSeq[FlowVarBase](threads)
 
-  stderr.write_line "[somalier] batch-size:", batch_size, " sites:", len(sites), " threads:" & $threads
+  stderr.write_line "[somalier] sites:", len(sites), " threads:" & $threads
   setMinPoolSize(threads)
   setMaxPoolSize(threads + 1)
 
@@ -509,43 +493,32 @@ proc main() =
                               samples: sample_names)
 
   for j in 0..<responses.len:
-    results[j] = relation_matrices()
-    results[j].ibs = newSeq[uint16](n_samples * n_samples)
-    results[j].n = newSeq[uint16](n_samples * n_samples)
-    results[j].shared_hom_alts = newSeq[uint16](n_samples * n_samples)
-    results[j].hets = newSeq[uint16](n_samples)
-    results[j].homs = newSeq[uint16](n_samples)
-    results[j].sites_tested = 0
-    var imin = j * batch_size
-    var imax = min(sites.len, (j + 1) * batch_size)
-
-    doAssert imin < imax
-    responses[j] = spawn relmatrix(bv_paths, sites[imin..<imax], results[j].addr, j)
+    results[j] = newSeqOfCap[int8](sites.len)
+    responses[j] = spawn get_bam_alts(bv_paths[j], sites, results[j].addr, min_depth)
 
   for index, fv in responses:
     blockUntil(fv)
-    #  quit "[somalier] got unexpected value from await"
-    var relm = results[index]
 
-    final.sites_tested += relm.sites_tested
+  stderr.write_line "[somalier] collected sites from all samples:", $final.sites_tested
+  shallow(results)
 
-    for i, v in relm.n:
-      final.n[i] += v
-    for i, v in relm.shared_hom_alts:
-      final.shared_hom_alts[i] += v
-    for i, v in relm.hets:
-      final.hets[i] += v
-    for i, v in relm.homs:
-      final.homs[i] += v
-    for i, v in relm.ibs:
-      final.ibs[i] += v
+  var t0 = cpuTime()
+  var nsites = 0
+  var alts = newSeq[int8](n_samples)
 
-  for i, r in results:
-    if r.sites_tested == 0:
-      stderr.write_line "[somalier] tested 0 sites for batch:", $i
+  for rowi in 0..sites.high:
+    var nun = 0
+    for i in 0..<n_samples:
+      alts[i] = results[i][rowi]
+      if alts[i] == -1: nun.inc
 
-  stderr.write_line "[somalier] sites tested:", $final.sites_tested
+    if nun.float64 / n_samples.float64 > 0.6: continue
+    nsites += 1
 
+    discard krelated(alts, final.ibs, final.n, final.hets, final.homs, final.shared_hom_alts, n_samples)
+
+  echo "used ", nsites, " sites"
+  echo "time to calculate relatedness:", cpuTime() - t0
   var
     fh_tsv:File
     fh_html:File
