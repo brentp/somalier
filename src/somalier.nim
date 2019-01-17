@@ -5,6 +5,8 @@ import hts
 import math
 import json
 import times
+import bpbiopkg/pedfile
+import strformat
 import ./parseopt3
 import algorithm
 import strutils
@@ -19,6 +21,11 @@ type Site* = object
 type count* = object
   nref: int
   nalt: int
+
+type pair = tuple[a:string, b:string, rel:float64]
+
+proc `%`*(p:pair): JsonNode =
+  return %*{"a":p.a, "b":p.b, "rel":p.rel}
 
 proc ab*(c:count): float {.inline.} =
   return c.nalt.float / (c.nalt + c.nref).float
@@ -77,11 +84,14 @@ Options:
 
   -s --sites <vcf>        vcf file with lines of sites to use for relatedness estimation.
   -t --threads <int>      optional number of processors to use for parallelization.
+  -d --min-depth <int>    only consider sites with at least this depth [default: 7].
   -f --fasta <reference>  path to reference fasta file.
   -g --groups <path>      optional path to expected groups of samples (e.g. tumor normal pairs).
                           specified as comma-separated groups per line e.g.:
                             normal1,tumor1a,tumor1b
                             normal2,tumor2a
+  -p --ped <path>         optional path to a ped/fam file indicating the expected relationships
+                          among samples.
   -o --output <prefix>    output prefix for results.
 
   """
@@ -223,69 +233,8 @@ proc n_samples(r: relation_matrices): int {.inline.} =
 proc bam_like(path:string): bool {.inline.} =
     return path.endsWith(".bam") or path.endsWith(".cram")
 
-#[
-proc relmatrix(paths:seq[string], sites:seq[Site], p: ptr relation_matrices, idx:int): bool {.thread, gcsafe.} =
-  result = true
 
-  var bams = newSeqOfCap[Bam](len(paths))
-  var vcfs = newSeqOfCap[VCF](2)
-  for i, path in paths:
-    if path.bam_like:
-      var b:Bam
-      open(b, path, index=true)
-      bams.add(b)
-    else:
-      var vcf: VCF
-      if not open(vcf, path, samples=(@[])):
-        quit "could not open " & $path
-      vcfs.add(vcf)
-
-  var nalts = newSeqOfCap[int8](16)
-  var rel = p[]
-
-  if rel.hets.len == 0:
-    stderr.write_line "skipped:", len(sites), " ", $(rel.n.len == 0), " ", $(rel.ibs.len == 0)
-    result = false
-    return
-
-  var cache = newSeq[int32](vcfs.len)
-  var min_depth:int = 6
-
-  var n_samples = bams.len
-  for v in vcfs:
-    n_samples += v.n_samples
-
-  var last_chrom = ""
-  var last_pos = -20000
-  var missing = 0 # just track how many missing sites and don't report after 10 per thread.
-
-  for s in sites:
-    if s.chrom == last_chrom and s.position - last_pos < 1000:
-      continue
-
-    rel.sites_tested += 1
-    nalts = nalts[0..<0]
-    var t0 = cpuTime()
-    var alt_count = get_bams_alts(bams, s, nalts, min_depth, report=(missing < 5)) + get_vcf_alts(vcfs, s, nalts, cache, min_depth)
-    t0 = cpuTime()
-
-    if alt_count.float / n_samples.float < 0.7:
-      if alt_count < 0:
-        missing += 1
-      if missing == 5:
-        stderr.write_line "[somalier] not reporting further missing sites from this thread."
-      continue
-
-    discard krelated(nalts, rel.ibs, rel.n, rel.hets, rel.homs, rel.shared_hom_alts, n_samples)
-
-    last_chrom = s.chrom
-    last_pos = s.position
-
-  p[] = rel
-
-]#
-
-iterator relatedness(r:relation_matrices): relation =
+iterator relatedness(r:relation_matrices, grouped: var seq[pair]): relation =
   var sample_names = r.samples
 
   for sj in 0..<r.n_samples - 1:
@@ -299,8 +248,9 @@ iterator relatedness(r:relation_matrices): relation =
         # can't calculate relatedness
         bottom = -1'f64
 
-      #var grelatedness = (r.ibs[sk * r.n_samples + sj].float64 - 2 * r.ibs[sj * r.n_samples + sk].float64) / bottom
-      #
+      var grelatedness = (r.ibs[sk * r.n_samples + sj].float64 - 2 * r.ibs[sj * r.n_samples + sk].float64) / bottom
+      if grelatedness > 0.2:
+        grouped.add((sample_names[sj], sample_names[sk], grelatedness))
       yield relation(sample_a: sample_names[sj],
                      sample_b: sample_names[sk],
                      hets_a: r.hets[sj], hets_b: r.hets[sk],
@@ -364,19 +314,25 @@ proc `%`*(v:uint16): JsonNode =
   result.kind = JInt
   result.num = v.int64
 
-proc readGroups(path:string): seq[seq[string]] =
-  result = newSeq[seq[string]]()
+proc readGroups(path:string): seq[pair] =
+  result = newSeq[pair]()
   if path == "":
     return
 
   # expand out a,b,c to a,b, a,c, b,c
   for line in path.lines:
     var row = line.strip().split(",")
+    var rel = 1.0
+    if '\t' in row[row.high]:
+      var tmp = row[row.high].split('\t')
+      doAssert tmp.len == 2
+      row[row.high] = tmp[0]
+      rel = parseFloat(tmp[1])
     for i, x in row[0..<row.high]:
       for j, y in row[(i+1)..row.high]:
-        result.add(@[x, y])
+        result.add((x, y, rel))
 
-proc get_sample_names(path: string, fasta: string): seq[string] =
+proc get_sample_names(path: string): seq[string] =
   if path.bam_like:
     var bam: Bam
     open(bam, path)
@@ -385,10 +341,7 @@ proc get_sample_names(path: string, fasta: string): seq[string] =
     for line in txt.split("\n"):
       if line.startsWith("@RG") and "\tSM:" in line:
         var t = line.split("\tSM:")[1].split("\t")[0].strip()
-        # TODO: don't do this.
-        #t = t.split("_")[0]
         return @[t]
-
 
   elif path.endsWith("vcf.gz") or path.endswith(".bcf") or path.endsWith(".bcf.gz") or path.endsWith("vcf.bgz"):
     var vcf: VCF
@@ -401,6 +354,14 @@ proc get_sample_names(path: string, fasta: string): seq[string] =
   # TODO: remove s.name
   return @[s.name.split("_")[0]]
 
+proc write(grouped: seq[pair], output_prefix:string) =
+  if len(grouped) == 0: return
+  var fh_groups:File
+  if not open(fh_groups,  output_prefix & "groups.tsv", fmWrite):
+    quit "couldn't open groups file."
+  for grp in grouped:
+    fh_groups.write(&"{grp.a},{grp.b}\t{grp.rel}\n")
+  fh_groups.close()
 
 proc main() =
 
@@ -409,9 +370,10 @@ proc main() =
   var
     bv_paths = newSeq[string]()
     sites_path: string
-    fasta_path: string
-    min_depth = 6
-    groups_path: string = ""
+    fai: Fai
+    samples: seq[Sample]
+    min_depth = 7
+    groups: seq[pair]
     output_prefix: string = "somalier."
     threads = 1
 
@@ -425,16 +387,21 @@ proc main() =
       of "help", "h":
         writeHelp()
         quit(0)
+      of "d", "min-depth":
+        min_depth = parseInt(val)
       of "threads", "t":
         threads = parseInt(val)
+      of "ped", "p":
+        samples = parse_ped(val)
       of "output", "o":
         output_prefix = val.strip(chars={'.'}) & "." & "somalier."
       of "sites", "s":
         sites_path = val
       of "fasta", "f":
-        fasta_path = val
+        if not open(fai, val):
+          quit "couldn't open fasta with fai:" & val
       of "groups", "g":
-        groups_path = val
+        groups = readGroups(val)
       else:
         writeHelp()
     of cmdEnd:
@@ -443,17 +410,13 @@ proc main() =
     echo "must set sites path"
     writeHelp()
     quit(2)
-  if fasta_path == "":
+  if fai == nil:
     echo "must set fasta path"
     writeHelp()
     quit(2)
   if threads < 1: threads = 1
 
-  var fai: Fai
-  if not open(fai, fasta_path):
-    quit "couldn't open fasta with fai:" & fasta_path
   var sites = readSites(sites_path, fai)
-  var groups = readGroups(groups_path)
 
   ## need to track samples names from bams first, then vcfs since
   ## thats the order for the alts array.
@@ -462,9 +425,9 @@ proc main() =
 
   for i, path in bv_paths:
     if path.bam_like:
-      sample_names.add(get_sample_names(path, fasta_path))
+      sample_names.add(get_sample_names(path))
     else:
-      non_bam_sample_names.add(get_sample_names(path, fasta_path))
+      non_bam_sample_names.add(get_sample_names(path))
 
   sample_names.add(non_bam_sample_names)
 
@@ -522,6 +485,7 @@ proc main() =
   var
     fh_tsv:File
     fh_html:File
+    grouped: seq[pair]
 
   if not open(fh_tsv, output_prefix & "tsv", fmWrite):
     quit "couldn't open output file"
@@ -531,20 +495,18 @@ proc main() =
   fh_tsv.write_line '#', header.replace("$", "")
 
   var j = % final
-  if groups.len > 0:
-    j["expected-relatedness"] = % [{
-      "value": %1,
-      "pairs" : %groups
-    }]
+  j["expected-relatedness"] = %* groups
 
   fh_html.write(tmpl_html.replace("<INPUT_JSON>", $j))
   fh_html.close()
   stderr.write_line("[somalier] wrote interactive HTML output to: ",  output_prefix & "html")
 
-  for rel in relatedness(final):
+  for rel in relatedness(final, grouped):
     fh_tsv.write_line $rel
 
   fh_tsv.close()
+  grouped.write(output_prefix)
+
   stderr.write_line("[somalier] wrote groups to: ",  output_prefix & "groups.tsv")
 
 

@@ -532,45 +532,18 @@ function get_xy_samples(input) {
 
 var colors = ['#377eb8bb', '#e41a1cbb', '#4daf4a', '#984ea3', '#ff7f00', '#ffff33', '#a65628', '#f781bf', '#999999', '#e41a1c', '#377eb8', '#4daf4a']
 
-function get_colors(input, colormap) {
-    var result = []
-    for(i = 0; i < input.n_samples - 1; i++) {
-        for(j=i+1; j < input.n_samples; j++){
-            var c = getc(colormap, input.samples[i], input.samples[j])
-            result.push(colors[c])
-        }
-    }
-    return result
-}
-
-var colorscaleValue = [
-  [0,   '#3D9970'],
-  [0.4,   '#2D8960'],
-  [0.8, '#011e3e'],
-  [1,   '#001f3f']
-];
-
-
 var sample_pairs = get_xy_samples(input)
 
 var traces_a = []
 
-
 var rel_pairs = new Map()
-var rel_pairs_value_2_rel = new Map()
-rel_pairs_value_2_rel.set(0, 0)
 if ("expected-relatedness" in input) {
     var er = input["expected-relatedness"]
-    var found = new Map()
     for(i in er){
-        var v = er[i] // v.value and v.pairs
-        rel_pairs_value_2_rel.set(parseInt(i) + 1, v.value)
-        for(j in v.pairs){
-            rel_pairs.set(v.pairs[j][0] + "--" + v.pairs[j][1], parseInt(i)+1)
-        }
+        var p = er[i] // {a:sample, b:sample, rel:0.5}
+        rel_pairs.set(p.a + "--" + p.b, p.rel)
     }
 }
-
 
 var layout_a = {
     autosize: true,
@@ -594,18 +567,23 @@ if(input.n_samples > 50) {
     size = 8
 }
 
+var l = {0: "unrelated", 0.5: "parent-child", 0.49: "sib-sib", 1: "identical"}
 
 var traces_a = []
 for (i in x_data) {
+    var name = l[i]
+    if (name == "undefined") {
+      name = i.toString()
+    }
 
     traces_a.push({
-        name: rel_pairs_value_2_rel.get(parseInt(i)) == 0 ? "unrelated" : "identical",
+        name: name,
         x: x_data[i],
         y: y_data[i],
         text: sample_pairs,
         type: 'scatter',
         mode: 'markers',
-        marker: {size: size, color:colors[i]},
+        marker: {size: size, color:colors[traces_a.length]},
         showlegend:true,
     })
 }
