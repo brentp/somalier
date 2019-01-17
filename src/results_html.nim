@@ -423,7 +423,7 @@ there.
 </head>
 <body>
 
-<div class = "six columns">
+<div class = "eleven columns">
         X:
     <select id="plotax_select">
         <option value="shared_hets">shared hets</option>
@@ -496,7 +496,7 @@ function getc(rel_pairs, sample_a, sample_b) {
     //c = rel_pairs.get(sample_b + "--" + sample_a)
     if (c == undefined) {
         c = 0
-    } 
+    }
     return c
 }
 

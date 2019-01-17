@@ -499,7 +499,7 @@ proc main() =
   for index, fv in responses:
     blockUntil(fv)
 
-  stderr.write_line "[somalier] collected sites from all samples:", $final.sites_tested
+  stderr.write_line "[somalier] collected sites from all samples"
   shallow(results)
 
   var t0 = cpuTime()

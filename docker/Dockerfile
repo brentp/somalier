@@ -36,5 +36,5 @@ RUN cd / && \
     nimble install -y hts && \
     source scl_source enable devtoolset-2  && \
     nim c -d:release -o:/usr/bin/somalier --passC:-flto src/somalier && \
-    rm -rf /somalier && somalier -h
+    rm -rf /somalier && somalier --help
 
