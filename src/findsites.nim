@@ -21,7 +21,7 @@ const target_af = 0.5
 
 proc vf_by(a:vf, b:vf): int =
   ## sort close to the given AF.
-  if (a.af - b.af) < 0.01:
+  if (a.af - b.af) < 0.03:
     return cmp(a.mqrs.abs, b.mqrs.abs)
   return cmp((a.af - target_af).abs, (b.af - target_af).abs)
 
@@ -89,13 +89,12 @@ when isMainModule:
 
   if not open(vcf, vcf_path, threads=2):
     quit "couldn't open " & vcf_path
-  if not open(wtr, "-", mode="wz", threads=1):
+  if not open(wtr, "sites.vcf.gz", mode="wz", threads=1):
     quit "couldn't open stdout for writing sites"
   wtr.header = vcf.header
 
   var
     last_chrom = "".cstring
-    last_pos = -2000
   var afs = newSeq[float32](1)
   var oms = ""
   var lap:Lapper[region_t]
@@ -107,15 +106,11 @@ when isMainModule:
     if v.REF == "C": continue
     if v.CHROM != last_chrom:
       last_chrom = v.CHROM
-      last_pos = -2000
-      stderr.write_line $last_chrom
       if exclude_regions.contains($last_chrom):
         lap = lapify(exclude_regions[$last_chrom])
       else:
         var seqs = newSeq[region_t]()
         lap = lapify(seqs)
-    if v.start - last_pos < 2000:
-      continue
     if $last_chrom == "X" or $last_chrom == "Y": continue
     if $last_chrom == "chrX" or $last_chrom == "chrY": continue
 
@@ -127,13 +122,13 @@ when isMainModule:
       continue
 
     var info = v.info
-    if info.floats("AF", afs) != Status.OK:
+    if info.get("AF", afs) != Status.OK:
       continue
-    if info.strings("AS_FilterStatus", oms) == Status.OK and oms != "PASS":
+    if info.get("AS_FilterStatus", oms) == Status.OK and oms != "PASS":
       continue
-    if info.strings("OLD_MULTIALLELIC", oms) == Status.OK:
+    if info.get("OLD_MULTIALLELIC", oms) == Status.OK:
       continue
-    if info.strings("OLD_VARIANT", oms) == Status.OK:
+    if info.get("OLD_VARIANT", oms) == Status.OK:
       continue
     if afs[0] < 0.08 or afs[0] > 0.92: continue
 
@@ -146,10 +141,9 @@ when isMainModule:
       except:
         discard
     #discard wtr.write_variant(v)
-    #last_pos = v.start
     var x:float32 = afs[0]
     var vfo = vf(v:v.copy(), af:x)
-    if info.floats("MQRankSum", afs) == Status.OK:
+    if info.get("MQRankSum", afs) == Status.OK:
       vfo.mqrs = afs[0]
     else:
       stderr.write_line "no MQRankSum"
@@ -165,22 +159,30 @@ when isMainModule:
   saved.sort(vf_by)
   stderr.write_line $(saved.len), " candidate variants"
   var added = newTable[cstring, seq[Variant]]()
-  var wrote = 0
+
+  var used = newSeqOfCap[Variant](8192)
 
   for v in saved:
     discard added.hasKeyOrPut(v.v.CHROM, newSeq[Variant]())
     var vs = added.mget(v.v.CHROM)
 
-    if len(vs) > 0 and (v.v.closest(vs).start - v.v.start).abs < 1000:
+    if len(vs) > 0 and (v.v.closest(vs).start - v.v.start).abs < 10000:
       continue
 
-    discard wtr.write_variant(v.v)
+    #discard wtr.write_variant(v.v)
     vs.add(v.v.copy())
-    wrote += 1
+    used.add(v.v.copy())
 
     added[v.v.CHROM] = vs
 
-  stderr.write_line "wrote ", $(wrote), " variants"
+  sort(used, proc(a, b: Variant): int =
+      if a.rid != b.rid: return cmp(a.rid, b.rid)
+      return cmp(a.start, b.start)
+  )
+  for v in used:
+     doAssert wtr.write_variant(v)
+
+  stderr.write_line "wrote ", $used.len, " variants"
   if vcf.header == nil:
     quit "bad"
   wtr.close()
