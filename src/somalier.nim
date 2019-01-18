@@ -78,7 +78,9 @@ proc count_alleles(b:Bam, site:Site): count = #{.inline.} =
 
 proc writeHelp() =
   stderr.write """
-somalier rel [options] <bam/cram>...
+somalier [options] <bam/cram>...
+
+version: 0.1.0
 
 Arguments:
   <bam/cram> file(s) for samples of interest.
