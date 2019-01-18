@@ -5,6 +5,7 @@ import hts
 import sets
 import math
 import json
+import stats
 import times
 import bpbiopkg/pedfile
 import strformat
@@ -99,17 +100,19 @@ Options:
   """
 
 
-proc get_alts(bam:Bam, sites:seq[Site], nalts: ptr seq[int8], min_depth:int=6): bool =
+proc get_alts(bam:Bam, sites:seq[Site], nalts: ptr seq[int8], dp_stat: ptr RunningStat, min_depth:int=6): bool =
   ## count alternate alleles in a single bam at each site.
   for i, site in sites:
     var c = bam.count_alleles(site)
+    dp_stat.push(c.nref + c.nalt)
+
     nalts[][i] = c.alts(min_depth)
 
-proc get_bam_alts(path:string, sites:seq[Site], nalts: ptr seq[int8], min_depth:int=6): bool =
+proc get_bam_alts(path:string, sites:seq[Site], nalts: ptr seq[int8], dp_stat: ptr RunningStat, min_depth:int=6): bool =
   var bam: Bam
   if not open(bam, path, index=true):
     quit "couldn't open :" & $path
-  result = bam.get_alts(sites, nalts, min_depth)
+  result = bam.get_alts(sites, nalts, dp_stat, min_depth)
   bam.close()
 
 proc get_depths(v:Variant, cache: var seq[int32]): seq[int32] =
@@ -386,6 +389,30 @@ proc add_ped_samples(grouped: var seq[pair], samples:seq[Sample], sample_names:s
          grouped.add((sampleB.id, sampleA.id, rel))
 
 
+proc write(fh:File, sample_names: seq[string], dp_stats: seq[RunningStat], gt_counts: array[4, seq[uint16]]) =
+  fh.write("#sample\tdepth_mean\tdepth_sd\tdepth_skew\tn_hom_ref\tn_het\tn_hom_alt\tn_unknown\n")
+  for i, sample in sample_names:
+    fh.write(&"{sample}\t{dp_stats[i].mean():.1f}\t{dp_stats[i].standard_deviation():.1f}\t{dp_stats[i].skewness()}\t{gt_counts[0][i]}\t{gt_counts[1][i]}\t{gt_counts[2][i]}\t{gt_counts[3][i]}\n")
+  fh.close()
+
+proc toj(samples: seq[string], dp_stats: seq[RunningStat], gt_counts: array[4, seq[uint16]]): string =
+  result = newStringOfCap(10000)
+  result.add("[")
+  for i, s in samples:
+    if i > 0: result.add(",\n")
+    result.add($(%* {
+      "sample": s,
+      "depth_mean": dp_stats[i].mean(),
+      "depth_std": dp_stats[i].standard_deviation(),
+      "depth_skew": dp_stats[i].standard_deviation(),
+      "n_hom_ref": gt_counts[0][i],
+      "n_het": gt_counts[1][i],
+      "n_hom_alt": gt_counts[2][i],
+      "n_unknown": gt_counts[3][i]
+    }
+    ))
+  result.add("]")
+
 proc main() =
 
   var p = initOptParser()
@@ -397,6 +424,7 @@ proc main() =
     samples: seq[Sample]
     min_depth = 7
     groups: seq[pair]
+    orig_groups: seq[pair]
     output_prefix: string = "somalier."
     threads = 1
 
@@ -424,7 +452,7 @@ proc main() =
         if not open(fai, val):
           quit "couldn't open fasta with fai:" & val
       of "groups", "g":
-        groups = readGroups(val)
+        orig_groups = readGroups(val)
       else:
         writeHelp()
     of cmdEnd:
@@ -454,6 +482,8 @@ proc main() =
 
   sample_names.add(non_bam_sample_names)
   groups.add_ped_samples(samples, sample_names)
+  # add orig_groups last so the -g takes precedence over -p
+  groups.add(orig_groups)
 
   var
     n_samples = sample_names.len
@@ -465,6 +495,7 @@ proc main() =
 
   var
     results = newSeq[seq[int8]](n_samples)
+    dp_stats = newSeq[RunningStat](n_samples)
     responses = newSeq[FlowVarBase](n_samples)
 
   stderr.write_line "[somalier] sites:", len(sites), " threads:" & $threads
@@ -485,7 +516,7 @@ proc main() =
     #  sleep(50)
     if responses.len > 50 and j mod 25 == 0:
       stderr.write_line "[somalier] spawning sample:", j
-    responses[j] = spawn get_bam_alts(bv_paths[j], sites, results[j].addr, min_depth)
+    responses[j] = spawn get_bam_alts(bv_paths[j], sites, results[j].addr, dp_stats[j].addr, min_depth)
 
   for index, fv in responses:
     blockUntil(fv)
@@ -496,26 +527,36 @@ proc main() =
   var t0 = cpuTime()
   var nsites = 0
   var alts = newSeq[int8](n_samples)
+  # counts of hom-ref, het, hom-alt, unk
+  var gt_counts : array[4, seq[uint16]]
+  for i in 0..<4:
+    gt_counts[i] = newSeq[uint16](n_samples)
 
   for rowi in 0..sites.high:
     var nun = 0
     for i in 0..<n_samples:
       alts[i] = results[i][rowi]
-      if alts[i] == -1: nun.inc
+      if alts[i] == -1:
+        nun.inc
+        gt_counts[3][i].inc
+      else:
+        gt_counts[alts[i].int][i].inc
 
     if nun.float64 / n_samples.float64 > 0.6: continue
     nsites += 1
 
     discard krelated(alts, final.ibs, final.n, final.hets, final.homs, final.shared_hom_alts, n_samples)
 
-  echo "used ", nsites, " sites"
-  echo "time to calculate relatedness:", cpuTime() - t0
+  stderr.write_line &"time to calculate relatedness on {nsites} usable sites: {cpuTime() - t0:.3f}"
   var
     fh_tsv:File
+    fh_samples:File
     fh_html:File
     grouped: seq[pair]
 
-  if not open(fh_tsv, output_prefix & "tsv", fmWrite):
+  if not open(fh_tsv, output_prefix & "pairs.tsv", fmWrite):
+    quit "couldn't open output file"
+  if not open(fh_samples, output_prefix & "samples.tsv", fmWrite):
     quit "couldn't open output file"
   if not open(fh_html, output_prefix & "html", fmWrite):
     quit "couldn't open html output file"
@@ -525,9 +566,11 @@ proc main() =
   var j = % final
   j["expected-relatedness"] = %* groups
 
-  fh_html.write(tmpl_html.replace("<INPUT_JSON>", $j))
+  fh_html.write(tmpl_html.replace("<INPUT_JSON>", $j).replace("<SAMPLE_JSON>", toj(sample_names, dp_stats, gt_counts)))
   fh_html.close()
   stderr.write_line("[somalier] wrote interactive HTML output to: ",  output_prefix & "html")
+
+  fh_samples.write(sample_names, dp_stats, gt_counts)
 
   for rel in relatedness(final, grouped):
     fh_tsv.write_line $rel

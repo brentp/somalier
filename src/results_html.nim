@@ -423,7 +423,7 @@ there.
 </head>
 <body>
 
-<div class = "eleven columns">
+<div class = "seven columns">
         X:
     <select id="plotax_select">
         <option value="shared_hets">shared hets</option>
@@ -445,10 +445,36 @@ there.
 
     <div id="plota" style="width: 100%; height: 90%"></div>
 </div>
+<div class = "five columns">
+    <div id="plotb" style="width: 100%; height: 90%"></div>
+        X:
+    <select id="plotbx_select">
+        <option value="depth_mean" selected>mean depth</option>
+        <option value="depth_std">stddev of depth</option>
+        <option value="depth_skew">skew of depth</option>
+        <option value="n_hom_ref">number of 0/0 sites</option>
+        <option value="n_het">number of 0/1 sites</option>
+        <option value="n_hom_alt">number of 1/1 sites</option>
+        <option value="n_unknown">number of unknown sites</option>
+    </select>
+        Y:
+    <select id="plotby_select">
+        <option value="depth_mean">mean depth</option>
+        <option value="depth_std">stddev of depth</option>
+        <option value="depth_skew">skew of depth</option>
+        <option value="n_hom_ref">number of 0/0 sites</option>
+        <option value="n_het">number of 0/1 sites</option>
+        <option value="n_hom_alt">number of 1/1 sites</option>
+        <option value="n_unknown" selected>number of unknown sites</option>
+    </select>
+
+</div>
+
 
     <script>
 
 var input = <INPUT_JSON>
+var sample_data = <SAMPLE_JSON>
 
 input.n_samples = input.samples.length;
 
@@ -493,7 +519,6 @@ function find_index(result, rel) {
     }
   }
   result.push({rel: rel, data:[]})
-  console.log(result.length)
   return result.length - 1
 }
 
@@ -502,7 +527,6 @@ function get_xy_data_by_group(input, metric, rel_pairs) {
     var result = [{rel:0, data:[]}]
     var m = accessors[metric]
     for(var i = 0; i < input.n_samples - 1; i++) {
-        console.log("i:", i)
         for(j=i+1; j < input.n_samples; j++){
             var c = getc(rel_pairs, input.samples[i], input.samples[j])
             var ci = 0
@@ -517,7 +541,6 @@ function get_xy_data_by_group(input, metric, rel_pairs) {
         }
     }
     result.sort(function(a, b) {return a.rel - b.rel })
-    console.log("got data and sorted")
     return result
 }
 
@@ -559,6 +582,19 @@ var layout_a = {
     showlegend: true,
 }
 
+var layout_b = {
+    autosize: true,
+    xaxis: {
+        title: jQuery("#plotbx_select option:selected").text(),
+    },
+    yaxis: {
+        title: jQuery("#plotby_select option:selected").text(),
+    },
+    hovermode: 'closest',
+    showlegend: false,
+}
+
+
 x_data = get_xy_data_by_group(input, jQuery('#plotax_select').val(), rel_pairs)
 y_data = get_xy_data_by_group(input, jQuery('#plotay_select').val(), rel_pairs)
 var size = 12
@@ -593,7 +629,19 @@ for (i in x_data) {
     })
 }
 
+var traces_b = [{x:[], y:[], text: [], type: 'scattergl', mode: 'markers', marker: {size: size + 3, color: colors[0]}, showlegend:false}]
+var xf = jQuery('#plotbx_select').val()
+var yf = jQuery('#plotby_select').val()
+for(i in sample_data){
+   traces_b[0].x.push(sample_data[i][xf])
+   traces_b[0].y.push(sample_data[i][yf])
+   traces_b[0].text.push("sample:" + sample_data[i].sample)
+}
+
+
 Plotly.newPlot('plota', traces_a, layout_a)
+Plotly.newPlot('plotb', traces_b, layout_b)
+
 
 jQuery('#plotax_select').on('change', function() {
     var metric = this.value
@@ -616,8 +664,26 @@ jQuery('#plotay_select').on('change', function() {
     Plotly.redraw('plota')
 })
 
+jQuery('#plotbx_select, #plotby_select').on('change', function() {
+    var field = this.value
+    var extracted = [];
+    for(i in sample_data) {
+        extracted.push(sample_data[i][field])
+    }
+    if(this.id == 'plotbx_select') {
+      layout_b.xaxis.title = jQuery("#plotbx_select option:selected").text();
+      traces_b[0].x = extracted
+    } else {
+      layout_b.yaxis.title = jQuery("#plotby_select option:selected").text();
+      traces_b[0].y = extracted
+
+    }
+    Plotly.redraw('plotb')
+})
+
 window.onresize = function() {
     Plotly.Plots.resize('plota');
+    Plotly.Plots.resize('plotb');
 };
 </script>
 </body>
