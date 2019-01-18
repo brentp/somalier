@@ -476,46 +476,48 @@ var accessors = {
     },
 }
 
-function get_heat_data(input, metric) {
-    var result = new Array(input.n_samples)
-    for (i = 0; i < input.n_samples; i++) {
-        result[i] = new Array(input.n_samples)
-    }
-    var m = accessors[metric]
-    for (i = 0; i < input.n_samples; i++) {
-        for (j = i + 1; j < input.n_samples; j++) {
-            result[i][j] = m(input, i, j)
-        }
-    }
-    return result
-}
-
 function getc(rel_pairs, sample_a, sample_b) {
     var c = rel_pairs.get(sample_a + "--" + sample_b)
     //if (c != undefined){ return c}
     //c = rel_pairs.get(sample_b + "--" + sample_a)
-    if (c == undefined) {
+    if (c == undefined || c == "undefined") {
         c = 0
     }
     return c
 }
 
+function find_index(result, rel) {
+  for(var i in result) {
+    if(result[i].rel == rel) {
+        return i
+    }
+  }
+  result.push({rel: rel, data:[]})
+  console.log(result.length)
+  return result.length - 1
+}
+
+
 function get_xy_data_by_group(input, metric, rel_pairs) {
-    var result = []
+    var result = [{rel:0, data:[]}]
     var m = accessors[metric]
-    for(i = 0; i < input.n_samples - 1; i++) {
+    for(var i = 0; i < input.n_samples - 1; i++) {
+        console.log("i:", i)
         for(j=i+1; j < input.n_samples; j++){
             var c = getc(rel_pairs, input.samples[i], input.samples[j])
-            if (result[c] == undefined) {
-                result[c] = []
+            var ci = 0
+            if(c > 0) {
+              ci = find_index(result, c)
             }
             var v = m(input, i, j)
             if (v < 15) {
                 v += (Math.random() - 0.5) / (7.0 * (v + 1))
             }
-            result[c].push(v)
+            result[ci].data.push(v)
         }
     }
+    result.sort(function(a, b) {return a.rel - b.rel })
+    console.log("got data and sorted")
     return result
 }
 
@@ -566,22 +568,25 @@ if(input.n_samples > 20) {
 if(input.n_samples > 50) {
     size = 8
 }
+if(input.n_samples > 200) {
+    size = 5
+}
 
 var l = {0: "unrelated", 0.5: "parent-child", 0.49: "sib-sib", 1: "identical"}
 
 var traces_a = []
 for (i in x_data) {
-    var name = l[i]
+    var name = l[x_data[i].rel]
     if (name == "undefined") {
-      name = i.toString()
+      name = x_data[i].rel
     }
 
     traces_a.push({
         name: name,
-        x: x_data[i],
-        y: y_data[i],
+        x: x_data[i].data,
+        y: y_data[i].data,
         text: sample_pairs,
-        type: 'scatter',
+        type: 'scattergl',
         mode: 'markers',
         marker: {size: size, color:colors[traces_a.length]},
         showlegend:true,
@@ -595,7 +600,7 @@ jQuery('#plotax_select').on('change', function() {
     layout_a.xaxis.title = jQuery("#plotax_select option:selected").text();
     x_data = get_xy_data_by_group(input, jQuery('#plotax_select').val(), rel_pairs)
     for (i in x_data) {
-        traces_a[i].x = x_data[i]
+        traces_a[i].x = x_data[i].data
     }
 
     Plotly.redraw('plota')
@@ -606,7 +611,7 @@ jQuery('#plotay_select').on('change', function() {
     layout_a.yaxis.title = jQuery("#plotay_select option:selected").text();
     y_data = get_xy_data_by_group(input, jQuery('#plotay_select').val(), rel_pairs)
     for (i in y_data) {
-        traces_a[i].y = y_data[i]
+        traces_a[i].y = y_data[i].data
     }
     Plotly.redraw('plota')
 })

@@ -2,6 +2,7 @@
 
 import os
 import hts
+import sets
 import math
 import json
 import times
@@ -51,7 +52,7 @@ proc alts*(c:count, min_depth:int): int8 {.inline.} =
 
   return 1
 
-proc count_alleles(b:Bam, site:Site): count {.inline.} =
+proc count_alleles(b:Bam, site:Site): count = #{.inline.} =
   for aln in b.query(site.chrom, site.position, site.position + 1):
     var off = aln.start
     var qoff = 0
@@ -67,6 +68,7 @@ proc count_alleles(b:Bam, site:Site): count {.inline.} =
       if off <= site.position: continue
 
       var over = off - site.position - roff_only
+      if over > qoff: continue
       var base = aln.base_at(qoff - over)
       if base == site.ref_allele:
         result.nref += 1
@@ -107,7 +109,8 @@ proc get_bam_alts(path:string, sites:seq[Site], nalts: ptr seq[int8], min_depth:
   var bam: Bam
   if not open(bam, path, index=true):
     quit "couldn't open :" & $path
-  return bam.get_alts(sites, nalts, min_depth)
+  result = bam.get_alts(sites, nalts, min_depth)
+  bam.close()
 
 proc get_depths(v:Variant, cache: var seq[int32]): seq[int32] =
   for c in cache.mitems:
@@ -330,7 +333,10 @@ proc readGroups(path:string): seq[pair] =
       rel = parseFloat(tmp[1])
     for i, x in row[0..<row.high]:
       for j, y in row[(i+1)..row.high]:
-        result.add((x, y, rel))
+        if x < y:
+          result.add((x, y, rel))
+        else:
+          result.add((y, x, rel))
 
 proc get_sample_names(path: string): seq[string] =
   if path.bam_like:
@@ -362,6 +368,23 @@ proc write(grouped: seq[pair], output_prefix:string) =
   for grp in grouped:
     fh_groups.write(&"{grp.a},{grp.b}\t{grp.rel}\n")
   fh_groups.close()
+
+proc add_ped_samples(grouped: var seq[pair], samples:seq[Sample], sample_names:seq[string]) =
+  ## samples were parsed from ped. we iterate over them and add any pair where both samples are in sample_names
+  if samples.len == 0: return
+  var ss = initSet[string]()
+  for s in sample_names: ss.incl(s) # use a set for better lookup.
+  for i, sampleA in samples[0..<samples.high]:
+    if sampleA.id notin ss: continue
+    for j, sampleB in samples[i + 1..samples.high]:
+       if sampleB.id notin ss: continue
+       var rel = relatedness(sampleA, sampleB, samples)
+       if rel <= 0: continue
+       if sampleA.id < sampleB.id:
+         grouped.add((sampleA.id, sampleB.id, rel))
+       else:
+         grouped.add((sampleB.id, sampleA.id, rel))
+
 
 proc main() =
 
@@ -430,6 +453,7 @@ proc main() =
       non_bam_sample_names.add(get_sample_names(path))
 
   sample_names.add(non_bam_sample_names)
+  groups.add_ped_samples(samples, sample_names)
 
   var
     n_samples = sample_names.len
@@ -440,12 +464,12 @@ proc main() =
     threads = n_samples
 
   var
-    results = newSeq[seq[int8]](threads)
-    responses = newSeq[FlowVarBase](threads)
+    results = newSeq[seq[int8]](n_samples)
+    responses = newSeq[FlowVarBase](n_samples)
 
   stderr.write_line "[somalier] sites:", len(sites), " threads:" & $threads
-  setMinPoolSize(threads)
-  setMaxPoolSize(threads + 1)
+  #setMinPoolSize(threads)
+  setMaxPoolSize(threads)
 
   # aggregated from all threads.
   var final = relation_matrices(ibs: newSeq[uint16](n_samples * n_samples),
@@ -456,7 +480,11 @@ proc main() =
                               samples: sample_names)
 
   for j in 0..<responses.len:
-    results[j] = newSeqOfCap[int8](sites.len)
+    results[j] = newSeq[int8](sites.len)
+    #while not preferSpawn():
+    #  sleep(50)
+    if responses.len > 50 and j mod 25 == 0:
+      stderr.write_line "[somalier] spawning sample:", j
     responses[j] = spawn get_bam_alts(bv_paths[j], sites, results[j].addr, min_depth)
 
   for index, fv in responses:

@@ -166,7 +166,7 @@ when isMainModule:
     discard added.hasKeyOrPut(v.v.CHROM, newSeq[Variant]())
     var vs = added.mget(v.v.CHROM)
 
-    if len(vs) > 0 and (v.v.closest(vs).start - v.v.start).abs < 10000:
+    if len(vs) > 0 and (v.v.closest(vs).start - v.v.start).abs < 100000:
       continue
 
     #discard wtr.write_variant(v.v)
