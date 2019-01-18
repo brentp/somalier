@@ -404,7 +404,7 @@ proc toj(samples: seq[string], dp_stats: seq[RunningStat], gt_counts: array[4, s
       "sample": s,
       "depth_mean": dp_stats[i].mean(),
       "depth_std": dp_stats[i].standard_deviation(),
-      "depth_skew": dp_stats[i].standard_deviation(),
+      "depth_skew": dp_stats[i].skewness(),
       "n_hom_ref": gt_counts[0][i],
       "n_het": gt_counts[1][i],
       "n_hom_alt": gt_counts[2][i],
