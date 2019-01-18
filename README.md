@@ -13,7 +13,8 @@ where sites is a VCF of variant sites (provided by somalier for hg19).
 The interactive output that's produced (similar to [peddy](https://github.com/brentp/peddy))
 makes it fast and easy to detect mismatched samples and sample-swaps.
 
-An optional argument lets the user specify expected groups of samples.
+Optional arguments let the user specify expected groups of samples or a ped/fam file indicating
+family relationships.
 
 `--sites` is a VCF of known polymorphic sites in VCF format. A good set is provided in
 the [releases](https://github.com/brentp/somalier/releases) but any set of common variants will work.
@@ -38,12 +39,15 @@ Options:
 
   -s --sites <vcf>        vcf file with lines of sites to use for relatedness estimation.
   -t --threads <int>      optional number of processors to use for parallelization.
+  -d --min-depth <int>    only consider sites with at least this depth [default: 7].
   -f --fasta <reference>  path to reference fasta file.
   -g --groups <path>      optional path to expected groups of samples (e.g. tumor normal pairs).
                           specified as comma-separated groups per line e.g.:
                             normal1,tumor1a,tumor1b
                             normal2,tumor2a
-  -o --output <prefix>    output prefix for results. (default: "somalier")
+  -p --ped <path>         optional path to a ped/fam file indicating the expected relationships
+                          among samples.
+  -o --output <prefix>    output prefix for results.
 ```
 
 ## How it works
@@ -51,10 +55,12 @@ Options:
 `somalier` takes a list of known sites. Even a few hundred (or dozen) sites can be a very
 good indicator of relatedness. The best sites are those with a population allele frequency
 close to 0.5 as that maximizes the probability that any 2 samples will differ.
+A list of such sites is provided in the [releases](https://github.com/brentp/somalier/releases)
+for GRCh37.
 
 In order to quickly calculate genotypes at these sites, `somalier` assays the exact base
 [without using pileup](https://brentp.github.io/post/no-pile/). It also parallelizes across
-sites with as many threads as requested. In addition, it uses [hts-nim](https://github.com/brentp/hts-nim)
+samples with as many threads as requested. In addition, it uses [hts-nim](https://github.com/brentp/hts-nim)
 which is a very fast wrapper of [htslib](https://htslib.org).
 
 For each sample-pair, it reports:
@@ -66,6 +72,8 @@ For each sample-pair, it reports:
 These are used to calculate [relatedness](https://en.wikipedia.org/wiki/Coefficient_of_relationship)
 and a measure of relatedness that is unaffected by loss-of-heterozygosity that is often seen in some 
 cancers. The interactive output allows toggling between any of these measures.
+
+It also reports depth information and the count of `HET`, `HOM_REF`, `HOM_ALT`, and `unknown` genotypes for each sample.
 
 
 ## Example
@@ -87,11 +95,6 @@ https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5499645/
 
 https://academic.oup.com/bioinformatics/article/33/4/596/2624551
 
-
-## TODO
-
-+ [ ]  link plots
-+ [ ] guess which samples are normal.
 
 ## Acknowledgement
 

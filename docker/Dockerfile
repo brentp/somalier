@@ -31,7 +31,7 @@ RUN cd / && \
     echo 'PATH=/nim/bin:$PATH' >> ~/.bashrc && \
     echo 'PATH=/nim/bin:$PATH' >> ~/.bash_profile && \
     cd / && \
-    git clone -b cleanup --depth 1 git://github.com/brentp/somalier.git && \
+    git clone -b master --depth 1 git://github.com/brentp/somalier.git && \
     cd somalier && \
     nimble install -y hts && \
     source scl_source enable devtoolset-2  && \
