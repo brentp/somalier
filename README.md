@@ -19,6 +19,7 @@ family relationships.
 `--sites` is a VCF of known polymorphic sites in VCF format. A good set is provided in
 the [releases](https://github.com/brentp/somalier/releases) but any set of common variants will work.
 
+
 ## Install
 
 get a binary from [here](https://github.com/brentp/somalier/releases)
@@ -26,6 +27,8 @@ get a binary from [here](https://github.com/brentp/somalier/releases)
 `somalier` requires `libhts.so` from [htslib](https://htslib.org) to be in
 a standard location or indicated with the `LD_LIBRARY_PATH` environment variable.
 
+Users can also get a docker image [here](https://cloud.docker.com/repository/registry-1.docker.io/brentp/somalier)
+which contains htslib and a somalier binary.
 
 ## Usage
 
