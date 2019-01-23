@@ -504,10 +504,8 @@ var accessors = {
 
 function getc(rel_pairs, sample_a, sample_b) {
     var c = rel_pairs.get(sample_a + "--" + sample_b)
-    //if (c != undefined){ return c}
-    //c = rel_pairs.get(sample_b + "--" + sample_a)
     if (c == undefined || c == "undefined") {
-        c = 0
+        return 0
     }
     return c
 }
@@ -518,13 +516,13 @@ function find_index(result, rel) {
         return i
     }
   }
-  result.push({rel: rel, data:[]})
+  result.push({rel: rel, data:[], text:[], ix:[]})
   return result.length - 1
 }
 
 
 function get_xy_data_by_group(input, metric, rel_pairs) {
-    var result = [{rel:0, data:[]}]
+    var result = [{rel:0, data:[], text: [], ix: []}]
     var m = accessors[metric]
     for(var i = 0; i < input.n_samples - 1; i++) {
         for(j=i+1; j < input.n_samples; j++){
@@ -538,26 +536,15 @@ function get_xy_data_by_group(input, metric, rel_pairs) {
                 v += (Math.random() - 0.5) / (7.0 * (v + 1))
             }
             result[ci].data.push(v)
+            result[ci].text.push(input.samples[i] + "<>" + input.samples[j])
+            result[ci].ix.push([i, j])
         }
     }
     result.sort(function(a, b) {return a.rel - b.rel })
     return result
 }
 
-function get_xy_samples(input) {
-    var result = []
-    for(i = 0; i < input.n_samples - 1; i++) {
-        for(j=i+1; j < input.n_samples; j++){
-            // TODO: might need to flip these.
-            result.push(input.samples[i] + " <> " + input.samples[j])
-        }
-    }
-    return result
-}
-
 var colors = ['#377eb8bb', '#e41a1cbb', '#4daf4a', '#984ea3', '#ff7f00', '#ffff33', '#a65628', '#f781bf', '#999999', '#e41a1c', '#377eb8', '#4daf4a']
-
-var sample_pairs = get_xy_samples(input)
 
 var traces_a = []
 
@@ -566,11 +553,16 @@ if ("expected-relatedness" in input) {
     var er = input["expected-relatedness"]
     for(i in er){
         var p = er[i] // {a:sample, b:sample, rel:0.5}
-        rel_pairs.set(p.a + "--" + p.b, p.rel)
+        if(p.a < p.b) {
+          rel_pairs.set(p.a + "--" + p.b, p.rel)
+        } else {
+          rel_pairs.set(p.b + "--" + p.a, p.rel)
+        }
     }
 }
 
 var layout_a = {
+    dragmode: "lasso",
     autosize: true,
     xaxis: {
         title: jQuery("#plotax_select option:selected").text(),
@@ -583,6 +575,7 @@ var layout_a = {
 }
 
 var layout_b = {
+    dragmode: "lasso",
     autosize: true,
     xaxis: {
         title: jQuery("#plotbx_select option:selected").text(),
@@ -621,15 +614,15 @@ for (i in x_data) {
         name: name,
         x: x_data[i].data,
         y: y_data[i].data,
-        text: sample_pairs,
+        text: x_data[i].text,
         type: 'scattergl',
         mode: 'markers',
-        marker: {size: size, color:colors[traces_a.length]},
+        marker: {size: size, color: colors[traces_a.length]},
         showlegend:true,
     })
 }
 
-var traces_b = [{x:[], y:[], text: [], type: 'scattergl', mode: 'markers', marker: {size: size + 3, color: colors[0]}, showlegend:false}]
+var traces_b = [{x:[], y:[], text: [], type: 'scatter', mode: 'markers', marker: {size: size + 3, color: '#bbbbbb'}, showlegend:false}]
 var xf = jQuery('#plotbx_select').val()
 var yf = jQuery('#plotby_select').val()
 for(i in sample_data){
@@ -639,30 +632,77 @@ for(i in sample_data){
 }
 
 
-Plotly.newPlot('plota', traces_a, layout_a)
-Plotly.newPlot('plotb', traces_b, layout_b)
+var plota = Plotly.newPlot('plota', traces_a, layout_a)
+var plotb = Plotly.newPlot('plotb', traces_b, layout_b)
 
+var pa = document.getElementById("plota")
+var pb = document.getElementById("plotb")
 
-jQuery('#plotax_select').on('change', function() {
-    var metric = this.value
-    layout_a.xaxis.title = jQuery("#plotax_select option:selected").text();
-    x_data = get_xy_data_by_group(input, jQuery('#plotax_select').val(), rel_pairs)
-    for (i in x_data) {
-        traces_a[i].x = x_data[i].data
-    }
-
-    Plotly.redraw('plota')
+pa.on('plotly_hover',  function(e) {
+    var p = e.points[0]
+    var idxs = x_data[p.curveNumber].ix[p.pointIndex]
+    Plotly.Fx.hover('plotb', [{curveNumber: 0, pointNumber: idxs[0]},
+                         {curveNumber: 0, pointNumber: idxs[1]}])
 })
 
-jQuery('#plotay_select').on('change', function() {
-    var metric = this.value
-    layout_a.yaxis.title = jQuery("#plotay_select option:selected").text();
-    y_data = get_xy_data_by_group(input, jQuery('#plotay_select').val(), rel_pairs)
-    for (i in y_data) {
-        traces_a[i].y = y_data[i].data
+pb.on('plotly_hover',  function(e) {
+    var p = e.points[0]
+    if(p.text[6] != ":") {
+        alert("bad sample name:" + p.text[6])
     }
-    Plotly.redraw('plota')
+    var sample = p.text.substring(7, p.text.length)
+    if(traces_a[0].name == 'hovered') {
+        traces_a.shift()
+    }
+    for(j = 0; j < traces_a.length; j++){
+        traces_a[j].marker.opacity = 0.35
+    }
+    var tr = {mode:"markers", showlegend:false, name:'hovered', x:[], y:[], text:[], marker:{size:size+4, color:'#777777'}}
+    for(var j=0;j<x_data.length;j++){
+        var xd = x_data[j];
+        var yd = y_data[j];
+        for(var k=0; k < xd.data.length; k++){
+            if(xd.text[k].startsWith(sample) || xd.text[k].endsWith(sample)) {
+                tr.x.push(xd.data[k])
+                tr.y.push(yd.data[k])
+                tr.text.push(xd.text[k])
+            }
+        }
+
+    }
+    traces_a.unshift(tr)
+    Plotly.react(pa, traces_a, layout_a)
+
 })
+pb.on('plotly_unhover',  function(e) {
+    if(traces_a[0].name == 'hovered') {
+        traces_a.shift()
+    }
+    for(j = 0; j < traces_a.length; j++){
+        traces_a[j].marker.opacity = 1
+    }
+    Plotly.react(pa, traces_a, layout_a)
+})
+
+
+jQuery('#plotay_select, #plotax_select').on('change', function() {
+    var metric = this.value
+    var extracted = get_xy_data_by_group(input, metric, rel_pairs)
+
+    if(this.id == 'plotay_select') {
+        layout_a.yaxis.title = jQuery("#plotay_select option:selected").text();
+        for (i in extracted) {
+            traces_a[i].y = extracted[i].data
+        }
+    } else {
+        layout_a.xaxis.title = jQuery("#plotax_select option:selected").text();
+        for (i in extracted) {
+            traces_a[i].x = extracted[i].data
+        }
+    }
+    Plotly.react(pa, traces_a, layout_a)
+})
+
 
 jQuery('#plotbx_select, #plotby_select').on('change', function() {
     var field = this.value
@@ -678,7 +718,7 @@ jQuery('#plotbx_select, #plotby_select').on('change', function() {
       traces_b[0].y = extracted
 
     }
-    Plotly.redraw('plotb')
+    Plotly.react(pb, traces_b, layout_b)
 })
 
 window.onresize = function() {
