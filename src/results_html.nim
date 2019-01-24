@@ -536,7 +536,7 @@ function get_xy_data_by_group(input, metric, rel_pairs) {
                 v += (Math.random() - 0.5) / (7.0 * (v + 1))
             }
             result[ci].data.push(v)
-            result[ci].text.push(input.samples[i] + "<>" + input.samples[j])
+            result[ci].text.push(input.samples[i] + "<br>" + input.samples[j])
             result[ci].ix.push([i, j])
         }
     }
@@ -614,13 +614,17 @@ for (i in x_data) {
         name: name,
         x: x_data[i].data,
         y: y_data[i].data,
-        text: x_data[i].text,
+        hovertext: x_data[i].text,
+        hoverinfo: 'text+x+y',
+        ix: x_data[i].ix,
         type: 'scattergl',
         mode: 'markers',
         marker: {size: size, color: colors[traces_a.length]},
         showlegend:true,
     })
 }
+x_data = null
+y_data = null
 
 var traces_b = [{x:[], y:[], text: [], type: 'scatter', mode: 'markers', marker: {size: size + 3, color: '#bbbbbb'}, showlegend:false}]
 var xf = jQuery('#plotbx_select').val()
@@ -640,9 +644,13 @@ var pb = document.getElementById("plotb")
 
 pa.on('plotly_hover',  function(e) {
     var p = e.points[0]
-    var idxs = x_data[p.curveNumber].ix[p.pointIndex]
+    var idxs = traces_a[p.curveNumber].ix[p.pointIndex]
     Plotly.Fx.hover('plotb', [{curveNumber: 0, pointNumber: idxs[0]},
                          {curveNumber: 0, pointNumber: idxs[1]}])
+})
+
+pa.on('plotly_unhover',  function(e) {
+    Plotly.Fx.unhover(pb)
 })
 
 pb.on('plotly_hover',  function(e) {
@@ -657,15 +665,14 @@ pb.on('plotly_hover',  function(e) {
     for(j = 0; j < traces_a.length; j++){
         traces_a[j].marker.opacity = 0.35
     }
-    var tr = {mode:"markers", showlegend:false, name:'hovered', x:[], y:[], text:[], marker:{size:size+4, color:'#777777'}}
-    for(var j=0;j<x_data.length;j++){
-        var xd = x_data[j];
-        var yd = y_data[j];
-        for(var k=0; k < xd.data.length; k++){
-            if(xd.text[k].startsWith(sample) || xd.text[k].endsWith(sample)) {
-                tr.x.push(xd.data[k])
-                tr.y.push(yd.data[k])
-                tr.text.push(xd.text[k])
+		var tr = {mode:"markers", hoverinfo:'text+x+y', showlegend:false, name:'hovered', x:[], y:[], hovertext:[], marker:{size:size+3, opacity: 1, color:'#000000'}}
+    for(var j=0;j<traces_a.length;j++){
+        var otr = traces_a[j];
+        for(var k=0; k < otr.x.length; k++){
+            if(otr.hovertext[k].startsWith(sample) || otr.hovertext[k].endsWith(sample)) {
+                tr.x.push(otr.x[k])
+                tr.y.push(otr.y[k])
+                tr.hovertext.push(otr.hovertext[k])
             }
         }
 
