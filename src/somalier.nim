@@ -80,7 +80,7 @@ proc writeHelp() =
   stderr.write """
 somalier [options] <bam/cram>...
 
-version: 0.1.0
+version: 0.1.1
 
 Arguments:
   <bam/cram> file(s) for samples of interest.
