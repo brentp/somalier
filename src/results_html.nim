@@ -495,7 +495,7 @@ var accessors = {
         return input.shared_hom_alts[i * input.n_samples + j]
     },
     "relatedness": function(input, i, j) {
-        return (accessors.shared_hets(input, i, j) - 2 * accessors.ibs0(input, i, j)) / Math.min(input.hets[i], input.hets[j])
+        return Math.max(-1.5, (accessors.shared_hets(input, i, j) - 2 * accessors.ibs0(input, i, j)) / Math.min(input.hets[i], input.hets[j]))
     },
     "concordance": function(input, i, j) {
         return (accessors.shared_hom_alts(input, i, j) - 2 * accessors.ibs0(input, i, j)) / Math.min(input.homs[i], input.homs[j])
