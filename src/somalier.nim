@@ -278,7 +278,7 @@ proc toSite(toks: seq[string]): Site =
   result.ref_allele = toks[3][0]
 
 proc checkSiteRef(s:Site, fai:var Fai) =
-  var fa_allele = fai.get(s.chrom, s.position, s.position)[0]
+  var fa_allele = fai.get(s.chrom, s.position, s.position)[0].toUpperAscii
   if s.ref_allele != fa_allele:
     quit "reference base from sites file:" & s.ref_allele & " does not match that from reference: " & fa_allele
 {.pop.}
