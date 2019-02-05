@@ -53,7 +53,7 @@ proc alts*(c:count, min_depth:int): int8 {.inline.} =
 
   return 1
 
-proc count_alleles(b:Bam, site:Site): count = #{.inline.} =
+proc count_alleles(b:Bam, site:Site): count {.inline.} =
   for aln in b.query(site.chrom, site.position, site.position + 1):
     var off = aln.start
     var qoff = 0
@@ -80,7 +80,7 @@ proc writeHelp() =
   stderr.write """
 somalier [options] <bam/cram>...
 
-version: 0.1.1
+version: 0.1.2
 
 Arguments:
   <bam/cram> file(s) for samples of interest.
@@ -110,10 +110,11 @@ proc get_alts(bam:Bam, sites:seq[Site], nalts: ptr seq[int8], dp_stat: ptr Runni
 
     nalts[][i] = c.alts(min_depth)
 
-proc get_bam_alts(path:string, sites:seq[Site], nalts: ptr seq[int8], dp_stat: ptr RunningStat, min_depth:int=6): bool =
+proc get_bam_alts(path:string, fai:string, sites:seq[Site], nalts: ptr seq[int8], dp_stat: ptr RunningStat, min_depth:int=6): bool =
   var bam: Bam
-  if not open(bam, path, index=true):
+  if not open(bam, path, index=true, fai=fai):
     quit "couldn't open :" & $path
+  discard bam.set_option(FormatOption.CRAM_OPT_REQUIRED_FIELDS, 8191 - SAM_QUAL.int - SAM_QNAME.int - SAM_RNAME.int)
   result = bam.get_alts(sites, nalts, dp_stat, min_depth)
   bam.close()
 
@@ -423,6 +424,7 @@ proc main() =
     bv_paths = newSeq[string]()
     sites_path: string
     fai: Fai
+    fasta_path: string
     samples: seq[Sample]
     min_depth = 7
     groups: seq[pair]
@@ -453,6 +455,7 @@ proc main() =
       of "fasta", "f":
         if not open(fai, val):
           quit "couldn't open fasta with fai:" & val
+        fasta_path = val
       of "groups", "g":
         orig_groups = readGroups(val)
       else:
@@ -518,7 +521,7 @@ proc main() =
     #  sleep(50)
     if responses.len > 50 and j mod 25 == 0:
       stderr.write_line "[somalier] spawning sample:", j
-    responses[j] = spawn get_bam_alts(bv_paths[j], sites, results[j].addr, dp_stats[j].addr, min_depth)
+    responses[j] = spawn get_bam_alts(bv_paths[j], fasta_path, sites, results[j].addr, dp_stats[j].addr, min_depth)
 
   for index, fv in responses:
     blockUntil(fv)
