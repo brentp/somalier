@@ -430,14 +430,14 @@ there.
         <option value="shared_hom_alts">shared hom-alts</option>
         <option value="concordance">homozygous concordance</option>
         <option value="relatedness">relatedness</option>
-        <option value="ibs0" selected>IBS0</option>
+        <option value="ibs0" selected >IBS0</option>
         <option value="ibs2">IBS2</option>
     </select>
         Y:
     <select id="plotay_select">
         <option value="shared_hets">shared hets</option>
         <option value="shared_hom_alts">shared hom-alts</option>
-        <option value="concordance" selected >homozygous concordance</option>
+        <option value="concordance">homozygous concordance</option>
         <option value="relatedness">relatedness</option>
         <option value="ibs0">IBS0</option>
         <option value="ibs2" selected>IBS2</option>
@@ -452,6 +452,11 @@ there.
         <option value="depth_mean" selected>mean depth</option>
         <option value="depth_std">stddev of depth</option>
         <option value="depth_skew">skew of depth</option>
+        <option value="ab_mean">mean allele balance</option>
+        <option value="ab_std">stddev of allele balance</option>
+
+        <option value="pct_other_alleles">% reads with neither REF nor ALT</option>
+
         <option value="n_hom_ref">number of 0/0 sites</option>
         <option value="n_het">number of 0/1 sites</option>
         <option value="n_hom_alt">number of 1/1 sites</option>
@@ -462,6 +467,11 @@ there.
         <option value="depth_mean">mean depth</option>
         <option value="depth_std">stddev of depth</option>
         <option value="depth_skew">skew of depth</option>
+        <option value="ab_mean">mean allele balance</option>
+        <option value="ab_std">stddev of allele balance</option>
+
+        <option value="pct_other_alleles">% reads with neither REF nor ALT</option>
+
         <option value="n_hom_ref">number of 0/0 sites</option>
         <option value="n_het">number of 0/1 sites</option>
         <option value="n_hom_alt">number of 1/1 sites</option>
@@ -495,10 +505,10 @@ var accessors = {
         return input.shared_hom_alts[i * input.n_samples + j]
     },
     "relatedness": function(input, i, j) {
-        return Math.max(-1.5, (accessors.shared_hets(input, i, j) - 2 * accessors.ibs0(input, i, j)) / Math.min(input.hets[i], input.hets[j]))
+        return Math.min(1.5, Math.max(-1.5, (accessors.shared_hets(input, i, j) - 2 * accessors.ibs0(input, i, j)) / Math.min(input.hets[i], input.hets[j])))
     },
     "concordance": function(input, i, j) {
-        return (accessors.shared_hom_alts(input, i, j) - 2 * accessors.ibs0(input, i, j)) / Math.min(input.homs[i], input.homs[j])
+        return Math.max(-1.5, Math.min(1.5, (accessors.shared_hom_alts(input, i, j) - 2 * accessors.ibs0(input, i, j)) / Math.min(input.homs[i], input.homs[j])))
     },
 }
 
@@ -532,7 +542,7 @@ function get_xy_data_by_group(input, metric, rel_pairs) {
               ci = find_index(result, c)
             }
             var v = m(input, i, j)
-            if (v < 15) {
+            if (v < 15 && metric != "relatedness" && metric != "concordance") {
                 v += (Math.random() - 0.5) / (7.0 * (v + 1))
             }
             result[ci].data.push(v)

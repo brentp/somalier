@@ -17,12 +17,14 @@ import ./results_html
 
 type Site* = object
   ref_allele: char
+  alt_allele: char
   chrom: string
   position: int
 
 type count* = object
-  nref: int
-  nalt: int
+  nref: uint32
+  nalt: uint32
+  nother: uint32
 
 type pair = tuple[a:string, b:string, rel:float64]
 
@@ -37,7 +39,8 @@ proc alts*(c:count, min_depth:int): int8 {.inline.} =
   ## AB < 0.15 is called as hom-ref
   ## AB > 0.75 is hom-alt
   ## 0.15 <= AB <= 0.75 is het
-  if c.nref + c.nalt < min_depth:
+  if c.nother > 1'u32: return -1
+  if int(c.nref + c.nalt) < min_depth:
     return -1
   if c.nalt == 0:
     return 0
@@ -55,6 +58,7 @@ proc alts*(c:count, min_depth:int): int8 {.inline.} =
 
 proc count_alleles(b:Bam, site:Site): count {.inline.} =
   for aln in b.query(site.chrom, site.position, site.position + 1):
+    if aln.mapping_quality < 10: continue
     var off = aln.start
     var qoff = 0
     var roff_only = 0
@@ -68,13 +72,20 @@ proc count_alleles(b:Bam, site:Site): count {.inline.} =
           roff_only += event.len
       if off <= site.position: continue
 
+      if not (cons.query and cons.reference): continue
+
       var over = off - site.position - roff_only
-      if over > qoff: continue
+      if over > qoff: break
+      if over < 0: continue
+      doAssert qoff - over >= 0
       var base = aln.base_at(qoff - over)
       if base == site.ref_allele:
         result.nref += 1
-      else:
+      elif base == site.alt_allele:
         result.nalt += 1
+      else:
+        #stderr.write_line $event, " -> over:", over, " -> ", site, " -> ", aln.tostring
+        result.nother += 1
 
 proc writeHelp() =
   stderr.write """
@@ -101,21 +112,29 @@ Options:
 
   """
 
+type Stat3 = object
+  dp: RunningStat
+  un: RunningStat
+  ab: RunningStat
 
-proc get_alts(bam:Bam, sites:seq[Site], nalts: ptr seq[int8], dp_stat: ptr RunningStat, min_depth:int=6): bool =
+proc get_alts(bam:Bam, sites:seq[Site], nalts: ptr seq[int8], stat: ptr Stat3, min_depth:int=6): bool =
   ## count alternate alleles in a single bam at each site.
   for i, site in sites:
     var c = bam.count_alleles(site)
-    dp_stat.push(c.nref + c.nalt)
+    stat.dp.push(int(c.nref + c.nalt))
+    if c.nref > 0'u32 or c.nalt > 0'u32 or c.nother > 0'u32:
+      stat.un.push(c.nother.float64 / float64(c.nref + c.nalt + c.nother))
+    if c.nref.float > min_depth / 2 and c.nalt.float > min_depth / 2:
+      stat.ab.push(c.ab)
 
     nalts[][i] = c.alts(min_depth)
 
-proc get_bam_alts(path:string, fai:string, sites:seq[Site], nalts: ptr seq[int8], dp_stat: ptr RunningStat, min_depth:int=6): bool =
+proc get_bam_alts(path:string, fai:string, sites:seq[Site], nalts: ptr seq[int8], stat: ptr Stat3, min_depth:int=6): bool =
   var bam: Bam
   if not open(bam, path, index=true, fai=fai):
     quit "couldn't open :" & $path
   discard bam.set_option(FormatOption.CRAM_OPT_REQUIRED_FIELDS, 8191 - SAM_QUAL.int - SAM_QNAME.int - SAM_RNAME.int)
-  result = bam.get_alts(sites, nalts, dp_stat, min_depth)
+  result = bam.get_alts(sites, nalts, stat, min_depth)
   bam.close()
 
 proc get_depths(v:Variant, cache: var seq[int32]): seq[int32] =
@@ -277,6 +296,7 @@ proc toSite(toks: seq[string]): Site =
   result.chrom = toks[0]
   result.position = parseInt(toks[1]) - 1
   result.ref_allele = toks[3][0]
+  result.alt_allele = toks[4][0]
 
 proc checkSiteRef(s:Site, fai:var Fai) =
   var fa_allele = fai.get(s.chrom, s.position, s.position)[0].toUpperAscii
@@ -363,8 +383,7 @@ proc get_sample_names(path: string): seq[string] =
 
   stderr.write_line "[somalier] warning couldn't find samples for " & path & " using file names to guess."
   var s = splitFile(path)
-  # TODO: remove s.name
-  return @[s.name.split("_")[0]]
+  return @[s.name]
 
 proc write(grouped: seq[pair], output_prefix:string) =
   if len(grouped) == 0: return
@@ -392,22 +411,26 @@ proc add_ped_samples(grouped: var seq[pair], samples:seq[Sample], sample_names:s
          grouped.add((sampleB.id, sampleA.id, rel))
 
 
-proc write(fh:File, sample_names: seq[string], dp_stats: seq[RunningStat], gt_counts: array[4, seq[uint16]]) =
-  fh.write("#sample\tdepth_mean\tdepth_sd\tdepth_skew\tn_hom_ref\tn_het\tn_hom_alt\tn_unknown\n")
+proc write(fh:File, sample_names: seq[string], stats: seq[Stat3], gt_counts: array[4, seq[uint16]]) =
+  fh.write("#sample\tdepth_mean\tdepth_sd\tdepth_skew\tab_mean\tab_std\tn_hom_ref\tn_het\tn_hom_alt\tn_unknown\n")
   for i, sample in sample_names:
-    fh.write(&"{sample}\t{dp_stats[i].mean():.1f}\t{dp_stats[i].standard_deviation():.1f}\t{dp_stats[i].skewness()}\t{gt_counts[0][i]}\t{gt_counts[1][i]}\t{gt_counts[2][i]}\t{gt_counts[3][i]}\n")
+    fh.write(&"{sample}\t{stats[i].dp.mean():.1f}\t{stats[i].dp.standard_deviation():.1f}\t{stats[i].dp.skewness()}\t{stats[i].ab.mean():.1f}\t{stats[i].ab.standard_deviation():.1f}\t{gt_counts[0][i]}\t{gt_counts[1][i]}\t{gt_counts[2][i]}\t{gt_counts[3][i]}\n")
   fh.close()
 
-proc toj(samples: seq[string], dp_stats: seq[RunningStat], gt_counts: array[4, seq[uint16]]): string =
+proc toj(samples: seq[string], stats: seq[Stat3], gt_counts: array[4, seq[uint16]]): string =
   result = newStringOfCap(10000)
   result.add("[")
   for i, s in samples:
     if i > 0: result.add(",\n")
     result.add($(%* {
       "sample": s,
-      "depth_mean": dp_stats[i].mean(),
-      "depth_std": dp_stats[i].standard_deviation(),
-      "depth_skew": dp_stats[i].skewness(),
+      "depth_mean": stats[i].dp.mean(),
+      "depth_std": stats[i].dp.standard_deviation(),
+      "depth_skew": stats[i].dp.skewness(),
+      "ab_mean": stats[i].ab.mean(),
+      "ab_std": stats[i].ab.standard_deviation(),
+      "ab_skew": stats[i].ab.skewness(),
+      "pct_other_alleles": 100.0 * stats[i].un.mean,
       "n_hom_ref": gt_counts[0][i],
       "n_het": gt_counts[1][i],
       "n_hom_alt": gt_counts[2][i],
@@ -500,7 +523,7 @@ proc main() =
 
   var
     results = newSeq[seq[int8]](n_samples)
-    dp_stats = newSeq[RunningStat](n_samples)
+    stats = newSeq[Stat3](n_samples)
     responses = newSeq[FlowVarBase](n_samples)
 
   stderr.write_line "[somalier] sites:", len(sites), " threads:" & $threads
@@ -521,7 +544,7 @@ proc main() =
     #  sleep(50)
     if responses.len > 50 and j mod 25 == 0:
       stderr.write_line "[somalier] spawning sample:", j
-    responses[j] = spawn get_bam_alts(bv_paths[j], fasta_path, sites, results[j].addr, dp_stats[j].addr, min_depth)
+    responses[j] = spawn get_bam_alts(bv_paths[j], fasta_path, sites, results[j].addr, stats[j].addr, min_depth)
 
   for index, fv in responses:
     blockUntil(fv)
@@ -571,11 +594,11 @@ proc main() =
   var j = % final
   j["expected-relatedness"] = %* groups
 
-  fh_html.write(tmpl_html.replace("<INPUT_JSON>", $j).replace("<SAMPLE_JSON>", toj(sample_names, dp_stats, gt_counts)))
+  fh_html.write(tmpl_html.replace("<INPUT_JSON>", $j).replace("<SAMPLE_JSON>", toj(sample_names, stats, gt_counts)))
   fh_html.close()
   stderr.write_line("[somalier] wrote interactive HTML output to: ",  output_prefix & "html")
 
-  fh_samples.write(sample_names, dp_stats, gt_counts)
+  fh_samples.write(sample_names, stats, gt_counts)
 
   for rel in relatedness(final, grouped):
     fh_tsv.write_line $rel
