@@ -34,12 +34,15 @@ proc `%`*(p:pair): JsonNode =
 proc ab*(c:count): float {.inline.} =
   return c.nalt.float / (c.nalt + c.nref).float
 
+template proportion_other(c:count): float =
+  if c.nother == 0: 0'f else: c.nother.float / (c.nother + c.nref + c.nalt).float
+
 proc alts*(c:count, min_depth:int): int8 {.inline.} =
   ## give an estimate of number of alts from counts of ref and alt
   ## AB < 0.15 is called as hom-ref
   ## AB > 0.75 is hom-alt
   ## 0.15 <= AB <= 0.75 is het
-  if c.nother > 1'u32: return -1
+  if c.proportion_other > 0.04: return -1
   if int(c.nref + c.nalt) < min_depth:
     return -1
   if c.nalt == 0:
