@@ -115,12 +115,13 @@ Options:
 
   """
 
-type Stat3 = object
+type Stat4 = object
   dp: RunningStat
+  gtdp: RunningStat # depth of genotyped sites
   un: RunningStat
   ab: RunningStat
 
-proc get_alts(bam:Bam, sites:seq[Site], nalts: ptr seq[int8], stat: ptr Stat3, min_depth:int=6): bool =
+proc get_alts(bam:Bam, sites:seq[Site], nalts: ptr seq[int8], stat: ptr Stat4, min_depth:int=6): bool =
   ## count alternate alleles in a single bam at each site.
   for i, site in sites:
     var c = bam.count_alleles(site)
@@ -131,8 +132,11 @@ proc get_alts(bam:Bam, sites:seq[Site], nalts: ptr seq[int8], stat: ptr Stat3, m
       stat.ab.push(c.ab)
 
     nalts[][i] = c.alts(min_depth)
+    if nalts[][i] != -1:
+      stat.gtdp.push(int(c.nref + c.nalt))
 
-proc get_bam_alts(path:string, fai:string, sites:seq[Site], nalts: ptr seq[int8], stat: ptr Stat3, min_depth:int=6): bool =
+
+proc get_bam_alts(path:string, fai:string, sites:seq[Site], nalts: ptr seq[int8], stat: ptr Stat4, min_depth:int=6): bool =
   var bam: Bam
   if not open(bam, path, index=true, fai=fai):
     quit "couldn't open :" & $path
@@ -414,22 +418,31 @@ proc add_ped_samples(grouped: var seq[pair], samples:seq[Sample], sample_names:s
          grouped.add((sampleB.id, sampleA.id, rel))
 
 
-proc write(fh:File, sample_names: seq[string], stats: seq[Stat3], gt_counts: array[4, seq[uint16]]) =
-  fh.write("#sample\tdepth_mean\tdepth_sd\tdepth_skew\tab_mean\tab_std\tn_hom_ref\tn_het\tn_hom_alt\tn_unknown\n")
+proc write(fh:File, sample_names: seq[string], stats: seq[Stat4], gt_counts: array[4, seq[uint16]]) =
+  fh.write("#sample\tgt_depth_mean\tgt_depth_sd\tgt_depth_skew\tdepth_mean\tdepth_sd\tdepth_skew\tab_mean\tab_std\tn_hom_ref\tn_het\tn_hom_alt\tn_unknown\n")
   for i, sample in sample_names:
-    fh.write(&"{sample}\t{stats[i].dp.mean():.1f}\t{stats[i].dp.standard_deviation():.1f}\t{stats[i].dp.skewness()}\t{stats[i].ab.mean():.1f}\t{stats[i].ab.standard_deviation():.1f}\t{gt_counts[0][i]}\t{gt_counts[1][i]}\t{gt_counts[2][i]}\t{gt_counts[3][i]}\n")
+    fh.write(&"{sample}\t")
+    fh.write(&"{stats[i].gtdp.mean():.1f}\t{stats[i].gtdp.standard_deviation():.1f}\t{stats[i].gtdp.skewness()}\t")
+    fh.write(&"{stats[i].dp.mean():.1f}\t{stats[i].dp.standard_deviation():.1f}\t{stats[i].dp.skewness()}\t")
+    fh.write(&"{stats[i].ab.mean():.1f}\t{stats[i].ab.standard_deviation():.1f}\t{gt_counts[0][i]}\t{gt_counts[1][i]}\t{gt_counts[2][i]}\t{gt_counts[3][i]}\n")
   fh.close()
 
-proc toj(samples: seq[string], stats: seq[Stat3], gt_counts: array[4, seq[uint16]]): string =
+proc toj(samples: seq[string], stats: seq[Stat4], gt_counts: array[4, seq[uint16]]): string =
   result = newStringOfCap(10000)
   result.add("[")
   for i, s in samples:
     if i > 0: result.add(",\n")
     result.add($(%* {
       "sample": s,
+
+      "gt_depth_mean": stats[i].gtdp.mean(),
+      "gt_depth_std": stats[i].gtdp.standard_deviation(),
+      "gt_depth_skew": stats[i].gtdp.skewness(),
+
       "depth_mean": stats[i].dp.mean(),
       "depth_std": stats[i].dp.standard_deviation(),
       "depth_skew": stats[i].dp.skewness(),
+
       "ab_mean": stats[i].ab.mean(),
       "ab_std": stats[i].ab.standard_deviation(),
       "ab_skew": stats[i].ab.skewness(),
@@ -437,7 +450,8 @@ proc toj(samples: seq[string], stats: seq[Stat3], gt_counts: array[4, seq[uint16
       "n_hom_ref": gt_counts[0][i],
       "n_het": gt_counts[1][i],
       "n_hom_alt": gt_counts[2][i],
-      "n_unknown": gt_counts[3][i]
+      "n_unknown": gt_counts[3][i],
+      "n_known": gt_counts[0][i] + gt_counts[1][i] + gt_counts[2][i]
     }
     ))
   result.add("]")
@@ -526,7 +540,7 @@ proc main() =
 
   var
     results = newSeq[seq[int8]](n_samples)
-    stats = newSeq[Stat3](n_samples)
+    stats = newSeq[Stat4](n_samples)
     responses = newSeq[FlowVarBase](n_samples)
 
   stderr.write_line "[somalier] sites:", len(sites), " threads:" & $threads

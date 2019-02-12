@@ -3,6 +3,10 @@ dev
 + if a sample had > 1 allele that was neither REF nor ALT at a given site, it was assigned
   an `unknown` genotype. This was too stringent for deep sequencing so it was changed to a
   proportion (> 0.04 [or 1 in 25 alleles]) #7
++ for samples with sparse coverage, e.g. from targetted sequencing projects, mean depth is
+  not very informative because it gets washed out by all the zero-depth sites. The new columns:
+  `gt_depth_mean`, `gt_depth_std`, gt_depth_skew` report the values for the depth at genotyped
+  sites--those meeting the depth requirement (default of 7).
 
 v0.1.2
 ======

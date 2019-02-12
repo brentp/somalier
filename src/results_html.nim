@@ -449,9 +449,12 @@ there.
     <div id="plotb" style="width: 100%; height: 90%"></div>
         X:
     <select id="plotbx_select">
-        <option value="depth_mean" selected>mean depth</option>
-        <option value="depth_std">stddev of depth</option>
-        <option value="depth_skew">skew of depth</option>
+        <option value="gt_depth_mean" selected>mean depth of genotyped sites</option>
+        <option value="gt_depth_std">std. of depth of genotyped sites</option>
+        <option value="gt_depth_skew">skew of depth of genotyped sites</option>
+        <option value="depth_mean">mean depth of all sites</option>
+        <option value="depth_std">stddev of depth of all sites</option>
+
         <option value="ab_mean">mean allele balance</option>
         <option value="ab_std">stddev of allele balance</option>
 
@@ -461,12 +464,16 @@ there.
         <option value="n_het">number of 0/1 sites</option>
         <option value="n_hom_alt">number of 1/1 sites</option>
         <option value="n_unknown">number of unknown sites</option>
+        <option value="n_known">number of known sites</option>
     </select>
         Y:
     <select id="plotby_select">
-        <option value="depth_mean">mean depth</option>
-        <option value="depth_std">stddev of depth</option>
-        <option value="depth_skew">skew of depth</option>
+        <option value="gt_depth_mean">mean depth of genotyped sites</option>
+        <option value="gt_depth_std">std. of depth of genotyped sites</option>
+        <option value="gt_depth_skew">skew of depth of genotyped sites</option>
+        <option value="depth_mean">mean depth of all sites</option>
+        <option value="depth_std">stddev of depth of all sites</option>
+
         <option value="ab_mean">mean allele balance</option>
         <option value="ab_std">stddev of allele balance</option>
 
@@ -475,7 +482,8 @@ there.
         <option value="n_hom_ref">number of 0/0 sites</option>
         <option value="n_het">number of 0/1 sites</option>
         <option value="n_hom_alt">number of 1/1 sites</option>
-        <option value="n_unknown" selected>number of unknown sites</option>
+        <option value="n_unknown">number of unknown sites</option>
+        <option value="n_known" selected>number of known sites</option>
     </select>
 
 </div>
