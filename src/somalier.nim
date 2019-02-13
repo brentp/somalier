@@ -92,12 +92,14 @@ proc count_alleles(b:Bam, site:Site): count {.inline.} =
 
 proc writeHelp() =
   stderr.write """
-somalier [options] <bam/cram>...
+somalier [options] <bam/cram/list>...
 
-version: 0.1.3
+version: 0.1.4
 
 Arguments:
-  <bam/cram> file(s) for samples of interest.
+  <bam/cram/list> file(s) for samples of interest. or a file ending in ".list" where each line
+  contains the path to the (possibly remote) alignment file in column 1 and optionally the index
+  in column 2. (tab, space, or comma delimited).
 
 Options:
 
@@ -121,6 +123,11 @@ type Stat4 = object
   un: RunningStat
   ab: RunningStat
 
+type pathWithIndex = object
+  ## this allows us to support paths where the index and the bam are in different locations
+  path: string
+  indexPath: string
+
 proc get_alts(bam:Bam, sites:seq[Site], nalts: ptr seq[int8], stat: ptr Stat4, min_depth:int=6): bool =
   ## count alternate alleles in a single bam at each site.
   for i, site in sites:
@@ -135,11 +142,11 @@ proc get_alts(bam:Bam, sites:seq[Site], nalts: ptr seq[int8], stat: ptr Stat4, m
     if nalts[][i] != -1:
       stat.gtdp.push(int(c.nref + c.nalt))
 
-
-proc get_bam_alts(path:string, fai:string, sites:seq[Site], nalts: ptr seq[int8], stat: ptr Stat4, min_depth:int=6): bool =
+proc get_bam_alts(pwi:pathWithIndex, fai:string, sites:seq[Site], nalts: ptr seq[int8], stat: ptr Stat4, min_depth:int=6): bool =
   var bam: Bam
-  if not open(bam, path, index=true, fai=fai):
-    quit "couldn't open :" & $path
+  if not open(bam, pwi.path, fai=fai):
+    quit "couldn't open :" & $pwi.path
+  bam.load_index(pwi.indexPath)
   discard bam.set_option(FormatOption.CRAM_OPT_REQUIRED_FIELDS, 8191 - SAM_QUAL.int - SAM_QNAME.int - SAM_RNAME.int)
   result = bam.get_alts(sites, nalts, stat, min_depth)
   bam.close()
@@ -456,12 +463,23 @@ proc toj(samples: seq[string], stats: seq[Stat4], gt_counts: array[4, seq[uint16
     ))
   result.add("]")
 
+proc add_pl(bv: var seq[pathWithIndex], arg: string) =
+  ## normalize arguments between *.bam and a .list with sample, index pairs
+  if arg.endswith(".list"):
+    for l in arg.lines:
+      var toks = l.split(seps={',', '\t', ' '})
+      doAssert toks.len in {1, 2}
+      if toks.len == 1: toks.add("")
+      bv.add(pathWithIndex(path: toks[0], indexPath: toks[1]))
+  else:
+    bv.add(pathWithIndex(path:arg))
+
 proc main() =
 
   var p = initOptParser()
 
   var
-    bv_paths = newSeq[string]()
+    bv_paths = newSeq[pathWithIndex]()
     sites_path: string
     fai: Fai
     fasta_path: string
@@ -476,7 +494,7 @@ proc main() =
     case kind
     of cmdArgument:
       if key == "rel": continue
-      bv_paths.add(key)
+      bv_paths.add_pl(key)
     of cmdLongOption, cmdShortOption:
       case key
       of "help", "h":
@@ -519,7 +537,8 @@ proc main() =
   var sample_names = newSeqOfCap[string](len(bv_paths))
   var non_bam_sample_names = newSeqOfCap[string](len(bv_paths))
 
-  for i, path in bv_paths:
+  for i, pw in bv_paths:
+    var path = pw.path
     if path.bam_like:
       sample_names.add(get_sample_names(path))
     else:

@@ -1,3 +1,13 @@
+v0.1.4
+======
++ if a file ending with ".list" is given as an argument (instead of .bam, .cram), it can contain
+  paths to the alignment files and optionally the indexes. e.g.
+  ```
+https://abc/path/to/aaa.bam https://abc/indexes/path/aaa.bam.bai
+https://abc/path/to/bbb.bam https://abc/indexes/path/bbb.bam.bai
+```
+  These can be space, comma, or tab-delimited.
+
 v0.1.3
 ======
 + if a sample had > 1 allele that was neither REF nor ALT at a given site, it was assigned

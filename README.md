@@ -33,10 +33,10 @@ which contains htslib and a somalier binary ready-for-use.
 ## Usage
 
 ```
-somalier [options] <bam/cram>...
+somalier [options] <bam/cram/list>...
 
 Arguments:
-  <bam/cram> file(s) for samples of interest.
+  <bam/cram> file(s) for samples of interest. or a `list` with lines of bam,index paths.
 
 Options:
 
@@ -76,7 +76,8 @@ These are used to calculate [relatedness](https://en.wikipedia.org/wiki/Coeffici
 and a measure of relatedness that is unaffected by loss-of-heterozygosity that is often seen in some 
 cancers. The interactive output allows toggling between any of these measures.
 
-It also reports depth information and the count of `HET`, `HOM_REF`, `HOM_ALT`, and `unknown` genotypes for each sample.
+It also reports depth information and the count of `HET`, `HOM_REF`, `HOM_ALT`, and `unknown` genotypes for each sample
+along with a number of metrics that are useful for general QC.
 
 
 ## Example
@@ -101,5 +102,6 @@ https://academic.oup.com/bioinformatics/article/33/4/596/2624551
 
 ## Acknowledgement
 
-This work was motivated by interaction and discussions with Preeti Aahir
+This work was motivated by interaction and discussions with Preeti Aahir and several
+early users who provided valuable feedback.
 
