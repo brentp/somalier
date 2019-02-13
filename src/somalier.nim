@@ -31,32 +31,24 @@ type pair = tuple[a:string, b:string, rel:float64]
 proc `%`*(p:pair): JsonNode =
   return %*{"a":p.a, "b":p.b, "rel":p.rel}
 
-proc ab*(c:count): float {.inline.} =
-  return c.nalt.float / (c.nalt + c.nref).float
-
 template proportion_other(c:count): float =
   if c.nother == 0: 0'f else: c.nother.float / (c.nother + c.nref + c.nalt).float
 
-proc alts*(c:count, min_depth:int): int8 {.inline.} =
-  ## give an estimate of number of alts from counts of ref and alt
-  ## AB < 0.15 is called as hom-ref
-  ## AB > 0.75 is hom-alt
-  ## 0.15 <= AB <= 0.75 is het
+proc ab*(c:count, min_depth:int): float {.inline.} =
   if c.proportion_other > 0.04: return -1
   if int(c.nref + c.nalt) < min_depth:
     return -1
   if c.nalt == 0:
     return 0
+  result = c.nalt.float / (c.nalt + c.nref).float
 
-  var ab = c.ab
-
+proc alts(ab:float): int8 {.inline.} =
+  if ab < 0: return -1
   if ab < 0.07:
     return 0
   if ab > 0.88:
     return 2
-
   if ab < 0.2 or ab > 0.8: return -1 # exclude mid-range hets.
-
   return 1
 
 proc count_alleles(b:Bam, site:Site): count {.inline.} =
@@ -128,7 +120,7 @@ type pathWithIndex = object
   path: string
   indexPath: string
 
-proc get_alts(bam:Bam, sites:seq[Site], nalts: ptr seq[int8], stat: ptr Stat4, min_depth:int=6): bool =
+proc get_abs(bam:Bam, sites:seq[Site], ab: ptr seq[float32], stat: ptr Stat4, min_depth:int=6): bool =
   ## count alternate alleles in a single bam at each site.
   for i, site in sites:
     var c = bam.count_alleles(site)
@@ -136,19 +128,19 @@ proc get_alts(bam:Bam, sites:seq[Site], nalts: ptr seq[int8], stat: ptr Stat4, m
     if c.nref > 0'u32 or c.nalt > 0'u32 or c.nother > 0'u32:
       stat.un.push(c.nother.float64 / float64(c.nref + c.nalt + c.nother))
     if c.nref.float > min_depth / 2 and c.nalt.float > min_depth / 2:
-      stat.ab.push(c.ab)
+      stat.ab.push(c.ab(min_depth))
 
-    nalts[][i] = c.alts(min_depth)
-    if nalts[][i] != -1:
+    ab[][i] = c.ab(min_depth)
+    if ab[][i] != -1:
       stat.gtdp.push(int(c.nref + c.nalt))
 
-proc get_bam_alts(pwi:pathWithIndex, fai:string, sites:seq[Site], nalts: ptr seq[int8], stat: ptr Stat4, min_depth:int=6): bool =
+proc get_bam_abs(pwi:pathWithIndex, fai:string, sites:seq[Site], ab: ptr seq[float32], stat: ptr Stat4, min_depth:int=6): bool =
   var bam: Bam
   if not open(bam, pwi.path, fai=fai):
     quit "couldn't open :" & $pwi.path
   bam.load_index(pwi.indexPath)
   discard bam.set_option(FormatOption.CRAM_OPT_REQUIRED_FIELDS, 8191 - SAM_QUAL.int - SAM_QNAME.int - SAM_RNAME.int)
-  result = bam.get_alts(sites, nalts, stat, min_depth)
+  result = bam.get_abs(sites, ab, stat, min_depth)
   bam.close()
 
 proc get_depths(v:Variant, cache: var seq[int32]): seq[int32] =
@@ -558,7 +550,7 @@ proc main() =
     threads = n_samples
 
   var
-    results = newSeq[seq[int8]](n_samples)
+    ab_results = newSeq[seq[float32]](n_samples)
     stats = newSeq[Stat4](n_samples)
     responses = newSeq[FlowVarBase](n_samples)
 
@@ -575,18 +567,16 @@ proc main() =
                               samples: sample_names)
 
   for j in 0..<responses.len:
-    results[j] = newSeq[int8](sites.len)
-    #while not preferSpawn():
-    #  sleep(50)
+    ab_results[j] = newSeq[float32](sites.len)
     if responses.len > 50 and j mod 25 == 0:
       stderr.write_line "[somalier] spawning sample:", j
-    responses[j] = spawn get_bam_alts(bv_paths[j], fasta_path, sites, results[j].addr, stats[j].addr, min_depth)
+    responses[j] = spawn get_bam_abs(bv_paths[j], fasta_path, sites, ab_results[j].addr, stats[j].addr, min_depth)
 
   for index, fv in responses:
     blockUntil(fv)
 
   stderr.write_line "[somalier] collected sites from all samples"
-  shallow(results)
+  shallow(ab_results)
 
   var t0 = cpuTime()
   var nsites = 0
@@ -596,15 +586,18 @@ proc main() =
   for i in 0..<4:
     gt_counts[i] = newSeq[uint16](n_samples)
 
+
   for rowi in 0..sites.high:
     var nun = 0
     for i in 0..<n_samples:
-      alts[i] = results[i][rowi]
+      alts[i] = ab_results[i][rowi].alts
       if alts[i] == -1:
         nun.inc
         gt_counts[3][i].inc
       else:
         gt_counts[alts[i].int][i].inc
+      if alts[i] == 0:
+        echo ab_results[i][rowi]
 
     if nun.float64 / n_samples.float64 > 0.6: continue
     nsites += 1
