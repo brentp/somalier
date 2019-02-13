@@ -1,5 +1,5 @@
-dev
-===
+v0.1.3
+======
 + if a sample had > 1 allele that was neither REF nor ALT at a given site, it was assigned
   an `unknown` genotype. This was too stringent for deep sequencing so it was changed to a
   proportion (> 0.04 [or 1 in 25 alleles]) #7
