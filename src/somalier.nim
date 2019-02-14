@@ -120,6 +120,26 @@ type pathWithIndex = object
   path: string
   indexPath: string
 
+const arraySize = 1024
+
+type counter = object
+  counts: array[arraySize, int]
+
+proc push(c:var counter, x:float) {.inline.} =
+  doAssert 0 <= x and x <= 0.5
+  var idx = min(c.counts.high, int(x * (arraySize * 2.0) + 0.5))
+  c.counts[idx].inc
+
+proc median(c:counter): float {.inline.} =
+  var n = sum(c.counts)
+  if n < 1: return 0
+  var mid = int(n.float / 2.0 + 0.5)
+  var fsum = 0
+  for i, v in c.counts:
+    fsum += v
+    if fsum >= mid:
+      return i.float / (arraySize * 2.0)
+
 proc get_abs(bam:Bam, sites:seq[Site], ab: ptr seq[float32], stat: ptr Stat4, min_depth:int=6): bool =
   ## count alternate alleles in a single bam at each site.
   for i, site in sites:
@@ -133,6 +153,50 @@ proc get_abs(bam:Bam, sites:seq[Site], ab: ptr seq[float32], stat: ptr Stat4, mi
     ab[][i] = c.ab(min_depth)
     if ab[][i] != -1:
       stat.gtdp.push(int(c.nref + c.nalt))
+
+const error_rate = 2e-3
+
+proc estimate_contamination(self_abs: seq[float32], other_abs: seq[float32]): (float, int) =
+  ## estimate contamination of self, by other.
+  var sites_used = 0
+  var c: counter
+  for i, a in self_abs:
+    if a == -1: continue
+    var b = other_abs[i]
+    if b == -1: continue
+    if abs(a - b) < 0.02: continue
+
+    sites_used += 1
+    # aa: 0.5, bb: 0 -> 2
+    # aa: 1,   bb: 0 -> 1
+    # aa: 0.01, bb: 0.03 -> 2
+    if a > 0.25 and a < 0.75: continue
+
+    var scaler = min(2'f32, 1'f32 / abs(a - b).float32)
+    # a: 0.01, b: 0.0001 then b can't contribute to a
+    if a < 0.5 and b < a:
+      scaler = 0
+
+    # a: 0.99, b: 0.999 then reads can't come from b
+    elif a > 0.5 and b > a:
+      scaler = 0
+
+    var ax = if a > 0.5: 1-a else: a
+    if ax > 0.25:
+      # remove cases where direction of support does not match
+      # e.g.:
+      # self:0.4744310677051544 other:0.9432255029678345 ax:0.02556893229484558 scaler:2.0 evidence for contamination of:0.05113786458969116
+      if a < 0.5 and b > 0.5:
+        scaler = 0.0 # no way that change in AF can come from b
+      ax = 0.5 - ax
+
+    var contam = scaler * ax
+
+    #echo "self:", a, " other:", b, " ax:", ax, " scaler:", scaler, " evidence for contamination of:", contam
+
+    c.push(contam) #scaler * (if a < 0.5: a else: 1 - a))
+  #echo sum(c.counts), " ", c.counts[0..<min(arraySize, 100)]
+  return (c.median, sum(c.counts))
 
 proc get_bam_abs(pwi:pathWithIndex, fai:string, sites:seq[Site], ab: ptr seq[float32], stat: ptr Stat4, min_depth:int=6): bool =
   var bam: Bam
@@ -586,6 +650,11 @@ proc main() =
   for i in 0..<4:
     gt_counts[i] = newSeq[uint16](n_samples)
 
+  for i in 1..<ab_results.len:
+    for o in 0..<i:
+      var a = ab_results[i]
+      var b = ab_results[o]
+      echo sample_names[o], " vs ", sample_names[i], " =>", estimate_contamination(a, b)
 
   for rowi in 0..sites.high:
     var nun = 0
@@ -596,8 +665,6 @@ proc main() =
         gt_counts[3][i].inc
       else:
         gt_counts[alts[i].int][i].inc
-      if alts[i] == 0:
-        echo ab_results[i][rowi]
 
     if nun.float64 / n_samples.float64 > 0.6: continue
     nsites += 1
