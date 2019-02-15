@@ -81,6 +81,7 @@ proc count_alleles(b:Bam, site:Site): count {.inline.} =
       else:
         #stderr.write_line $event, " -> over:", over, " -> ", site, " -> ", aln.tostring
         result.nother += 1
+    doAssert aln.start >= 0
 
 proc writeHelp() =
   stderr.write """
@@ -140,10 +141,10 @@ proc median(c:counter): float {.inline.} =
     if fsum >= mid:
       return i.float / (arraySize * 2.0)
 
-proc get_abs(bam:Bam, sites:seq[Site], ab: ptr seq[float32], stat: ptr Stat4, min_depth:int=6): bool =
+proc get_abs(ibam:Bam, sites:seq[Site], ab: ptr seq[float32], stat: ptr Stat4, min_depth:int=6): bool =
   ## count alternate alleles in a single bam at each site.
   for i, site in sites:
-    var c = bam.count_alleles(site)
+    var c = ibam.count_alleles(site)
     stat.dp.push(int(c.nref + c.nalt))
     if c.nref > 0'u32 or c.nalt > 0'u32 or c.nother > 0'u32:
       stat.un.push(c.nother.float64 / float64(c.nref + c.nalt + c.nother))
@@ -164,7 +165,7 @@ proc estimate_contamination(self_abs: seq[float32], other_abs: seq[float32]): (f
     if a == -1: continue
     var b = other_abs[i]
     if b == -1: continue
-    if abs(a - b) < 0.02: continue
+    if abs(a - b) < 0.015: continue
 
     sites_used += 1
     # aa: 0.5, bb: 0 -> 2
@@ -198,14 +199,15 @@ proc estimate_contamination(self_abs: seq[float32], other_abs: seq[float32]): (f
   #echo sum(c.counts), " ", c.counts[0..<min(arraySize, 100)]
   return (c.median, sum(c.counts))
 
-proc get_bam_abs(pwi:pathWithIndex, fai:string, sites:seq[Site], ab: ptr seq[float32], stat: ptr Stat4, min_depth:int=6): bool =
-  var bam: Bam
-  if not open(bam, pwi.path, fai=fai):
+proc get_bam_abs(pwi:pathWithIndex, fai:string, sites:seq[Site], ab: ptr seq[float32], stat: ptr Stat4, min_depth:int): bool {.thread.} =
+  var ibam: Bam
+  if not open(ibam, pwi.path, fai=fai):
     quit "couldn't open :" & $pwi.path
-  bam.load_index(pwi.indexPath)
-  discard bam.set_option(FormatOption.CRAM_OPT_REQUIRED_FIELDS, 8191 - SAM_QUAL.int - SAM_QNAME.int - SAM_RNAME.int)
-  result = bam.get_abs(sites, ab, stat, min_depth)
-  bam.close()
+  ibam.load_index(pwi.indexPath)
+  discard ibam.set_option(FormatOption.CRAM_OPT_REQUIRED_FIELDS, 8191 - SAM_QUAL.int - SAM_QNAME.int)
+  result = ibam.get_abs(sites, ab, stat, min_depth)
+  doAssert ibam.idx != nil
+  ibam.close()
 
 proc get_depths(v:Variant, cache: var seq[int32]): seq[int32] =
   for c in cache.mitems:
