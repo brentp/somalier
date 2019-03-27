@@ -490,12 +490,13 @@ proc add_ped_samples(grouped: var seq[pair], samples:seq[Sample], sample_names:s
 
 
 proc write(fh:File, sample_names: seq[string], stats: seq[Stat4], gt_counts: array[5, seq[uint16]]) =
-  fh.write("#sample\tgt_depth_mean\tgt_depth_sd\tgt_depth_skew\tdepth_mean\tdepth_sd\tdepth_skew\tab_mean\tab_std\tn_hom_ref\tn_het\tn_hom_alt\tn_unknown\n")
+  fh.write("#sample\tgt_depth_mean\tgt_depth_sd\tgt_depth_skew\tdepth_mean\tdepth_sd\tdepth_skew\tab_mean\tab_std\tn_hom_ref\tn_het\tn_hom_alt\tn_unknown\tp_middling_ab\n")
   for i, sample in sample_names:
     fh.write(&"{sample}\t")
     fh.write(&"{stats[i].gtdp.mean():.1f}\t{stats[i].gtdp.standard_deviation():.1f}\t{stats[i].gtdp.skewness()}\t")
     fh.write(&"{stats[i].dp.mean():.1f}\t{stats[i].dp.standard_deviation():.1f}\t{stats[i].dp.skewness()}\t")
-    fh.write(&"{stats[i].ab.mean():.1f}\t{stats[i].ab.standard_deviation():.1f}\t{gt_counts[0][i]}\t{gt_counts[1][i]}\t{gt_counts[2][i]}\t{gt_counts[3][i]}\n")
+    fh.write(&"{stats[i].ab.mean():.1f}\t{stats[i].ab.standard_deviation():.1f}\t{gt_counts[0][i]}\t{gt_counts[1][i]}\t{gt_counts[2][i]}\t{gt_counts[3][i]}\t")
+    fh.write(&"{gt_counts[4][i].float / (gt_counts[0][i] + gt_counts[1][i] + gt_counts[2][i] + gt_counts[3][i] + gt_counts[4][i]).float:.3f}\n")
   fh.close()
 
 proc toj(samples: seq[string], stats: seq[Stat4], gt_counts: array[5, seq[uint16]]): string =
