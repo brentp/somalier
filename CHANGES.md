@@ -6,6 +6,10 @@ v0.1.5
 + fix threading bug with large numbers of samples. 
 + more lenient ped file parsing ("Female" will be recognized in sex column and
   "Affected" in phenotype column).
++ the html output now allows selecting a single sample to be highlighted in the plot
+  this allows finding a sample of interest in a large cohort.
++ the output now includes a new metric for proportion of sites with an allele balance
+  > 0.02 and < 0.2 or > 0.8 and < 0.98. this turns out to be a nice QC (high is bad)
 
 v0.1.4
 ======

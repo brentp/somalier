@@ -664,9 +664,10 @@ proc main() =
       if i == o: continue
       var a = ab_results[i]
       var b = ab_results[o]
+      # estimate contamination of a, by b
       var res = estimate_contamination(a, b)
-      if res[0] == 0: continue
-      echo sample_names[o], " vs ", sample_names[i], " =>", res
+      if res[0] == 0 or res[1] < 10: continue
+      echo sample_names[i], " contaminated by ", sample_names[o], " =>", res
 
   for rowi in 0..sites.high:
     var nun = 0
