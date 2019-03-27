@@ -1,3 +1,12 @@
+v0.1.5
+======
++ add experimental contamination estimate. this simply prints to stderr the sample and
+  inferred source (another sample) of contamination along with the estimated level of 
+  contamination and the number of sites used to estimate it.
++ fix threading bug with large numbers of samples. 
++ more lenient ped file parsing ("Female" will be recognized in sex column and
+  "Affected" in phenotype column).
+
 v0.1.4
 ======
 + if a file ending with ".list" is given as an argument (instead of .bam, .cram), it can contain

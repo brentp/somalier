@@ -16,10 +16,10 @@ import threadpool
 import ./results_html
 
 type Site* = object
-  ref_allele: char
-  alt_allele: char
-  chrom: string
-  position: int
+  ref_allele*: char
+  alt_allele*: char
+  chrom*: string
+  position*: int
 
 type count* = object
   nref: uint32
@@ -51,7 +51,9 @@ proc alts(ab:float): int8 {.inline.} =
   if ab < 0.2 or ab > 0.8: return -1 # exclude mid-range hets.
   return 1
 
-proc count_alleles(b:Bam, site:Site): count {.inline.} =
+
+proc count_alleles(b:Bam, site:Site): count {.thread.} =
+  result = count()
   for aln in b.query(site.chrom, site.position, site.position + 1):
     if aln.mapping_quality < 10: continue
     var off = aln.start
@@ -87,7 +89,7 @@ proc writeHelp() =
   stderr.write """
 somalier [options] <bam/cram/list>...
 
-version: 0.1.4
+version: 0.1.5
 
 Arguments:
   <bam/cram/list> file(s) for samples of interest. or a file ending in ".list" where each line
@@ -131,7 +133,7 @@ proc push(c:var counter, x:float) {.inline.} =
   var idx = min(c.counts.high, int(x * (arraySize * 2.0) + 0.5))
   c.counts[idx].inc
 
-proc median(c:counter): float {.inline.} =
+proc median(c:counter): float =
   var n = sum(c.counts)
   if n < 1: return 0
   var mid = int(n.float / 2.0 + 0.5)
@@ -141,7 +143,7 @@ proc median(c:counter): float {.inline.} =
     if fsum >= mid:
       return i.float / (arraySize * 2.0)
 
-proc get_abs(ibam:Bam, sites:seq[Site], ab: ptr seq[float32], stat: ptr Stat4, min_depth:int=6): bool =
+proc get_abs(ibam:Bam, sites:seq[Site], ab: ptr seq[float32], stat: ptr Stat4, min_depth:int=6): bool {.thread.} =
   ## count alternate alleles in a single bam at each site.
   for i, site in sites:
     var c = ibam.count_alleles(site)
@@ -203,15 +205,19 @@ proc get_bam_abs(pwi:pathWithIndex, fai:string, sites:seq[Site], ab: ptr seq[flo
   var ibam: Bam
   if not open(ibam, pwi.path, fai=fai):
     quit "couldn't open :" & $pwi.path
-  ibam.load_index(pwi.indexPath)
   discard ibam.set_option(FormatOption.CRAM_OPT_REQUIRED_FIELDS, 8191 - SAM_QUAL.int - SAM_QNAME.int)
+  ibam.load_index(pwi.indexPath)
+  doAssert ibam.idx != nil
+  GC_ref(ibam)
   result = ibam.get_abs(sites, ab, stat, min_depth)
   doAssert ibam.idx != nil
+  GC_unref(ibam)
   ibam.close()
+  ibam = nil
+  GC_fullCollect()
 
 proc get_depths(v:Variant, cache: var seq[int32]): seq[int32] =
-  for c in cache.mitems:
-    c = 0
+  zeroMem(cache[0].addr, cache.len * sizeof(int32))
   if v.format.get("AD", cache) == Status.OK:
     result = newSeq[int32](v.n_samples)
     for i in 0..<v.n_samples:
@@ -391,7 +397,7 @@ proc readSites(path: string, fai:var Fai): seq[Site] =
     if line[0] == '#': continue
     var sep = '\t'
     # handle ":" or tab. with ":", there is no id field.
-    if line.count(sep) == 0:
+    if sep notin line:
       sep = ':'
     var toks = line.strip().split(sep)
     if sep == ':':
@@ -483,7 +489,7 @@ proc add_ped_samples(grouped: var seq[pair], samples:seq[Sample], sample_names:s
          grouped.add((sampleB.id, sampleA.id, rel))
 
 
-proc write(fh:File, sample_names: seq[string], stats: seq[Stat4], gt_counts: array[4, seq[uint16]]) =
+proc write(fh:File, sample_names: seq[string], stats: seq[Stat4], gt_counts: array[5, seq[uint16]]) =
   fh.write("#sample\tgt_depth_mean\tgt_depth_sd\tgt_depth_skew\tdepth_mean\tdepth_sd\tdepth_skew\tab_mean\tab_std\tn_hom_ref\tn_het\tn_hom_alt\tn_unknown\n")
   for i, sample in sample_names:
     fh.write(&"{sample}\t")
@@ -492,7 +498,7 @@ proc write(fh:File, sample_names: seq[string], stats: seq[Stat4], gt_counts: arr
     fh.write(&"{stats[i].ab.mean():.1f}\t{stats[i].ab.standard_deviation():.1f}\t{gt_counts[0][i]}\t{gt_counts[1][i]}\t{gt_counts[2][i]}\t{gt_counts[3][i]}\n")
   fh.close()
 
-proc toj(samples: seq[string], stats: seq[Stat4], gt_counts: array[4, seq[uint16]]): string =
+proc toj(samples: seq[string], stats: seq[Stat4], gt_counts: array[5, seq[uint16]]): string =
   result = newStringOfCap(10000)
   result.add("[")
   for i, s in samples:
@@ -516,7 +522,8 @@ proc toj(samples: seq[string], stats: seq[Stat4], gt_counts: array[4, seq[uint16
       "n_het": gt_counts[1][i],
       "n_hom_alt": gt_counts[2][i],
       "n_unknown": gt_counts[3][i],
-      "n_known": gt_counts[0][i] + gt_counts[1][i] + gt_counts[2][i]
+      "n_known": gt_counts[0][i] + gt_counts[1][i] + gt_counts[2][i],
+      "p_middling_ab": gt_counts[4][i].float / (gt_counts[0][i] + gt_counts[1][i] + gt_counts[2][i] + gt_counts[3][i] + gt_counts[4][i]).float,
     }
     ))
   result.add("]")
@@ -614,15 +621,15 @@ proc main() =
 
   if threads > n_samples:
     threads = n_samples
+  stderr.write_line "[somalier] sites:", len(sites), " threads:" & $threads
+  setMaxPoolSize(threads)
+  sleep(300)
 
   var
     ab_results = newSeq[seq[float32]](n_samples)
     stats = newSeq[Stat4](n_samples)
     responses = newSeq[FlowVarBase](n_samples)
 
-  stderr.write_line "[somalier] sites:", len(sites), " threads:" & $threads
-  #setMinPoolSize(threads)
-  setMaxPoolSize(threads)
 
   # aggregated from all threads.
   var final = relation_matrices(ibs: newSeq[uint16](n_samples * n_samples),
@@ -641,27 +648,33 @@ proc main() =
   for index, fv in responses:
     blockUntil(fv)
 
-  stderr.write_line "[somalier] collected sites from all samples"
+  stderr.write_line &"[somalier] collected sites from all {n_samples} samples"
   shallow(ab_results)
 
   var t0 = cpuTime()
   var nsites = 0
   var alts = newSeq[int8](n_samples)
-  # counts of hom-ref, het, hom-alt, unk
-  var gt_counts : array[4, seq[uint16]]
-  for i in 0..<4:
+  # counts of hom-ref, het, hom-alt, unk, hets outside of 0.2..0.8
+  var gt_counts : array[5, seq[uint16]]
+  for i in 0..<gt_counts.len:
     gt_counts[i] = newSeq[uint16](n_samples)
 
-  for i in 1..<ab_results.len:
-    for o in 0..<i:
+  for i in 0..<ab_results.len:
+    for o in 0..<ab_results.len:
+      if i == o: continue
       var a = ab_results[i]
       var b = ab_results[o]
-      echo sample_names[o], " vs ", sample_names[i], " =>", estimate_contamination(a, b)
+      var res = estimate_contamination(a, b)
+      if res[0] == 0: continue
+      echo sample_names[o], " vs ", sample_names[i], " =>", res
 
   for rowi in 0..sites.high:
     var nun = 0
     for i in 0..<n_samples:
-      alts[i] = ab_results[i][rowi].alts
+      var abi = ab_results[i][rowi]
+      alts[i] = abi.alts
+      if abi > 0.02 and abi < 0.98 and (abi < 0.2 or abi > 0.8):
+        gt_counts[4][i].inc
       if alts[i] == -1:
         nun.inc
         gt_counts[3][i].inc

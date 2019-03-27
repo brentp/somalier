@@ -465,6 +465,7 @@ there.
         <option value="n_hom_alt">number of 1/1 sites</option>
         <option value="n_unknown">number of unknown sites</option>
         <option value="n_known">number of known sites</option>
+        <option value="p_middling_ab">proportion sites with AB &lt; 0.2 or AB &gt; 0.8</option>
     </select>
         Y:
     <select id="plotby_select">
@@ -484,6 +485,7 @@ there.
         <option value="n_hom_alt">number of 1/1 sites</option>
         <option value="n_unknown">number of unknown sites</option>
         <option value="n_known" selected>number of known sites</option>
+        <option value="p_middling_ab">proportion sites with AB &lt; 0.2 or AB &gt; 0.8</option>
     </select>
 
 </div>

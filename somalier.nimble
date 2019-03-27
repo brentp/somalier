@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.1.4"
+version       = "0.1.5"
 author        = "Brent Pedersen"
 description   = "sample-swap checking directly on BAMs/CRAMs for cancer data"
 license       = "academic only"
