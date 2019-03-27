@@ -12,6 +12,7 @@ v0.1.5
   > 0.02 and < 0.2 or > 0.8 and < 0.98. this turns out to be a nice QC (high is bad)
 + for low coverage or targetted sites, sometimes `nan` values would stop the entire 
   html page from working; this has been fixed.
++ make sure all reported relationships are plotted in correct colors (#14)
 
 v0.1.4
 ======

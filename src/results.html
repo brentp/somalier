@@ -580,11 +580,8 @@ if ("expected-relatedness" in input) {
     var er = input["expected-relatedness"]
     for(i in er){
         var p = er[i] // {a:sample, b:sample, rel:0.5}
-        if(p.a < p.b) {
-          rel_pairs.set(p.a + "--" + p.b, p.rel)
-        } else {
-          rel_pairs.set(p.b + "--" + p.a, p.rel)
-        }
+        rel_pairs.set(p.a + "--" + p.b, p.rel)
+        rel_pairs.set(p.b + "--" + p.a, p.rel)
     }
 }
 
@@ -625,6 +622,9 @@ if(input.n_samples > 50) {
     size = 8
 }
 if(input.n_samples > 200) {
+    size = 7
+}
+if(input.n_samples > 700) {
     size = 5
 }
 
