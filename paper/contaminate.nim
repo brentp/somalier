@@ -14,10 +14,10 @@ type read = object
   sequence:string
   base_qualities: seq[uint8]
 
-type pair = object
-  qname: string
-  read1: read
-  read2: read
+type pair* = object
+  qname*: string
+  read1*: read
+  read2*: read
 #[
 create a bam with only reads from the regions that overlap the bases used by somalier
 ]#
@@ -38,6 +38,49 @@ proc reverse_complement(xs: string): string =
   result = newString(xs.len)
   for i, x in xs:
     result[xs.high-i] = complement(x)
+
+proc simulate_variant(aln:Record, site:Variant, freq: float): read =
+  var r = read()
+  discard aln.sequence(r.sequence)
+  discard aln.base_qualities(r.base_qualities)
+  if site == nil or random(1'f) > freq or aln.chrom != $site.CHROM or aln.start > site.start or aln.stop < site.stop:
+    if aln.flag.reverse:
+      reverse(r.base_qualities)
+      r.sequence = reverse_complement(r.sequence)
+    return r
+
+  var
+    off = aln.start
+    qoff = 0
+    r_off_only = 0
+
+  for event in aln.cigar:
+    var cons = event.consumes
+    if cons.query:
+      qoff += event.len
+    if cons.reference:
+      off += event.len
+      if not cons.query:
+        roff_only += event.len
+    if off <= site.start: continue
+
+    if not (cons.query and cons.reference): continue
+
+    var over = off - site.start - roff_only
+    if over > qoff: break
+    if over < 0: continue
+    doAssert qoff - over >= 0
+
+    if site.start mod 2 == 0:
+      r.sequence[qoff - over] = site.REF[0]
+    else:
+      r.sequence[qoff - over] = site.ALT[0][0]
+    break
+
+  if aln.flag.reverse:
+    reverse(r.base_qualities)
+    r.sequence = reverse_complement(r.sequence)
+  return r
 
 proc extract(bam_path: string, vcf_path: string, fasta:string): seq[pair] =
   var s = initSet[string]()
@@ -73,14 +116,9 @@ proc extract(bam_path: string, vcf_path: string, fasta:string): seq[pair] =
     if aln.flag.secondary or aln.flag.supplementary: continue
 
     var p = pairs.mgetOrPut(aln.qname, pair(qname: aln.qname))
-    var r = read()
-
-    discard aln.sequence(r.sequence)
-    discard aln.base_qualities(r.base_qualities)
-
-    if aln.flag.reverse:
-      reverse(r.base_qualities)
-      r.sequence = reverse_complement(r.sequence)
+    # TODO: hwo to get simulated variant?)
+    # move adding to pairs above? yes.
+    var r = simulate_variant(aln, nil, 1)
 
     if aln.flag.read1:
       p.read1 = r
@@ -134,13 +172,16 @@ proc contaminate(a: var seq[pair], cont: var seq[pair], out_fastq_base: string, 
   echo "writing ", reads.len, " pairs"
   reads.write(out_fastq_base)
 
-  var cmd = &"""bwa mem -R "@RG\tID:{out_fastq_base}\tSM:{out_fastq_base}" -t 3 {fasta} {out_fastq_base}_R1.fastq {out_fastq_base}_R2.fastq"""
-  cmd &= &"""| samblaster | samtools sort -o {out_fastq_base}_c{level:.3f}.bam && samtools index {out_fastq_base}_c{level:.3f}.bam"""
+  var name = splitFile(out_fastq_base).name
+
+  var cmd = &"""bwa mem -R "@RG\tID:{name}\tSM:{name}{level:.1g}" -t 5 {fasta} {out_fastq_base}_R1.fastq {out_fastq_base}_R2.fastq"""
+  cmd &= &"""| samblaster | samtools sort -@ 5 -o {out_fastq_base}_c{level:.3f}.bam && samtools index {out_fastq_base}_c{level:.3f}.bam"""
   doAssert execCmd(cmd) == 0
   echo &"wrote {out_fastq_base}_c{level:.3f}.bam and .bai"
 
   removeFile(&"{out_fastq_base}_R1.fastq")
   removeFile(&"{out_fastq_base}_R2.fastq")
+
 
 when isMainModule:
   randomize(42)
@@ -164,8 +205,8 @@ when isMainModule:
 
   echo "writing subset of contamination file"
   contam_read_pairs.write("contamination")
-  var cmd = &"""bwa mem -R "@RG\tID:contam\tSM:contam" -t 3 {fasta} contamination_R1.fastq contamination_R2.fastq"""
-  cmd &= &"""| samblaster | samtools sort -o contamination.bam && samtools index contamination.bam"""
+  var cmd = &"""bwa mem -R "@RG\tID:contam\tSM:contam" -t 5 {fasta} contamination_R1.fastq contamination_R2.fastq"""
+  cmd &= &"""| samblaster | samtools sort -@3 -m4G -o contamination.bam && samtools index contamination.bam"""
   doAssert execCmd(cmd) == 0
   echo &"wrote contamination.bam and .bai"
   removeFile("contamination_R1.fastq")
