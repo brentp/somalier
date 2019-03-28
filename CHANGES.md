@@ -13,6 +13,7 @@ v0.1.5
 + for low coverage or targetted sites, sometimes `nan` values would stop the entire 
   html page from working; this has been fixed.
 + make sure all reported relationships are plotted in correct colors (#14)
++ plotting fixes (#15)
 
 v0.1.4
 ======

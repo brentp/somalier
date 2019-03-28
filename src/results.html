@@ -573,8 +573,6 @@ function get_xy_data_by_group(input, metric, rel_pairs) {
 
 var colors = ['#377eb8bb', '#e41a1cbb', '#4daf4a', '#984ea3', '#ff7f00', '#ffff33', '#a65628', '#f781bf', '#999999', '#e41a1c', '#377eb8', '#4daf4a']
 
-var traces_a = []
-
 var rel_pairs = new Map()
 if ("expected-relatedness" in input) {
     var er = input["expected-relatedness"]
@@ -644,12 +642,16 @@ for (i in x_data) {
         hovertext: x_data[i].text,
         hoverinfo: 'text+x+y',
         ix: x_data[i].ix,
-        type: 'scattergl',
+        // this gets around an apparent bug in plotly webgl instead of using all scattergl.
+        // since first trace is unrelated and with the most points..
+        type: x_data[i].ix.length > 9999 ? 'scattergl' : 'scatter',
         mode: 'markers',
         marker: {size: size, color: colors[traces_a.length]},
         showlegend:true,
     })
 }
+traces_a.push({mode:"markers", hoverinfo:'text+x+y', showlegend:false, name:'hovered', x:[], y:[], hovertext:[], marker:{size:size+3, opacity: 1, color:'#000000'}})
+
 x_data = null
 y_data = null
 
@@ -691,39 +693,40 @@ pb.on('plotly_hover',  function(e) {
 })
 
 function pa_clear() {
-    if(traces_a[0].name == 'hovered') {
-        traces_a.shift()
-    }
-    for(j = 0; j < traces_a.length; j++){
+    for(j = 0; j < traces_a.length-1; j++){
         traces_a[j].marker.opacity = 0.35
     }
 }
 
 
 function pa_hover(sample) {
-    var tr = {mode:"markers", hoverinfo:'text+x+y', showlegend:false, name:'hovered', x:[], y:[], hovertext:[], marker:{size:size+3, opacity: 1, color:'#000000'}}
-    for(var j=0;j<traces_a.length;j++){
+    var ht = []
+    var xs = []; var ys = [];
+    for(var j=0;j<traces_a.length-1;j++){
         var otr = traces_a[j];
         for(var k=0; k < otr.x.length; k++){
             if(otr.hovertext[k].startsWith(sample) || otr.hovertext[k].endsWith(sample)) {
-                tr.x.push(otr.x[k])
-                tr.y.push(otr.y[k])
-                tr.hovertext.push(otr.hovertext[k])
+                xs.push(otr.x[k])
+                ys.push(otr.y[k])
+                ht.push(otr.hovertext[k])
             }
         }
 
     }
+    traces_a[traces_a.length-1].x = xs;
+    traces_a[traces_a.length-1].y = ys;
+    traces_a[traces_a.length-1].hovertext = ht;
+    
     pa_clear()
-    traces_a.unshift(tr)
     Plotly.react(pa, traces_a, layout_a)
 
 }
 
 pb.on('plotly_unhover',  function(e) {
-    if(traces_a[0].name == 'hovered') {
-        traces_a.shift()
-    }
-    for(j = 0; j < traces_a.length; j++){
+    traces_a[traces_a.length-1].x = [];
+    traces_a[traces_a.length-1].y = [];
+    traces_a[traces_a.length-1].hovertext = [];
+    for(j = 0; j < traces_a.length-1; j++){
         traces_a[j].marker.opacity = 1
     }
     Plotly.react(pa, traces_a, layout_a)
