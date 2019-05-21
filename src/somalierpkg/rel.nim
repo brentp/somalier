@@ -406,6 +406,9 @@ specified as comma-separated groups per line e.g.:
     fh_html:File
     grouped: seq[pair]
 
+  # empty this so it doesn't get sent to html
+  final.allele_counts.setLen(0)
+
   if not open(fh_tsv, opts.output_prefix & "pairs.tsv", fmWrite):
     quit "couldn't open output file"
   if not open(fh_samples, opts.output_prefix & "samples.tsv", fmWrite):

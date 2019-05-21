@@ -1,9 +1,9 @@
 <html>
 <head>
+<meta charset="UTF-8">
     <style>
 /* https://codepen.io/chriddyp/pen/bWLwgP.css */
 /* Table of contents
-––––––––––––––––––––––––––––––––––––––––––––––––––
 - Plotly.js
 - Grid
 - Base Styles
@@ -21,7 +21,6 @@
 */
 
 /* PLotly.js
-–––––––––––––––––––––––––––––––––––––––––––––––––– */
 /* plotly.js's modebar's z-index is 1001 by default
  * https://github.com/plotly/plotly.js/blob/7e4d8ab164258f6bd48be56589dacd9bdd7fded2/src/css/_modebar.scss#L5
  * In case a dropdown is above the graph, the dropdown's options
@@ -37,7 +36,6 @@
 }*/
 
 /* Grid
-–––––––––––––––––––––––––––––––––––––––––––––––––– */
 .container {
   position: relative;
   width: 100%;
@@ -124,7 +122,6 @@
 
 
 /* Base Styles
-–––––––––––––––––––––––––––––––––––––––––––––––––– */
 /* NOTE
 html is set to 62.5% so that all the REM measurements throughout Skeleton
 are based on 10px sizing. So basically 1.5rem = 15px :) */
@@ -644,7 +641,7 @@ for (i in x_data) {
         ix: x_data[i].ix,
         // this gets around an apparent bug in plotly webgl instead of using all scattergl.
         // since first trace is unrelated and with the most points..
-        type: x_data[i].ix.length > 9999 ? 'scattergl' : 'scatter',
+        type: 'scattergl',
         mode: 'markers',
         marker: {size: size, color: colors[traces_a.length]},
         showlegend:true,
