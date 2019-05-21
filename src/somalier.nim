@@ -9,7 +9,6 @@ import hile
 import tables
 import times
 import ./somalierpkg/version
-import ./somalierpkg/results_html
 import ./somalierpkg/rel
 import strformat
 import argparse
@@ -101,7 +100,10 @@ proc readSites(path: string, fai:var Fai): seq[Site] =
 
 proc extract_main() =
   var argv = commandLineParams()
-  if argv[0] == "extract": argv = argv[1..argv.high]
+  if argv[0] == "extract":
+    argv = argv[1..argv.high]
+  if len(argv) == 0:
+    argv = @["-h"]
 
   var p = newParser("somalier extract"):
     help("extract genotype-like information for a single-sample at selected sites")
@@ -110,6 +112,7 @@ proc extract_main() =
     option("-t", "--threads", help="number of decompression threads to use", default="3")
     option("-d", "--out-dir", help="path to output directory")
     arg("sample_file", help="sample CRAM/BAM file from which to extract")
+
 
   let opts = p.parse(argv)
   if opts.help:
@@ -126,6 +129,8 @@ proc extract_main() =
     quit "[somalier] unable to open fasta file:" & opts.fasta
 
   var sites = readSites(opts.sites, fai)
+  createDir(opts.out_dir)
+
 
   # responses[j] = spawn get_bam_abs(bv_paths[j], fasta_path, sites, ab_results[j].addr, stats[j].addr, min_depth)
   var ibam: Bam

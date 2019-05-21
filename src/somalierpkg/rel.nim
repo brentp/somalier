@@ -9,6 +9,7 @@ import json
 import stats
 import math
 import bpbiopkg/pedfile
+import ./results_html
 
 type Stat4 = object
     dp: RunningStat
@@ -20,26 +21,6 @@ type count* = object
   nref*: uint32
   nalt*: uint32
   nother*: uint32
-
-const arraySize = 1024
-
-type counter = object
-  counts: array[arraySize, int]
-
-proc push(c:var counter, x:float) {.inline.} =
-  doAssert 0 <= x and x <= 0.5
-  var idx = min(c.counts.high, int(x * (arraySize * 2.0) + 0.5))
-  c.counts[idx].inc
-
-proc median(c:counter): float =
-  var n = sum(c.counts)
-  if n < 1: return 0
-  var mid = int(n.float / 2.0 + 0.5)
-  var fsum = 0
-  for i, v in c.counts:
-    fsum += v
-    if fsum >= mid:
-      return i.float / (arraySize * 2.0)
 
 proc krelated(alts: var seq[int8], ibs: var seq[uint16], n: var seq[uint16], hets: var seq[uint16], homs: var seq[uint16], shared_hom_alts: var seq[uint16], n_samples: int): int {.inline.} =
 
@@ -121,6 +102,7 @@ type relation_matrices = object
   homs: seq[uint16]
   shared_hom_alts: seq[uint16]
   samples: seq[string]
+  # n-samples * n_sites
   allele_counts: seq[seq[count]]
 
 proc `%`*(v:uint16): JsonNode =
@@ -203,7 +185,6 @@ proc alts(ab:float): int8 {.inline.} =
   return 1
 
 
-
 iterator relatedness(r:relation_matrices, grouped: var seq[pair]): relation =
   var sample_names = r.samples
 
@@ -238,12 +219,6 @@ type counts* = object
   ybounds*: array[2, uint16]
   sites*: seq[count]
 
-proc sample_names(ex: seq[counts]): seq[string] =
-  result = newSeq[string](ex.len)
-  for i, e in ex:
-    result[i] = e.sample_name
-
-
 proc read_extracted(paths: seq[string]): relation_matrices =
   var n_samples = paths.len
 
@@ -266,7 +241,7 @@ proc read_extracted(paths: seq[string]): relation_matrices =
     var sl: uint8 = 0
     discard f.readData(sl.addr, sizeof(sl))
     result.samples[i] = newString(sl)
-    discard f.readData(result.samples[i].addr, sl.int)
+    discard f.readData(result.samples[i][0].addr, sl.int)
     discard f.readData(nsites.addr, nsites.sizeof.int)
     if i > 0:
       doAssert nsites == last_nsites
@@ -338,49 +313,78 @@ specified as comma-separated groups per line e.g.:
     normal2,tumor2a""")
     option("-p", "--ped", help="optional path to a ped/fam file indicating the expected relationships among samples.")
     option("-d", "--min-depth", default="7", help="only genotype sites with at least this depth.")
-    option("-o", "--output-prefix", help="output prefix for results.")
-    arg("extracted", nargs= -1, help=".somalier files for each sample.")
+    option("-o", "--output-prefix", help="output prefix for results.", default="somalier")
+    arg("extracted", nargs= -1, help="$sample.somalier files for each sample.")
 
 
-  let opts = p.parse(argv)
+  var opts = p.parse(argv)
+  if opts.help:
+    quit 0
+  if opts.extracted.len == 0:
+    echo p.help
+    quit "[somalier] specify at least 1 extracted somalier file"
   var
     groups: seq[pair]
     samples: seq[Sample]
+    min_depth = parseInt(opts.min_depth)
 
-  let
-    ex = read_extracted(opts.extracted)
-
-  stderr.write_line &"[somalier] collected sites from all {n_samples} samples"
-  groups.add_ped_samples(samples, ex.samples)
-  groups.add(readGroups(opts.groups))
+  if not opts.output_prefix.endswith(".") or opts.output_prefix.endswith("/"):
+    opts.output_prefix &= '.'
 
   var
-    n_samples = ex.samples.len
+    final = read_extracted(opts.extracted)
+    sample_names = final.samples
+    n_samples = sample_names.len
 
-  var final = read_extracted(opts.extracted)
+  if opts.ped != "":
+    samples = parse_ped(opts.ped)
+
+  stderr.write_line &"[somalier] collected sites from all {n_samples} samples"
+  groups.add_ped_samples(samples, final.samples)
+  groups.add(readGroups(opts.groups))
 
   var t0 = cpuTime()
-  var nsites = 0
+  var nsites = final.allele_counts[0].len
+  var n_used_sites = 0
   var alts = newSeq[int8](n_samples)
   # counts of hom-ref, het, hom-alt, unk, hets outside of 0.2..0.8
   var gt_counts : array[5, seq[uint16]]
+  var stats = newSeq[Stat4](n_samples)
   for i in 0..<gt_counts.len:
     gt_counts[i] = newSeq[uint16](n_samples)
 
-  for i in 0..<ab_results.len:
-    for o in 0..<ab_results.len:
+
+  #[
+  var
+    a = newSeq[float32](final.allele_counts[0].len)
+    b = newSeq[float32](final.allele_counts[0].len)
+  for i in 0..<final.allele_counts.len:
+    for k, p in final.allele_counts[i]:
+      a[k] = p.ab(min_depth)
+
+    for o in 0..<final.allele_counts.len:
       if i == o: continue
-      var a = ab_results[i]
-      var b = ab_results[o]
+      for k, p in final.allele_counts[i]:
+        b[k] = p.ab(min_depth)
+
       # estimate contamination of a, by b
       var res = estimate_contamination(a, b)
       if res[0] == 0 or res[1] < 10: continue
       echo sample_names[i], " contaminated by ", sample_names[o], " =>", res
-
-  for rowi in 0..sites.high:
+  ]#
+  for rowi in 0..<nsites:
     var nun = 0
-    for i in 0..<n_samples:
-      var abi = ab_results[i][rowi]
+    for i, stat in stats.mpairs:
+      var c = final.allele_counts[i][rowi]
+      var abi = c.ab(min_depth)
+      stat.dp.push(int(c.nref + c.nalt))
+      if c.nref > 0'u32 or c.nalt > 0'u32 or c.nother > 0'u32:
+        stat.un.push(c.nother.float64 / float64(c.nref + c.nalt + c.nother))
+      if c.nref.float > min_depth / 2 and c.nalt.float > min_depth / 2:
+        stat.ab.push(abi)
+      if abi != -1:
+        stat.gtdp.push(int(c.nref + c.nalt))
+
       alts[i] = abi.alts
       if abi > 0.02 and abi < 0.98 and (abi < 0.2 or abi > 0.8):
         gt_counts[4][i].inc
@@ -391,22 +395,22 @@ specified as comma-separated groups per line e.g.:
         gt_counts[alts[i].int][i].inc
 
     if nun.float64 / n_samples.float64 > 0.6: continue
-    nsites += 1
+    n_used_sites += 1
 
     discard krelated(alts, final.ibs, final.n, final.hets, final.homs, final.shared_hom_alts, n_samples)
 
-  stderr.write_line &"time to calculate relatedness on {nsites} usable sites: {cpuTime() - t0:.3f}"
+  stderr.write_line &"time to calculate relatedness on {n_used_sites} usable sites: {cpuTime() - t0:.3f}"
   var
     fh_tsv:File
     fh_samples:File
     fh_html:File
     grouped: seq[pair]
 
-  if not open(fh_tsv, output_prefix & "pairs.tsv", fmWrite):
+  if not open(fh_tsv, opts.output_prefix & "pairs.tsv", fmWrite):
     quit "couldn't open output file"
-  if not open(fh_samples, output_prefix & "samples.tsv", fmWrite):
+  if not open(fh_samples, opts.output_prefix & "samples.tsv", fmWrite):
     quit "couldn't open output file"
-  if not open(fh_html, output_prefix & "html", fmWrite):
+  if not open(fh_html, opts.output_prefix & "html", fmWrite):
     quit "couldn't open html output file"
 
   fh_tsv.write_line '#', header.replace("$", "")
@@ -416,7 +420,7 @@ specified as comma-separated groups per line e.g.:
 
   fh_html.write(tmpl_html.replace("<INPUT_JSON>", $j).replace("<SAMPLE_JSON>", toj(sample_names, stats, gt_counts)))
   fh_html.close()
-  stderr.write_line("[somalier] wrote interactive HTML output to: ",  output_prefix & "html")
+  stderr.write_line("[somalier] wrote interactive HTML output to: ",  opts.output_prefix & "html")
 
   fh_samples.write(sample_names, stats, gt_counts)
 
@@ -424,6 +428,6 @@ specified as comma-separated groups per line e.g.:
     fh_tsv.write_line $rel
 
   fh_tsv.close()
-  grouped.write(output_prefix)
+  grouped.write(opts.output_prefix)
 
-  stderr.write_line("[somalier] wrote groups to: ",  output_prefix & "groups.tsv")
+  stderr.write_line("[somalier] wrote groups to: ",  opts.output_prefix & "groups.tsv")

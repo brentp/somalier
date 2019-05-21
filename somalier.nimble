@@ -1,5 +1,6 @@
 # Package
-#
+import ospaths
+template thisModuleFile: string = instantiationInfo(fullPaths = true).filename
 
 when fileExists(thisModuleFile.parentDir / "src/somalier.nim"):
   # In the git repository the Nimble sources are in a ``src`` directory.
@@ -16,7 +17,7 @@ license       = "academic only"
 
 # Dependencies
 
-requires "nim >= 0.18.0", "hts >= 0.2.7", "https://github.com/brentp/bpbio", "https://github.com/brentp/hileup"
+requires "nim >= 0.19.0", "hts >= 0.2.13", "https://github.com/brentp/bpbio", "https://github.com/brentp/hileup", "argparse"
 srcDir = "src"
 
 #bin = @["./somalier.nim"]
