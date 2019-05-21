@@ -1,4 +1,6 @@
 src/somalier
+src/somalierpkg/rel
+*.json
 nimcache
 *.bam
 *.cram
