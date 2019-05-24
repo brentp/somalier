@@ -10,6 +10,7 @@ import tables
 import times
 import ./somalierpkg/version
 import ./somalierpkg/rel
+import ./somalierpkg/findsites
 import strformat
 import argparse
 import algorithm
@@ -69,7 +70,14 @@ proc get_ref_alt_counts(ibam:Bam, sites:seq[Site], fai:Fai): counts =
         result.sites[i].nalt.inc
       else:
         result.sites[i].nother.inc
-
+    if site.chrom in ["X", "chrX"]:
+      if result.xbounds[0] == 0:
+        result.xbounds[0] = i.uint16
+      result.xbounds[1] = i.uint16
+    elif site.chrom in ["Y", "chrY"]:
+      if result.ybounds[0] == 0:
+        result.ybounds[0] = i.uint16
+      result.ybounds[1] = i.uint16
 
 proc siteOrder(a:Site, b:Site): int =
   if a.chrom == b.chrom:
@@ -113,7 +121,6 @@ proc extract_main() =
     option("-d", "--out-dir", help="path to output directory")
     arg("sample_file", help="sample CRAM/BAM file from which to extract")
 
-
   let opts = p.parse(argv)
   if opts.help:
     quit 0
@@ -138,11 +145,6 @@ proc extract_main() =
     quit "[somalier] couldn't open :" & opts.sample_file
 
   var cnts = ibam.get_ref_alt_counts(sites, fai)
-  cnts.xbounds[0] = 33
-  cnts.xbounds[1] = 34
-  cnts.ybounds[0] = 8
-  cnts.ybounds[1] = 14
-
 
   var s = newFileStream(opts.outdir & "/" & cnts.sample_name & ".somalier", fmWrite)
   s.write(cnts.sample_name.len.uint8)
@@ -165,10 +167,11 @@ proc main() =
   var dispatcher = {
     "extract": pair(f:extract_main, description: "extract genotype-like information for a single sample from VCF/BAM/CRAM."),
     "rel": pair(f:rel_main, description: "calculate relatedness among samples from `extract`ed information."),
+    "find-sites": pair(f:findsites_main, description: "create a new sites.vcf.gz file from a population VCF (this is rarely needed)"),
   }.toOrderedTable
 
 
-  stderr.write_line "slivar version: " & somalierVersion & "\n"
+  stderr.write_line "somalier version: " & somalierVersion
   var args = commandLineParams()
 
   if len(args) == 0 or not (args[0] in dispatcher):
