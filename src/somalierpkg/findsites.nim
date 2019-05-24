@@ -112,7 +112,7 @@ proc findsites_main*() =
   var ranksum = @[0'f32]
 
   for v in vcf:
-    if v.REF == "C": continue
+    if $v.CHROM notin ["chrY", "Y"] and v.REF == "C": continue
     if v.CHROM != last_chrom:
       last_chrom = v.CHROM
       if exclude_regions.contains($last_chrom):
@@ -134,10 +134,10 @@ proc findsites_main*() =
     var info = v.info
     if info.get("AF", afs) != Status.OK:
       continue
-    if $v.CHROM notin ["chrY", "Y"]:
-      if afs[0] < 0.08 or afs[0] > 0.92: continue
-    else:
+    if $v.CHROM in ["chrY", "Y"]:
       if afs[0] < 0.04 or afs[0] > 0.96: continue
+    else:
+      if afs[0] < 0.08 or afs[0] > 0.92: continue
 
     if info.get("AS_FilterStatus", oms) == Status.OK and oms != "PASS":
       continue
@@ -185,7 +185,7 @@ proc findsites_main*() =
 
     if len(vs) > 0:
       var close = v.v.closest(vs).start
-      if $v.v.CHROM in ["chrY", "Y"] and (close - v.v.start).abs < 2000:
+      if $v.v.CHROM in ["chrY", "Y"] and (close - v.v.start).abs < 200:
         continue
       elif (close - v.v.start).abs < 5000:
         continue
