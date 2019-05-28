@@ -97,7 +97,8 @@ proc findsites_main*() =
 
   if not open(vcf, opts.vcf, threads=2):
     quit "couldn't open " & opts.vcf
-  if not open(wtr, "sites.vcf.gz", mode="wz", threads=1):
+  var out_path = "sites.vcf.gz"
+  if not open(wtr, out_path, mode="wz", threads=1):
     quit "couldn't open stdout for writing sites"
   wtr.header = vcf.header
 
@@ -112,7 +113,7 @@ proc findsites_main*() =
   var ranksum = @[0'f32]
 
   for v in vcf:
-    if $v.CHROM notin ["chrY", "Y"] and v.REF == "C": continue
+    if $v.CHROM notin ["chrY", "Y", "chrX", "X"] and v.REF == "C": continue
     if v.CHROM != last_chrom:
       last_chrom = v.CHROM
       if exclude_regions.contains($last_chrom):
@@ -185,9 +186,13 @@ proc findsites_main*() =
 
     if len(vs) > 0:
       var close = v.v.closest(vs).start
-      if $v.v.CHROM in ["chrY", "Y"] and (close - v.v.start).abs < 200:
-        continue
-      elif (close - v.v.start).abs < 5000:
+      if $v.v.CHROM in ["chrY", "Y"]:
+        if (close - v.v.start).abs < 200:
+          continue
+      elif $v.v.CHROM in ["chrX", "X"]:
+        if (close - v.v.start).abs < 20000:
+          continue
+      elif (close - v.v.start).abs < 12000:
         continue
 
     #discard wtr.write_variant(v.v)
@@ -209,7 +214,7 @@ proc findsites_main*() =
         discard
     doAssert wtr.write_variant(v)
 
-  stderr.write_line "wrote ", $used.len, " variants"
+  stderr.write_line "[somalier] wrote ", $used.len, " variants to:", $out_path
   if vcf.header == nil:
     quit "bad"
   wtr.close()
