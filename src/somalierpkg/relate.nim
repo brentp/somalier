@@ -324,13 +324,13 @@ proc toj(samples: seq[string], stats: seq[Stat4], gt_counts: array[5, seq[uint16
       "n_known": gt_counts[0][i] + gt_counts[1][i] + gt_counts[2][i],
       "p_middling_ab": gt_counts[4][i].float / (gt_counts[0][i] + gt_counts[1][i] + gt_counts[2][i] + gt_counts[3][i] + gt_counts[4][i]).float,
 
-      "x_depth_mean": stats[i].x_dp.mean(),
+      "x_depth_mean": 2 * stats[i].x_dp.mean() / stats[i].dp.mean(),
       "x_ab_mean": stats[i].x_ab.mean(),
       "x_hom_ref": stats[i].x_hom_ref,
       "x_het": stats[i].x_het,
       "x_hom_alt": stats[i].x_hom_alt,
 
-      "y_depth_mean": stats[i].y_dp.mean(),
+      "y_depth_mean": 2 * stats[i].y_dp.mean() / stats[i].dp.mean(),
       "y_ab_mean": stats[i].y_ab.mean(),
     }
     ))
@@ -445,16 +445,14 @@ specified as comma-separated groups per line e.g.:
       if abi == -1: continue
       var alt = abi.alts
       stat.x_dp.push(int(c.nref + c.nalt))
-      # TODO: why is this here?
-      stat.x_ab.push(abi)
+      if c.nref.float > min_depth / 2 or c.nalt.float > min_depth / 2:
+        stat.x_ab.push(abi)
       if alt == 0:
         stat.x_hom_ref.inc
       elif alt == 1:
         stat.x_het.inc
       elif alt == 2:
         stat.x_hom_alt.inc
-      else:
-        raise newException(ValueError, "unknown alt count:" & $alt)
 
   for rowi in 0..<final.y_allele_counts[0].len:
     for i, stat in stats.mpairs:
@@ -463,7 +461,8 @@ specified as comma-separated groups per line e.g.:
       # NOTE: we just skip missed sites on Y
       if abi == -1: continue
       stat.y_dp.push(int(c.nref + c.nalt))
-      stat.y_ab.push(abi)
+      if c.nref.float > min_depth / 2 or c.nalt.float > min_depth / 2:
+        stat.y_ab.push(abi)
 
 
   stderr.write_line &"[somalier] time to calculate relatedness on {n_used_sites} usable sites: {cpuTime() - t0:.3f}"
