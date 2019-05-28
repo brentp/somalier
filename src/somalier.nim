@@ -47,42 +47,39 @@ proc get_sample_name(bam:Bam): string =
 
 type counts* = object
   sample_name*: string
-  sites*: seq[count]
-  x_sites*: seq[count]
-  y_sites*: seq[count]
+  sites*: seq[allele_count]
+  x_sites*: seq[allele_count]
+  y_sites*: seq[allele_count]
 
 proc get_ref_alt_counts(ibam:Bam, sites:seq[Site], fai:Fai): counts =
 
-  result.sites = newSeq[relate.count](sites.len)
+  result.sites = newSeqOfCap[allele_count](sites.len)
   result.sample_name = ibam.get_sample_name()
 
   var cfg = Config(MinMappingQuality: 1, ExcludeFlags:BAM_FUNMAP or BAM_FSECONDARY or BAM_FQCFAIL or BAM_FDUP)
-
-  shallow(result.sites)
-  shallow(result.x_sites)
-  shallow(result.y_sites)
-
-  var rsites = result.sites
+  # TODO: count X, Y, autosomal from sites so we can pre-allocate exactly.
 
   for i, site in sites:
     var h = hileup(ibam, site.chrom, site.position, fai, cfg)
     checkSiteRef(site, fai)
 
-    case site.chrom:
-      of ["X", "chrX"]:
-        rsites = result.x_sites
-      of ["Y", "chrY"]:
-        rsites = result.y_sites
-      else:
-        rsites = result.sites
+    var ac = allele_count()
 
     for b in h.bases:
       if b.base.char == site.ref_allele:
-        rsites[i].nref.inc
+        ac.nref.inc
       elif b.base.char == site.alt_allele:
-        rsites[i].nalt.inc
+        ac.nalt.inc
       else:
-        rsites[i].nother.inc
+        ac.nother.inc
+
+    case site.chrom:
+      of ["X", "chrX"]:
+        result.x_sites.add(ac)
+      of ["Y", "chrY"]:
+        result.y_sites.add(ac)
+      else:
+        result.sites.add(ac)
 
 
 proc siteOrder(a:Site, b:Site): int =
@@ -123,7 +120,6 @@ proc extract_main() =
     help("extract genotype-like information for a single-sample at selected sites")
     option("-s", "--sites", help="sites vcf file of variants to extract")
     option("-f", "--fasta", help="path to reference fasta file")
-    option("-t", "--threads", help="number of decompression threads to use", default="3")
     option("-d", "--out-dir", help="path to output directory")
     arg("sample_file", help="sample CRAM/BAM file from which to extract")
 

@@ -17,7 +17,7 @@ type Stat4 = object
     un: RunningStat
     ab: RunningStat
 
-type count* = object
+type allele_count* = object
   nref*: uint32
   nalt*: uint32
   nother*: uint32
@@ -103,9 +103,9 @@ type relation_matrices = object
   shared_hom_alts: seq[uint16]
   samples: seq[string]
   # n-samples * n_sites
-  allele_counts: seq[seq[count]]
-  x_allele_counts: seq[seq[count]]
-  y_allele_counts: seq[seq[count]]
+  allele_counts: seq[seq[allele_count]]
+  x_allele_counts: seq[seq[allele_count]]
+  y_allele_counts: seq[seq[allele_count]]
 
 proc `%`*(v:uint16): JsonNode =
   new(result)
@@ -128,7 +128,7 @@ proc write(grouped: seq[pair], output_prefix:string) =
 proc add_ped_samples(grouped: var seq[pair], samples:seq[Sample], sample_names:seq[string]) =
   ## samples were parsed from ped. we iterate over them and add any pair where both samples are in sample_names
   if samples.len == 0: return
-  var ss = initSet[string]()
+  var ss = initHashSet[string]()
   for s in sample_names: ss.incl(s) # use a set for better lookup.
   for i, sampleA in samples[0..<samples.high]:
     if sampleA.id notin ss: continue
@@ -166,10 +166,10 @@ proc readGroups(path:string): seq[pair] =
 proc n_samples(r: relation_matrices): int {.inline.} =
   return r.samples.len
 
-template proportion_other(c:count): float =
+template proportion_other(c:allele_count): float =
   if c.nother == 0: 0'f else: c.nother.float / (c.nother + c.nref + c.nalt).float
 
-proc ab*(c:count, min_depth:int): float {.inline.} =
+proc ab*(c:allele_count, min_depth:int): float {.inline.} =
   if c.proportion_other > 0.04: return -1
   if int(c.nref + c.nalt) < min_depth:
     return -1
@@ -219,7 +219,7 @@ type counts* = object
   sample_name*: string
   xbounds*: array[2, uint16]
   ybounds*: array[2, uint16]
-  sites*: seq[count]
+  sites*: seq[allele_count]
 
 proc read_extracted(paths: seq[string]): relation_matrices =
   var n_samples = paths.len
@@ -231,9 +231,9 @@ proc read_extracted(paths: seq[string]): relation_matrices =
                              hets: newSeq[uint16](n_samples),
                              homs: newSeq[uint16](n_samples),
                              samples: newSeq[string](n_samples),
-                             allele_counts: newSeq[seq[count]](n_samples),
-                             x_allele_counts: newSeq[seq[count]](n_samples),
-                             y_allele_counts: newSeq[seq[count]](n_samples),
+                             allele_counts: newSeq[seq[allele_count]](n_samples),
+                             x_allele_counts: newSeq[seq[allele_count]](n_samples),
+                             y_allele_counts: newSeq[seq[allele_count]](n_samples),
                              )
   var
     nsites = 0'u16
@@ -260,12 +260,15 @@ proc read_extracted(paths: seq[string]): relation_matrices =
     last_nsites = nsites
     last_nxsites = nxsites
     last_nysites = nysites
-    result.allele_counts[i] = newSeq[count](nsites)
-    result.x_allele_counts[i] = newSeq[count](nxsites)
-    result.y_allele_counts[i] = newSeq[count](nysites)
-    doAssert nsites.int * sizeof(result.allele_counts[i][0]) == f.readData(result.allele_counts[i][0].addr, nsites.int * sizeof(result.allele_counts[i][0]))
-    doAssert nxsites.int * sizeof(result.x_allele_counts[i][0]) == f.readData(result.x_allele_counts[i][0].addr, nsites.int * sizeof(result.x_allele_counts[i][0]))
-    doAssert nysites.int * sizeof(result.y_allele_counts[i][0]) == f.readData(result.y_allele_counts[i][0].addr, nsites.int * sizeof(result.y_allele_counts[i][0]))
+    result.allele_counts[i] = newSeq[allele_count](nsites)
+    result.x_allele_counts[i] = newSeq[allele_count](nxsites)
+    result.y_allele_counts[i] = newSeq[allele_count](nysites)
+    if nsites > 0'u16:
+      doAssert nsites.int * sizeof(result.allele_counts[i][0]) == f.readData(result.allele_counts[i][0].addr, nsites.int * sizeof(result.allele_counts[i][0]))
+    if nxsites > 0'u16:
+      doAssert nxsites.int * sizeof(result.x_allele_counts[i][0]) == f.readData(result.x_allele_counts[i][0].addr, nxsites.int * sizeof(result.x_allele_counts[i][0]))
+    if nysites > 0'u16:
+      doAssert nysites.int * sizeof(result.y_allele_counts[i][0]) == f.readData(result.y_allele_counts[i][0].addr, nysites.int * sizeof(result.y_allele_counts[i][0]))
 
 
     f.close()
@@ -411,7 +414,7 @@ specified as comma-separated groups per line e.g.:
 
     discard krelated(alts, final.ibs, final.n, final.hets, final.homs, final.shared_hom_alts, n_samples)
 
-  stderr.write_line &"time to calculate relatedness on {n_used_sites} usable sites: {cpuTime() - t0:.3f}"
+  stderr.write_line &"[somalier] time to calculate relatedness on {n_used_sites} usable sites: {cpuTime() - t0:.3f}"
   var
     fh_tsv:File
     fh_samples:File
