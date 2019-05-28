@@ -17,7 +17,7 @@ license       = "academic only"
 
 # Dependencies
 
-requires "nim >= 0.19.0", "hts >= 0.2.13", "https://github.com/brentp/bpbio", "https://github.com/brentp/hileup", "argparse"
+requires "nim >= 0.19.0", "hts >= 0.2.13", "https://github.com/brentp/bpbio", "https://github.com/brentp/hileup", "argparse", "lapper"
 srcDir = "src"
 
 #bin = @["./somalier.nim"]
