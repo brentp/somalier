@@ -93,8 +93,8 @@ proc `$`(r:relation): string =
          "shared_hets", $r.shared_hets, "hom_alts_a", $r.hom_alts_a, "hom_alts_b", $r.hom_alts_b, "shared_hom_alts", $r.shared_hom_alts, "ibs0", $r.ibs0, "ibs2", $r.ibs2, "n", $r.n]
 
 type relation_matrices = object
-  xbounds: array[2, uint16]
-  ybounds: array[2, uint16]
+  #xbounds: array[2, uint16]
+  #ybounds: array[2, uint16]
   sites_tested: int
   ibs: seq[uint16]
   n: seq[uint16]
@@ -104,6 +104,8 @@ type relation_matrices = object
   samples: seq[string]
   # n-samples * n_sites
   allele_counts: seq[seq[count]]
+  x_allele_counts: seq[seq[count]]
+  y_allele_counts: seq[seq[count]]
 
 proc `%`*(v:uint16): JsonNode =
   new(result)
@@ -200,7 +202,7 @@ iterator relatedness(r:relation_matrices, grouped: var seq[pair]): relation =
         bottom = -1'f64
 
       var grelatedness = (r.ibs[sk * r.n_samples + sj].float64 - 2 * r.ibs[sj * r.n_samples + sk].float64) / bottom
-      if grelatedness > 0.2:
+      if grelatedness > 0.125:
         grouped.add((sample_names[sj], sample_names[sk], grelatedness))
       yield relation(sample_a: sample_names[sj],
                      sample_b: sample_names[sk],
@@ -229,12 +231,17 @@ proc read_extracted(paths: seq[string]): relation_matrices =
                              hets: newSeq[uint16](n_samples),
                              homs: newSeq[uint16](n_samples),
                              samples: newSeq[string](n_samples),
-                             allele_counts: newSeq[seq[count]](n_samples)
+                             allele_counts: newSeq[seq[count]](n_samples),
+                             x_allele_counts: newSeq[seq[count]](n_samples),
+                             y_allele_counts: newSeq[seq[count]](n_samples),
                              )
-  var nsites = 0'u16
-  var last_nsites = 0'u16
-  var xbounds: array[2, uint16]
-  var ybounds: array[2, uint16]
+  var
+    nsites = 0'u16
+    nxsites = 0'u16
+    nysites = 0'u16
+    last_nsites = 0'u16
+    last_nxsites = 0'u16
+    last_nysites = 0'u16
 
   for i, p in paths:
     var f = newFileStream(p, fmRead)
@@ -243,19 +250,24 @@ proc read_extracted(paths: seq[string]): relation_matrices =
     result.samples[i] = newString(sl)
     discard f.readData(result.samples[i][0].addr, sl.int)
     discard f.readData(nsites.addr, nsites.sizeof.int)
+    discard f.readData(nxsites.addr, nxsites.sizeof.int)
+    discard f.readData(nysites.addr, nysites.sizeof.int)
     if i > 0:
       doAssert nsites == last_nsites
-      discard f.readData(xbounds[0].addr, 2 * sizeof(xbounds[0]))
-      doAssert xbounds[0] == result.xbounds[0] and xbounds[1] == result.xbounds[1]
-      discard f.readData(ybounds[0].addr, 2 * sizeof(ybounds[0]))
-      doAssert ybounds[0] == result.ybounds[0] and ybounds[1] == result.ybounds[1]
-    else:
-      discard f.readData(result.xbounds[0].addr, 2 * sizeof(result.xbounds[0]))
-      discard f.readData(result.ybounds[0].addr, 2 * sizeof(result.ybounds[0]))
+      doAssert nxsites == last_nxsites
+      doAssert nysites == last_nysites
 
     last_nsites = nsites
+    last_nxsites = nxsites
+    last_nysites = nysites
     result.allele_counts[i] = newSeq[count](nsites)
+    result.x_allele_counts[i] = newSeq[count](nxsites)
+    result.y_allele_counts[i] = newSeq[count](nysites)
     doAssert nsites.int * sizeof(result.allele_counts[i][0]) == f.readData(result.allele_counts[i][0].addr, nsites.int * sizeof(result.allele_counts[i][0]))
+    doAssert nxsites.int * sizeof(result.x_allele_counts[i][0]) == f.readData(result.x_allele_counts[i][0].addr, nsites.int * sizeof(result.x_allele_counts[i][0]))
+    doAssert nysites.int * sizeof(result.y_allele_counts[i][0]) == f.readData(result.y_allele_counts[i][0].addr, nsites.int * sizeof(result.y_allele_counts[i][0]))
+
+
     f.close()
 
 
@@ -303,9 +315,9 @@ proc rel_main*() =
   ## need to track samples names from bams first, then vcfs since
   ## thats the order for the alts array.
   var argv = commandLineParams()
-  if argv[0] == "rel": argv = argv[1..argv.high]
+  if argv[0] == "relate": argv = argv[1..argv.high]
 
-  var p = newParser("somalier rel"):
+  var p = newParser("somalier relate"):
     help("calculate relatedness among samples from extracted, genotype-like information")
     option("-g", "--groups", help="""optional path  to expected groups of samples (e.g. tumor normal pairs).
 specified as comma-separated groups per line e.g.:

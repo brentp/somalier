@@ -1,5 +1,3 @@
-{.experimental.}
-
 import os
 import hts
 import hts/private/hts_concat
@@ -9,7 +7,7 @@ import hile
 import tables
 import times
 import ./somalierpkg/version
-import ./somalierpkg/rel
+import ./somalierpkg/relate
 import ./somalierpkg/findsites
 import strformat
 import argparse
@@ -49,35 +47,43 @@ proc get_sample_name(bam:Bam): string =
 
 type counts* = object
   sample_name*: string
-  xbounds*: array[2, uint16]
-  ybounds*: array[2, uint16]
   sites*: seq[count]
+  x_sites*: seq[count]
+  y_sites*: seq[count]
 
 proc get_ref_alt_counts(ibam:Bam, sites:seq[Site], fai:Fai): counts =
 
-  result.sites = newSeq[rel.count](sites.len)
+  result.sites = newSeq[relate.count](sites.len)
   result.sample_name = ibam.get_sample_name()
 
   var cfg = Config(MinMappingQuality: 1, ExcludeFlags:BAM_FUNMAP or BAM_FSECONDARY or BAM_FQCFAIL or BAM_FDUP)
 
+  shallow(result.sites)
+  shallow(result.x_sites)
+  shallow(result.y_sites)
+
+  var rsites = result.sites
+
   for i, site in sites:
     var h = hileup(ibam, site.chrom, site.position, fai, cfg)
     checkSiteRef(site, fai)
+
+    case site.chrom:
+      of ["X", "chrX"]:
+        rsites = result.x_sites
+      of ["Y", "chrY"]:
+        rsites = result.y_sites
+      else:
+        rsites = result.sites
+
     for b in h.bases:
       if b.base.char == site.ref_allele:
-        result.sites[i].nref.inc
+        rsites[i].nref.inc
       elif b.base.char == site.alt_allele:
-        result.sites[i].nalt.inc
+        rsites[i].nalt.inc
       else:
-        result.sites[i].nother.inc
-    if site.chrom in ["X", "chrX"]:
-      if result.xbounds[0] == 0:
-        result.xbounds[0] = i.uint16
-      result.xbounds[1] = i.uint16
-    elif site.chrom in ["Y", "chrY"]:
-      if result.ybounds[0] == 0:
-        result.ybounds[0] = i.uint16
-      result.ybounds[1] = i.uint16
+        rsites[i].nother.inc
+
 
 proc siteOrder(a:Site, b:Site): int =
   if a.chrom == b.chrom:
@@ -138,8 +144,6 @@ proc extract_main() =
   var sites = readSites(opts.sites, fai)
   createDir(opts.out_dir)
 
-
-  # responses[j] = spawn get_bam_abs(bv_paths[j], fasta_path, sites, ab_results[j].addr, stats[j].addr, min_depth)
   var ibam: Bam
   if not open(ibam, opts.sample_file, fai=opts.fasta, index=true):
     quit "[somalier] couldn't open :" & opts.sample_file
@@ -150,11 +154,13 @@ proc extract_main() =
   s.write(cnts.sample_name.len.uint8)
   s.write(cnts.sample_name)
   s.write(cnts.sites.len.uint16)
-  s.write(cnts.xbounds[0])
-  s.write(cnts.xbounds[1])
-  s.write(cnts.ybounds[0])
-  s.write(cnts.ybounds[1])
+  s.write(cnts.x_sites.len.uint16)
+  s.write(cnts.y_sites.len.uint16)
   for st in cnts.sites:
+    s.write(st)
+  for st in cnts.x_sites:
+    s.write(st)
+  for st in cnts.y_sites:
     s.write(st)
   s.close()
 
@@ -166,7 +172,7 @@ proc main() =
 
   var dispatcher = {
     "extract": pair(f:extract_main, description: "extract genotype-like information for a single sample from VCF/BAM/CRAM."),
-    "rel": pair(f:rel_main, description: "calculate relatedness among samples from `extract`ed information."),
+    "relate": pair(f:rel_main, description: "aggregate `extract`ed information and calculate relatedness among samples"),
     "find-sites": pair(f:findsites_main, description: "create a new sites.vcf.gz file from a population VCF (this is rarely needed)"),
   }.toOrderedTable
 
