@@ -5,7 +5,7 @@ but cancer projects have only somatic calls between tumor-normal pairs.
 
 `somalier` makes checking any number of samples for identity easy **directly from the alignments**:
 
-The first step is to extract sites. This is parallelizable by sample:
+The first step is to extract sites. This is parallelizable by sample (here using `xargs`, but this can also be done via cluster or cloud):
 ```
 ls *.cram | xargs -I{} -P 12 "somalier extract -d extracted/ --sites sites.vcf.gz -f /data/human/g1k_v37_decoy.fa {}"
 ```
@@ -14,18 +14,19 @@ ls *.cram | xargs -I{} -P 12 "somalier extract -d extracted/ --sites sites.vcf.g
 the [releases](https://github.com/brentp/somalier/releases) but any set of common variants will work.
 
 
-
-The next is to calculate relatedness on the extracted data:
+The next step is to calculate relatedness on the extracted data:
 
 ```
-somalier rel --ped $pedigree extracted/*.somalier
+somalier relate --ped $pedigree extracted/*.somalier
 ```
 This will create text and interactive HTML output that's produced (similar to [peddy](https://github.com/brentp/peddy))
 makes it fast and easy to detect mismatched samples and sample-swaps.
 
-Note that the `somalier rel` command runs extremely quickly (10 seconds for 600 samples) so it's possible
-to add/remove samples or adjust a pedigree file and re-run.
+Note that the `somalier relate` command runs extremely quickly (10 seconds for 600 samples) so it's possible
+to add/remove samples or adjust a pedigree file and re-run iteratively.
 
+For example to add the **n + 1th** samples, just run `somalier extract` on the new sample and then re-use
+the already extracted data from the `n` original samples.
 
 
 ## Install
