@@ -4,6 +4,7 @@ import times
 import streams
 import argparse
 import strutils
+import tables
 import sets
 import json
 import stats
@@ -283,12 +284,12 @@ proc read_extracted(paths: seq[string]): relation_matrices =
     f.close()
 
 
-proc write(fh:File, sample_names: seq[string], stats: seq[Stat4], gt_counts: array[5, seq[uint16]]) =
-  fh.write("#sample\tgt_depth_mean\tgt_depth_sd\tgt_depth_skew\tdepth_mean\tdepth_sd\tdepth_skew\tab_mean\tab_std\tn_hom_ref\tn_het\tn_hom_alt\tn_unknown\tp_middling_ab\t")
+proc write(fh:File, sample_names: seq[string], stats: seq[Stat4], gt_counts: array[5, seq[uint16]], sample_sex: TableRef[string, string]) =
+  fh.write("#sample\tpedigree_sex\tgt_depth_mean\tgt_depth_sd\tgt_depth_skew\tdepth_mean\tdepth_sd\tdepth_skew\tab_mean\tab_std\tn_hom_ref\tn_het\tn_hom_alt\tn_unknown\tp_middling_ab\t")
   fh.write("X_depth_mean\tX_ab_mean\tX_n\tX_hom_ref\tX_het\tX_hom_alt\t")
   fh.write("Y_depth_mean\tY_ab_mean\tY_n\n")
   for i, sample in sample_names:
-    fh.write(&"{sample}\t")
+    fh.write(&"{sample}\t{sample_sex.getOrDefault(sample)}\t")
     fh.write(&"{stats[i].gtdp.mean():.1f}\t{stats[i].gtdp.standard_deviation():.1f}\t{stats[i].gtdp.skewness():.1f}\t")
     fh.write(&"{stats[i].dp.mean():.1f}\t{stats[i].dp.standard_deviation():.1f}\t{stats[i].dp.skewness():.1f}\t")
     fh.write(&"{stats[i].ab.mean():.2f}\t{stats[i].ab.standard_deviation():.2f}\t{gt_counts[0][i]}\t{gt_counts[1][i]}\t{gt_counts[2][i]}\t{gt_counts[3][i]}\t")
@@ -297,13 +298,14 @@ proc write(fh:File, sample_names: seq[string], stats: seq[Stat4], gt_counts: arr
     fh.write(&"{stats[i].y_dp.mean():.2f}\t{stats[i].y_ab.mean():.2f}\t{stats[i].y_dp.n}\n")
   fh.close()
 
-proc toj(samples: seq[string], stats: seq[Stat4], gt_counts: array[5, seq[uint16]]): string =
+proc toj(sample_names: seq[string], stats: seq[Stat4], gt_counts: array[5, seq[uint16]], sample_sex: TableRef[string, string]): string =
   result = newStringOfCap(10000)
   result.add("[")
-  for i, s in samples:
+  for i, s in sample_names:
     if i > 0: result.add(",\n")
     result.add($(%* {
       "sample": s,
+      "sex": sample_sex.getOrDefault(s, "unknown"),
 
       "gt_depth_mean": stats[i].gtdp.mean(),
       "gt_depth_std": stats[i].gtdp.standard_deviation(),
@@ -335,6 +337,11 @@ proc toj(samples: seq[string], stats: seq[Stat4], gt_counts: array[5, seq[uint16
     }
     ))
   result.add("]")
+
+proc to_sex_lookup(samples: seq[Sample]): TableRef[string, string] =
+  result = newTable[string, string]()
+  for s in samples:
+    result[s.id] = if s.sex == 1: "male" elif s.sex == 2: "female" else: "unknown"
 
 proc rel_main*() =
   ## need to track samples names from bams first, then vcfs since
@@ -489,11 +496,13 @@ specified as comma-separated groups per line e.g.:
   var j = % final
   j["expected-relatedness"] = %* groups
 
-  fh_html.write(tmpl_html.replace("<INPUT_JSON>", $j).replace("<SAMPLE_JSON>", toj(sample_names, stats, gt_counts)))
+  var sample_sexes = samples.to_sex_lookup
+
+  fh_html.write(tmpl_html.replace("<INPUT_JSON>", $j).replace("<SAMPLE_JSON>", toj(sample_names, stats, gt_counts, sample_sexes)))
   fh_html.close()
   stderr.write_line("[somalier] wrote interactive HTML output to: ",  opts.output_prefix & "html")
 
-  fh_samples.write(sample_names, stats, gt_counts)
+  fh_samples.write(sample_names, stats, gt_counts, sample_sexes)
 
   for rel in relatedness(final, grouped):
     fh_tsv.write_line $rel
@@ -502,3 +511,4 @@ specified as comma-separated groups per line e.g.:
   grouped.write(opts.output_prefix)
 
   stderr.write_line("[somalier] wrote groups to: ",  opts.output_prefix & "groups.tsv")
+  stderr.write_line("[somalier] wrote samples to: ",  opts.output_prefix & "samples.tsv")
