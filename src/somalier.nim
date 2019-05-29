@@ -45,13 +45,6 @@ proc get_sample_name(bam:Bam): string =
 
     raise newException(ValueError, "[somalier] no read-group in bam file")
 
-type counts* = object
-  sample_name*: string
-  sites*: seq[allele_count]
-  x_sites*: seq[allele_count]
-  y_sites*: seq[allele_count]
-
-
 proc get_variant(ivcf:VCF, site:Site): Variant =
   for v in ivcf.query(&"{site.chrom}:{site.position+1}-{site.position+2}"):
     if v.start == site.position and v.REF[0] == site.ref_allele and v.ALT[0][0] == site.alt_allele:
@@ -215,8 +208,8 @@ proc main() =
 
   var dispatcher = {
     "extract": pair(f:extract_main, description: "extract genotype-like information for a single sample from VCF/BAM/CRAM."),
-    "relate": pair(f:rel_main, description: "aggregate `extract`ed information and calculate relatedness among samples"),
-    "find-sites": pair(f:findsites_main, description: "create a new sites.vcf.gz file from a population VCF (this is rarely needed)"),
+    "relate": pair(f:rel_main, description: "aggregate `extract`ed information and calculate relatedness among samples."),
+    "find-sites": pair(f:findsites_main, description: "create a new sites.vcf.gz file from a population VCF (this is rarely needed)."),
   }.toOrderedTable
 
 

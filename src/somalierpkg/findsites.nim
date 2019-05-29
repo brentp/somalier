@@ -73,11 +73,10 @@ proc findsites_main*() =
     arg("vcf", help="population VCF to use to find sites", nargs=1)
 
   var argv = commandLineParams()
-
-  if argv[0] == "find-sites":
-    argv = argv[1..argv.high]
   if len(argv) == 0:
     argv = @["-h"]
+  elif argv[0] == "find-sites":
+    argv = argv[1..argv.high]
   let opts = p.parse(argv)
   if opts.help:
     quit 0

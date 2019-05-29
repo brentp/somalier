@@ -30,6 +30,12 @@ type allele_count* = object
   nalt*: uint32
   nother*: uint32
 
+type counts* = object
+  sample_name*: string
+  sites*: seq[allele_count]
+  x_sites*: seq[allele_count]
+  y_sites*: seq[allele_count]
+
 proc krelated(alts: var seq[int8], ibs: var seq[uint16], n: var seq[uint16], hets: var seq[uint16], homs: var seq[uint16], shared_hom_alts: var seq[uint16], n_samples: int): int {.inline.} =
 
   if alts[n_samples - 1] == 1:
@@ -222,12 +228,34 @@ iterator relatedness(r:relation_matrices, grouped: var seq[pair]): relation =
                      ibs2: r.n[sk * r.n_samples + sj],
                      n: r.n[sj * r.n_samples + sk])
 
+proc read_extracted*(path: string, cnt: var counts) =
+  # read a single sample, used by versus
+  var f = newFileStream(path, fmRead)
+  var sl: uint8 = 0
+  discard f.readData(sl.addr, sizeof(sl))
+  cnt.sample_name = newString(sl)
+  var n_sites: uint16
+  var nx_sites: uint16
+  var ny_sites: uint16
 
-type counts* = object
-  sample_name*: string
-  xbounds*: array[2, uint16]
-  ybounds*: array[2, uint16]
-  sites*: seq[allele_count]
+  discard f.readData(cnt.sample_name[0].addr, sl.int)
+  discard f.readData(n_sites.addr, n_sites.sizeof.int)
+  discard f.readData(nx_sites.addr, nx_sites.sizeof.int)
+  discard f.readData(ny_sites.addr, ny_sites.sizeof.int)
+  if cnt.sites.len.uint16 != n_sites:
+    cnt.sites = newSeq[allele_count](n_sites)
+  if cnt.x_sites.len.uint16 != nx_sites:
+    cnt.x_sites = newSeq[allele_count](nx_sites)
+  if cnt.y_sites.len.uint16 != ny_sites:
+    cnt.y_sites = newSeq[allele_count](ny_sites)
+  if nsites > 0'u16:
+    doAssert n_sites.int * sizeof(cnt.sites[0]) == f.readData(cnt.sites[0].addr, nsites.int * sizeof(cnt.sites[0]))
+  if nxsites > 0'u16:
+    doAssert nx_sites.int * sizeof(cnt.x_sites[0]) == f.readData(cnt.x_sites[0].addr, nx_sites.int * sizeof(cnt.x_sites[0]))
+  if nysites > 0'u16:
+    doAssert ny_sites.int * sizeof(cnt.y_sites[0]) == f.readData(cnt.y_sites[0].addr, ny_sites.int * sizeof(cnt.y_sites[0]))
+  f.close()
+
 
 proc read_extracted(paths: seq[string]): relation_matrices =
   var n_samples = paths.len
