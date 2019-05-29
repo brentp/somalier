@@ -1,3 +1,7 @@
+v0.2.1 (dev)
+============
++ fix hover in html
+
 v0.2.0
 ======
 This was a large re-write of `somalier`. The command-line usage is backwards incompatible (but
