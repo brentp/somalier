@@ -659,7 +659,7 @@ for (i in x_data) {
         showlegend:true,
     })
 }
-traces_a.push({mode:"markers", hoverinfo:'text+x+y', showlegend:false, name:'hovered', x:[], y:[], hovertext:[], marker:{size:size+3, opacity: 1, color:'#000000'}})
+//traces_a.push({mode:"markers", hoverinfo:'text+x+y', showlegend:false, name:'hovered', x:[], y:[], hovertext:[], marker:{size:size+3, opacity: 1, color:'#000000'}})
 
 x_data = null
 y_data = null
@@ -694,7 +694,7 @@ pa.on('plotly_hover',  function(e) {
     var idxs = traces_a[p.curveNumber].ix[p.pointIndex]
     Plotly.Fx.hover('plotb', [{curveNumber: 0, pointNumber: idxs[0]},
                          {curveNumber: 0, pointNumber: idxs[1]}])
-    pa_clear()
+    pa_clear(1.0)
 })
 
 pa.on('plotly_unhover',  function(e) {
@@ -710,9 +710,9 @@ pb.on('plotly_hover',  function(e) {
     pa_hover(sample)
 })
 
-function pa_clear() {
-    for(j = 0; j < traces_a.length-1; j++){
-        traces_a[j].marker.opacity = 0.35
+function pa_clear(val) {
+    for(j = 0; j < traces_a.length; j++){
+        traces_a[j].marker.opacity = val
     }
 }
 
@@ -735,7 +735,7 @@ function pa_hover(sample) {
     traces_a[traces_a.length-1].y = ys;
     traces_a[traces_a.length-1].hovertext = ht;
     
-    pa_clear()
+    pa_clear(0.35)
     Plotly.react(pa, traces_a, layout_a)
 
 }
