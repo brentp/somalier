@@ -1,3 +1,25 @@
+v0.2.0
+======
+This was a large re-write of `somalier`. The command-line usage is backwards incompatible (but
+should not change moving forward). There is now a per-sample extract step:
+```
+somalier extract -d extracted/ -s $sites_vcf -f $fasta $sample.cram
+```
+
+followed by a relate step:
+
+```
+somalier relate --ped $ped extracted/*.somalier
+```
+
+This enables parallelization by sample across nodes and the resulting, extracted, binary "somalier"
+files are only ~240KB per sample so reading them is nearly instant and the `relate` step
+runs in 10 seconds for my 603-sample test-case which makes adjusting pedigree files or removing samples
+and re-running a much faster process.
+
+somalier extract can also take a (multi-sample) VCF and create an idential "somalier" file
+for cases when a VCF is available. 
+
 v0.1.5
 ======
 + add experimental contamination estimate. this simply prints to stderr the sample and

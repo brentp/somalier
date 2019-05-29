@@ -31,6 +31,51 @@ template ab(a:AD): float32 =
   # allele balance
   if a.depth > 0: a.nalt.int / a.depth else: -1
 
+const error_rate = 2e-3
+
+proc estimate_contamination(self_abs: seq[float32], other_abs: seq[float32]): (float, int) =
+  ## estimate contamination of self, by other.
+  var sites_used = 0
+  var c: counter
+  for i, a in self_abs:
+    if a == -1: continue
+    var b = other_abs[i]
+    if b == -1: continue
+    if abs(a - b) < 0.015: continue
+
+    sites_used += 1
+    # aa: 0.5, bb: 0 -> 2
+    # aa: 1,   bb: 0 -> 1
+    # aa: 0.01, bb: 0.03 -> 2
+    if a > 0.25 and a < 0.75: continue
+
+    var scaler = min(2'f32, 1'f32 / abs(a - b).float32)
+    # a: 0.01, b: 0.0001 then b can't contribute to a
+    if a < 0.5 and b < a:
+      scaler = 0
+
+    # a: 0.99, b: 0.999 then reads can't come from b
+    elif a > 0.5 and b > a:
+      scaler = 0
+
+    var ax = if a > 0.5: 1-a else: a
+    if ax > 0.25:
+      # remove cases where direction of support does not match
+      # e.g.:
+      # self:0.4744310677051544 other:0.9432255029678345 ax:0.02556893229484558 scaler:2.0 evidence for contamination of:0.05113786458969116
+      if a < 0.5 and b > 0.5:
+        scaler = 0.0 # no way that change in AF can come from b
+      ax = 0.5 - ax
+
+    var contam = scaler * ax
+
+    #echo "self:", a, " other:", b, " ax:", ax, " scaler:", scaler, " evidence for contamination of:", contam
+
+    c.push(contam) #scaler * (if a < 0.5: a else: 1 - a))
+  #echo sum(c.counts), " ", c.counts[0..<min(arraySize, 100)]
+  return (c.median, sum(c.counts))
+
+
 proc estimate_contamination(a:AD, b:AD, min_depth:int=7): float32 {.inline.} =
   if a.depth < min_depth: return -1
   if b.depth < min_depth: return -1
@@ -84,7 +129,6 @@ when isMainModule:
   import alea
 
   const n_sites = 4000
-  const error_rate = 1e-4
   # number of sites mutated in the tumor
   # make it so when this is 0, there is no differnece found
   const n_mutated_sites = 0
