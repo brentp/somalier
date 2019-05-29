@@ -28,6 +28,16 @@ to add/remove samples or adjust a pedigree file and re-run iteratively.
 For example to add the **n + 1th** samples, just run `somalier extract` on the new sample and then re-use
 the already extracted data from the `n` original samples.
 
+## VCF
+
+`somalier` can also `extract` from a multi or single-sample VCF. This will be much faster, in cases where it's available,
+this would look like:
+
+```
+somalier extract -d extracted/ --sites sites.vcf.gz -f /data/human/g1k_v37_decoy.fa joint.vcf.gz
+```
+
+following this, there will be a `$sample.somalier` file for each sample in the `joint.vcf.gz`
 
 ## Install
 
