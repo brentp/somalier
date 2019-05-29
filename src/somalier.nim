@@ -51,6 +51,42 @@ type counts* = object
   x_sites*: seq[allele_count]
   y_sites*: seq[allele_count]
 
+
+proc get_variant(ivcf:VCF, site:Site): Variant =
+  for v in ivcf.query(&"{site.chrom}:{site.position+1}-{site.position+2}"):
+    if v.start == site.position and v.REF[0] == site.ref_allele and v.ALT[0][0] == site.alt_allele:
+      return v.copy()
+
+proc get_ref_alt_counts(ivcf:VCF, sites:seq[Site], fai:Fai=nil): seq[counts] =
+  result = newSeq[counts](ivcf.samples.len)
+  var vcf_samples = ivcf.samples
+  for j, s in vcf_samples:
+    result[j].sample_name = s
+    result[j].sites = newSeqOfCap[allele_count](sites.len)
+
+  var AD = newSeq[int32]()
+  var n = 0
+
+  for i, site in sites:
+    var v = ivcf.get_variant(site)
+    if v == nil or v.format.get("AD", AD) != Status.OK:
+      AD = newSeq[int32](vcf_samples.len * 2)
+    else:
+      n += 1
+    var mult = int(AD.len / vcf_samples.len)
+    for j, s in vcf_samples:
+      var ac = allele_count(nref: max(0, AD[mult * j]).uint32, nalt: max(0, AD[mult * j + 1]).uint32)
+
+      case site.chrom:
+        of ["X", "chrX"]:
+          result[j].x_sites.add(ac)
+        of ["Y", "chrY"]:
+          result[j].y_sites.add(ac)
+        else:
+          result[j].sites.add(ac)
+
+  stderr.write_line &"[somalier] found {n} sites"
+
 proc get_ref_alt_counts(ibam:Bam, sites:seq[Site], fai:Fai): counts =
 
   result.sites = newSeqOfCap[allele_count](sites.len)
@@ -121,7 +157,7 @@ proc extract_main() =
     option("-s", "--sites", help="sites vcf file of variants to extract")
     option("-f", "--fasta", help="path to reference fasta file")
     option("-d", "--out-dir", help="path to output directory")
-    arg("sample_file", help="sample CRAM/BAM file from which to extract")
+    arg("sample_file", help="single-sample CRAM/BAM file or multi/signle-sample VCF from which to extract")
 
   let opts = p.parse(argv)
   if opts.help:
@@ -141,24 +177,35 @@ proc extract_main() =
   createDir(opts.out_dir)
 
   var ibam: Bam
-  if not open(ibam, opts.sample_file, fai=opts.fasta, index=true):
-    quit "[somalier] couldn't open :" & opts.sample_file
+  var ivcf: VCF
 
-  var cnts = ibam.get_ref_alt_counts(sites, fai)
+  var sample_counts: seq[counts]
 
-  var s = newFileStream(opts.outdir & "/" & cnts.sample_name & ".somalier", fmWrite)
-  s.write(cnts.sample_name.len.uint8)
-  s.write(cnts.sample_name)
-  s.write(cnts.sites.len.uint16)
-  s.write(cnts.x_sites.len.uint16)
-  s.write(cnts.y_sites.len.uint16)
-  for st in cnts.sites:
-    s.write(st)
-  for st in cnts.x_sites:
-    s.write(st)
-  for st in cnts.y_sites:
-    s.write(st)
-  s.close()
+  if opts.sample_file.endsWith(".vcf.gz") or opts.sample_file.endswith(".vcf.bgz") or opts.sample_file.endswith(".bcf"):
+    if not open(ivcf, opts.sample_file):
+      quit "[somalier] couldn't open sample VCF file"
+    sample_counts = ivcf.get_ref_alt_counts(sites, fai)
+
+  else:
+    if not open(ibam, opts.sample_file, fai=opts.fasta, index=true):
+      quit "[somalier] couldn't open :" & opts.sample_file
+    var cnts = ibam.get_ref_alt_counts(sites, fai)
+    sample_counts = @[cnts]
+
+  for cnts in sample_counts:
+    var s = newFileStream(opts.outdir & "/" & cnts.sample_name & ".somalier", fmWrite)
+    s.write(cnts.sample_name.len.uint8)
+    s.write(cnts.sample_name)
+    s.write(cnts.sites.len.uint16)
+    s.write(cnts.x_sites.len.uint16)
+    s.write(cnts.y_sites.len.uint16)
+    for st in cnts.sites:
+      s.write(st)
+    for st in cnts.x_sites:
+      s.write(st)
+    for st in cnts.y_sites:
+      s.write(st)
+    s.close()
 
 proc main() =
 
