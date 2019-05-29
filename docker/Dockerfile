@@ -22,20 +22,20 @@ RUN yum install -y git curl wget zlib-devel xz-devel bzip2-devel openssl-devel l
     echo "/usr/local/lib" >> etc/ld.so.conf && \
     ldconfig
 
-RUN cd / && \
+RUN cd / &&     \
     git clone -b devel --depth 10 git://github.com/nim-lang/nim nim && \
     cd nim && \
     chmod +x ./build_all.sh && \
     scl enable devtoolset-2 ./build_all.sh
 
-RUN cd / && \
-    export PATH=/nim/bin:$PATH && \
+RUN cd / &&      \
     echo 'PATH=/nim/bin:$PATH' >> ~/.bashrc && \
+    export PATH=/nim/bin:$PATH && \
     echo 'PATH=/nim/bin:$PATH' >> ~/.bash_profile && \
     git clone -b master --depth 1 git://github.com/brentp/somalier.git && \
     cd somalier && \
     source scl_source enable devtoolset-2 && \
-    nimble install -y hts binaryheap https://github.com/brentp/bpbio && \
+    nimble install -y && \
     nim c -d:release -o:/usr/bin/somalier --passC:-flto src/somalier && \
     rm -rf /somalier && somalier --help
 
