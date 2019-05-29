@@ -449,14 +449,10 @@ there.
     <div id="plotb" style="width: 100%; height: 90%"></div>
         X:
     <select id="plotbx_select">
-        <option value="gt_depth_mean" selected>mean depth of genotyped sites</option>
-        <option value="gt_depth_std">std. of depth of genotyped sites</option>
-        <option value="gt_depth_skew">skew of depth of genotyped sites</option>
+        <option value="gt_depth_mean">mean depth of genotyped sites</option>
         <option value="depth_mean">mean depth of all sites</option>
-        <option value="depth_std">stddev of depth of all sites</option>
 
         <option value="ab_mean">mean allele balance</option>
-        <option value="ab_std">stddev of allele balance</option>
 
         <option value="pct_other_alleles">% reads with neither REF nor ALT</option>
 
@@ -468,27 +464,21 @@ there.
         <option value="p_middling_ab">proportion sites with AB &lt; 0.2 or AB &gt; 0.8</option>
 
 
-        <option value="x_depth_mean">scaled mean depth on X</option>
-        <option value="x_ab_mean">mean alllele_balance on X chromosome</option>
+        <option value="x_depth_mean" selected>scaled mean depth on X</option>
         <option value="x_hom_ref">number of 0/0 sites on X</option>
         <option value="x_het">number of 0/1 sites on X</option>
         <option value="x_hom_alt">number of 1/1 sites on X</option>
 	
         <option value="y_depth_mean">scaled mean depth on Y</option>
-        <option value="y_ab_mean">mean alllele_balance on Y chromosome</option>
 
 
     </select>
         Y:
     <select id="plotby_select">
         <option value="gt_depth_mean">mean depth of genotyped sites</option>
-        <option value="gt_depth_std">std. of depth of genotyped sites</option>
-        <option value="gt_depth_skew">skew of depth of genotyped sites</option>
         <option value="depth_mean">mean depth of all sites</option>
-        <option value="depth_std">stddev of depth of all sites</option>
 
         <option value="ab_mean">mean allele balance</option>
-        <option value="ab_std">stddev of allele balance</option>
 
         <option value="pct_other_alleles">% reads with neither REF nor ALT</option>
 
@@ -496,17 +486,15 @@ there.
         <option value="n_het">number of 0/1 sites</option>
         <option value="n_hom_alt">number of 1/1 sites</option>
         <option value="n_unknown">number of unknown sites</option>
-        <option value="n_known" selected>number of known sites</option>
+        <option value="n_known">number of known sites</option>
         <option value="p_middling_ab">proportion sites with AB &lt; 0.2 or AB &gt; 0.8</option>
 
         <option value="x_depth_mean">scaled mean depth on X</option>
-        <option value="x_ab_mean">mean alllele_balance on X chromosome</option>
         <option value="x_hom_ref">number of 0/0 sites on X</option>
         <option value="x_het">number of 0/1 sites on X</option>
         <option value="x_hom_alt">number of 1/1 sites on X</option>
 	
-        <option value="y_depth_mean">scaled mean depth on Y</option>
-        <option value="y_ab_mean">mean alllele_balance on Y</option>
+        <option value="y_depth_mean" selected>scaled mean depth on Y</option>
     </select>
 
 </div>
@@ -675,13 +663,22 @@ traces_a.push({mode:"markers", hoverinfo:'text+x+y', showlegend:false, name:'hov
 x_data = null
 y_data = null
 
-var traces_b = [{x:[], y:[], text: [], type: 'scatter', mode: 'markers', marker: {size: size + 3, color: '#bbbbbb'}, showlegend:false}]
+var traces_b = [
+	{x:[], y:[], text: [], type: 'scatter', mode: 'markers', marker: {size: size + 3, color: '#bbbbbb'}, showlegend:false, name: "unknown"},
+	{x:[], y:[], text: [], type: 'scatter', mode: 'markers', marker: {size: size + 3, color: '#1111bb'}, showlegend:true, name: "male"},
+	{x:[], y:[], text: [], type: 'scatter', mode: 'markers', marker: {size: size + 3, color: '#ff99aa'}, showlegend:true, name: "female"},
+               ]
 var xf = jQuery('#plotbx_select').val()
 var yf = jQuery('#plotby_select').val()
 for(i in sample_data){
-   traces_b[0].x.push(sample_data[i][xf])
-   traces_b[0].y.push(sample_data[i][yf])
-   traces_b[0].text.push("sample:" + sample_data[i].sample)
+   var idx = 0;
+   var sex = sample_data[i].sex;
+   if(sex == "male") {idx = 1}
+   if(sex == "female") {idx = 2}
+
+   traces_b[idx].x.push(sample_data[i][xf])
+   traces_b[idx].y.push(sample_data[i][yf])
+   traces_b[idx].text.push("sample:" + sample_data[i].sample)
 }
 
 
@@ -774,17 +771,24 @@ jQuery('#plotay_select, #plotax_select').on('change', function() {
 
 jQuery('#plotbx_select, #plotby_select').on('change', function() {
     var field = this.value
-    var extracted = [];
+    var extracted = [[], [], []];
     for(i in sample_data) {
-        extracted.push(sample_data[i][field])
+        var idx = 0;
+	var sex = sample_data[i].sex
+	if(sex == "male"){ idx = 1}
+	if(sex == "female"){ idx = 2}
+        extracted[idx].push(sample_data[i][field])
     }
     if(this.id == 'plotbx_select') {
       layout_b.xaxis.title = jQuery("#plotbx_select option:selected").text();
-      traces_b[0].x = extracted
+      traces_b[0].x = extracted[0]
+      traces_b[1].x = extracted[1]
+      traces_b[2].x = extracted[2]
     } else {
       layout_b.yaxis.title = jQuery("#plotby_select option:selected").text();
-      traces_b[0].y = extracted
-
+      traces_b[0].y = extracted[0]
+      traces_b[1].y = extracted[1]
+      traces_b[2].y = extracted[2]
     }
     Plotly.react(pb, traces_b, layout_b)
 })

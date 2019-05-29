@@ -19,13 +19,11 @@ type Stat4 = object
     ab: RunningStat
 
     x_dp: RunningStat
-    x_ab: RunningStat
     x_hom_ref: int
     x_het: int
     x_hom_alt: int
 
     y_dp: RunningStat
-    y_ab: RunningStat
 
 type allele_count* = object
   nref*: uint32
@@ -285,17 +283,17 @@ proc read_extracted(paths: seq[string]): relation_matrices =
 
 
 proc write(fh:File, sample_names: seq[string], stats: seq[Stat4], gt_counts: array[5, seq[uint16]], sample_sex: TableRef[string, string]) =
-  fh.write("#sample\tpedigree_sex\tgt_depth_mean\tgt_depth_sd\tgt_depth_skew\tdepth_mean\tdepth_sd\tdepth_skew\tab_mean\tab_std\tn_hom_ref\tn_het\tn_hom_alt\tn_unknown\tp_middling_ab\t")
-  fh.write("X_depth_mean\tX_ab_mean\tX_n\tX_hom_ref\tX_het\tX_hom_alt\t")
-  fh.write("Y_depth_mean\tY_ab_mean\tY_n\n")
+  fh.write("#sample\tpedigree_sex\tgt_depth_mean\tgt_depth_sd\tdepth_mean\tdepth_sd\tab_mean\tab_std\tn_hom_ref\tn_het\tn_hom_alt\tn_unknown\tp_middling_ab\t")
+  fh.write("X_depth_mean\tX_n\tX_hom_ref\tX_het\tX_hom_alt\t")
+  fh.write("Y_depth_mean\tY_n\n")
   for i, sample in sample_names:
     fh.write(&"{sample}\t{sample_sex.getOrDefault(sample)}\t")
-    fh.write(&"{stats[i].gtdp.mean():.1f}\t{stats[i].gtdp.standard_deviation():.1f}\t{stats[i].gtdp.skewness():.1f}\t")
-    fh.write(&"{stats[i].dp.mean():.1f}\t{stats[i].dp.standard_deviation():.1f}\t{stats[i].dp.skewness():.1f}\t")
+    fh.write(&"{stats[i].gtdp.mean():.1f}\t{stats[i].gtdp.standard_deviation():.1f}\t")
+    fh.write(&"{stats[i].dp.mean():.1f}\t{stats[i].dp.standard_deviation():.1f}\t")
     fh.write(&"{stats[i].ab.mean():.2f}\t{stats[i].ab.standard_deviation():.2f}\t{gt_counts[0][i]}\t{gt_counts[1][i]}\t{gt_counts[2][i]}\t{gt_counts[3][i]}\t")
     fh.write(&"{gt_counts[4][i].float / (gt_counts[0][i] + gt_counts[1][i] + gt_counts[2][i] + gt_counts[3][i] + gt_counts[4][i]).float:.3f}\t")
-    fh.write(&"{stats[i].x_dp.mean():.2f}\t{stats[i].x_ab.mean():.2f}\t{stats[i].x_dp.n}\t{stats[i].x_hom_ref}\t{stats[i].x_het}\t{stats[i].x_hom_alt}\t")
-    fh.write(&"{stats[i].y_dp.mean():.2f}\t{stats[i].y_ab.mean():.2f}\t{stats[i].y_dp.n}\n")
+    fh.write(&"{stats[i].x_dp.mean():.2f}\t{stats[i].x_dp.n}\t{stats[i].x_hom_ref}\t{stats[i].x_het}\t{stats[i].x_hom_alt}\t")
+    fh.write(&"{stats[i].y_dp.mean():.2f}\t{stats[i].y_dp.n}\n")
   fh.close()
 
 proc toj(sample_names: seq[string], stats: seq[Stat4], gt_counts: array[5, seq[uint16]], sample_sex: TableRef[string, string]): string =
@@ -308,16 +306,10 @@ proc toj(sample_names: seq[string], stats: seq[Stat4], gt_counts: array[5, seq[u
       "sex": sample_sex.getOrDefault(s, "unknown"),
 
       "gt_depth_mean": stats[i].gtdp.mean(),
-      "gt_depth_std": stats[i].gtdp.standard_deviation(),
-      "gt_depth_skew": stats[i].gtdp.skewness(),
 
       "depth_mean": stats[i].dp.mean(),
-      "depth_std": stats[i].dp.standard_deviation(),
-      "depth_skew": stats[i].dp.skewness(),
 
       "ab_mean": stats[i].ab.mean(),
-      "ab_std": stats[i].ab.standard_deviation(),
-      "ab_skew": stats[i].ab.skewness(),
       "pct_other_alleles": 100.0 * stats[i].un.mean,
       "n_hom_ref": gt_counts[0][i],
       "n_het": gt_counts[1][i],
@@ -327,13 +319,11 @@ proc toj(sample_names: seq[string], stats: seq[Stat4], gt_counts: array[5, seq[u
       "p_middling_ab": gt_counts[4][i].float / (gt_counts[0][i] + gt_counts[1][i] + gt_counts[2][i] + gt_counts[3][i] + gt_counts[4][i]).float,
 
       "x_depth_mean": 2 * stats[i].x_dp.mean() / stats[i].dp.mean(),
-      "x_ab_mean": stats[i].x_ab.mean(),
       "x_hom_ref": stats[i].x_hom_ref,
       "x_het": stats[i].x_het,
       "x_hom_alt": stats[i].x_hom_alt,
 
       "y_depth_mean": 2 * stats[i].y_dp.mean() / stats[i].dp.mean(),
-      "y_ab_mean": stats[i].y_ab.mean(),
     }
     ))
   result.add("]")
@@ -452,8 +442,6 @@ specified as comma-separated groups per line e.g.:
       if abi == -1: continue
       var alt = abi.alts
       stat.x_dp.push(int(c.nref + c.nalt))
-      if c.nref.float > min_depth / 2 or c.nalt.float > min_depth / 2:
-        stat.x_ab.push(abi)
       if alt == 0:
         stat.x_hom_ref.inc
       elif alt == 1:
@@ -468,8 +456,6 @@ specified as comma-separated groups per line e.g.:
       # NOTE: we just skip missed sites on Y
       if abi == -1: continue
       stat.y_dp.push(int(c.nref + c.nalt))
-      if c.nref.float > min_depth / 2 or c.nalt.float > min_depth / 2:
-        stat.y_ab.push(abi)
 
 
   stderr.write_line &"[somalier] time to calculate relatedness on {n_used_sites} usable sites: {cpuTime() - t0:.3f}"
