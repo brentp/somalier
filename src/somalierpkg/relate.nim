@@ -36,6 +36,20 @@ type counts* = object
   x_sites*: seq[allele_count]
   y_sites*: seq[allele_count]
 
+proc xrelated(alts: var seq[int8], x: var seq[uint16], n_samples:int): int {.inline.} =
+  for j in 0..<(n_samples - 1):
+    var aj = alts[j]
+    if aj == -1: continue
+    for k in (j+1..<n_samples):
+      var ak = alts[k]
+      if ak == -1: continue
+
+      if aj == ak: #ibs2
+        x[k * n_samples + j] += 1
+      elif aj + ak == 2: #ibs0
+        x[j * n_samples + k] += 1
+
+
 proc krelated(alts: var seq[int8], ibs: var seq[uint16], n: var seq[uint16], hets: var seq[uint16], homs: var seq[uint16], shared_hom_alts: var seq[uint16], n_samples: int): int {.inline.} =
 
   if alts[n_samples - 1] == 1:
@@ -89,6 +103,8 @@ type relation = object
   shared_hets: uint16
   ibs0: uint16
   ibs2: uint16
+  x_ibs0: uint16
+  x_ibs2: uint16
   n: uint16
 
 proc hom_alt_concordance(r: relation): float64 {.inline.} =
@@ -97,23 +113,23 @@ proc hom_alt_concordance(r: relation): float64 {.inline.} =
 proc rel(r:relation): float64 {.inline.} =
   return (r.shared_hets.float64 - 2 * r.ibs0.float64) / min(r.hets_a, r.hets_b).float64
 
-const header = "$sample_a\t$sample_b\t$relatedness\t$hom_concordance\t$hets_a\t$hets_b\t$shared_hets\t$hom_alts_a\t$hom_alts_b\t$shared_hom_alts\t$ibs0\t$ibs2\t$n"
+const header = "$sample_a\t$sample_b\t$relatedness\t$hom_concordance\t$hets_a\t$hets_b\t$shared_hets\t$hom_alts_a\t$hom_alts_b\t$shared_hom_alts\t$ibs0\t$ibs2\t$n\t$x_ibs0\t$x_ibs2"
 proc `$`(r:relation): string =
   return header % [
          "sample_a", r.sample_a, "sample_b", r.sample_b,
          "relatedness", formatFloat(r.rel, ffDecimal, precision=3),
          "hom_concordance", formatFloat(r.hom_alt_concordance, ffDecimal, precision=3),
          "hets_a", $r.hets_a, "hets_b", $r.hets_b,
-         "shared_hets", $r.shared_hets, "hom_alts_a", $r.hom_alts_a, "hom_alts_b", $r.hom_alts_b, "shared_hom_alts", $r.shared_hom_alts, "ibs0", $r.ibs0, "ibs2", $r.ibs2, "n", $r.n]
+         "shared_hets", $r.shared_hets, "hom_alts_a", $r.hom_alts_a, "hom_alts_b", $r.hom_alts_b, "shared_hom_alts", $r.shared_hom_alts, "ibs0", $r.ibs0, "ibs2", $r.ibs2, "n", $r.n,
+         "x_ibs0", $r.x_ibs0, "x_ibs2", $r.x_ibs2]
 
 type relation_matrices = object
-  #xbounds: array[2, uint16]
-  #ybounds: array[2, uint16]
   sites_tested: int
   ibs: seq[uint16]
   n: seq[uint16]
   hets: seq[uint16]
   homs: seq[uint16]
+  x: seq[uint16]
   shared_hom_alts: seq[uint16]
   samples: seq[string]
   # n-samples * n_sites
@@ -226,7 +242,9 @@ iterator relatedness(r:relation_matrices, grouped: var seq[pair]): relation =
                      shared_hets: r.ibs[sk * r.n_samples + sj],
                      shared_hom_alts: r.shared_hom_alts[sj * r.n_samples + sk],
                      ibs2: r.n[sk * r.n_samples + sj],
-                     n: r.n[sj * r.n_samples + sk])
+                     n: r.n[sj * r.n_samples + sk],
+                     x_ibs0: r.x[sj * r.n_samples + sk],
+                     x_ibs2: r.x[sk * r.n_samples + sj])
 
 proc read_extracted*(path: string, cnt: var counts) =
   # read a single sample, used by versus
@@ -264,6 +282,7 @@ proc read_extracted(paths: seq[string]): relation_matrices =
   result = relation_matrices(ibs: newSeq[uint16](n_samples * n_samples),
                              n: newSeq[uint16](n_samples * n_samples),
                              shared_hom_alts: newSeq[uint16](n_samples * n_samples),
+                             x: newSeq[uint16](n_samples * n_samples),
                              hets: newSeq[uint16](n_samples),
                              homs: newSeq[uint16](n_samples),
                              samples: newSeq[string](n_samples),
@@ -305,7 +324,6 @@ proc read_extracted(paths: seq[string]): relation_matrices =
       doAssert nxsites.int * sizeof(result.x_allele_counts[i][0]) == f.readData(result.x_allele_counts[i][0].addr, nxsites.int * sizeof(result.x_allele_counts[i][0]))
     if nysites > 0'u16:
       doAssert nysites.int * sizeof(result.y_allele_counts[i][0]) == f.readData(result.y_allele_counts[i][0].addr, nysites.int * sizeof(result.y_allele_counts[i][0]))
-
 
     f.close()
 
@@ -467,8 +485,9 @@ specified as comma-separated groups per line e.g.:
       var c = final.x_allele_counts[i][rowi]
       var abi = c.ab(min_depth)
       # NOTE: we just skip missed sites on X
-      if abi == -1: continue
       var alt = abi.alts
+      alts[i] = alt
+      if abi == -1: continue
       stat.x_dp.push(int(c.nref + c.nalt))
       if alt == 0:
         stat.x_hom_ref.inc
@@ -476,6 +495,7 @@ specified as comma-separated groups per line e.g.:
         stat.x_het.inc
       elif alt == 2:
         stat.x_hom_alt.inc
+    discard xrelated(alts, final.x, n_samples)
 
   for rowi in 0..<final.y_allele_counts[0].len:
     for i, stat in stats.mpairs:
@@ -506,23 +526,23 @@ specified as comma-separated groups per line e.g.:
     quit "couldn't open html output file"
 
   fh_tsv.write_line '#', header.replace("$", "")
+  var sample_sexes = samples.to_sex_lookup
+  for rel in relatedness(final, grouped):
+    fh_tsv.write_line $rel
 
+  final.x.setLen(0)
   var j = % final
   j["expected-relatedness"] = %* groups
-
-  var sample_sexes = samples.to_sex_lookup
-
   fh_html.write(tmpl_html.replace("<INPUT_JSON>", $j).replace("<SAMPLE_JSON>", toj(sample_names, stats, gt_counts, sample_sexes)))
   fh_html.close()
   stderr.write_line("[somalier] wrote interactive HTML output to: ",  opts.output_prefix & "html")
 
   fh_samples.write(sample_names, stats, gt_counts, sample_sexes)
 
-  for rel in relatedness(final, grouped):
-    fh_tsv.write_line $rel
 
   fh_tsv.close()
   grouped.write(opts.output_prefix)
 
   stderr.write_line("[somalier] wrote groups to: ",  opts.output_prefix & "groups.tsv")
   stderr.write_line("[somalier] wrote samples to: ",  opts.output_prefix & "samples.tsv")
+  stderr.write_line("[somalier] wrote pair-wise relatedness metrics to: ",  opts.output_prefix & "pairs.tsv")

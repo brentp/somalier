@@ -531,6 +531,7 @@ var accessors = {
     },
     "relatedness": function(input, i, j) {
         return Math.min(1.5, Math.max(-1.5, (accessors.shared_hets(input, i, j) - 2 * accessors.ibs0(input, i, j)) / Math.min(input.hets[i], input.hets[j])))
+        //return Math.min(1.5, Math.max(-1.5, (accessors.shared_hets(input, i, j) - 2 * accessors.ibs0(input, i, j)) / (0.75 * Math.min(input.hets[i], input.hets[j]) + 0.25 * Math.max(input.hets[i], input.hets[j]))))
     },
     "concordance": function(input, i, j) {
         return Math.max(-1.5, Math.min(1.5, (accessors.shared_hom_alts(input, i, j) - 2 * accessors.ibs0(input, i, j)) / Math.min(input.homs[i], input.homs[j])))
@@ -652,7 +653,7 @@ for (i in x_data) {
         ix: x_data[i].ix,
         // this gets around an apparent bug in plotly webgl instead of using all scattergl.
         // since first trace is unrelated and with the most points..
-        type: 'scattergl',
+        type: x_data[i].data.length > 5000 ? 'scattergl': 'scatter',
         mode: 'markers',
         marker: {size: size, color: colors[traces_a.length]},
         showlegend:true,
