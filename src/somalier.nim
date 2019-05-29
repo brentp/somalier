@@ -216,16 +216,18 @@ proc main() =
 
   stderr.write_line "somalier version: " & somalierVersion
   var args = commandLineParams()
+  if len(args) > 0 and args[0] in dispatcher:
+    dispatcher[args[0]].f()
+    return
 
-  if len(args) == 0 or not (args[0] in dispatcher):
+  if len(args) == 0 or args[0] in ["-h", "--help"]:
     stderr.write_line "Commands: "
     for k, v in dispatcher:
       echo &"  {k:<13}:   {v.description}"
-    if len(args) > 0 and (args[0] notin dispatcher) and args[0] notin @["-h", "-help"]:
-      echo &"unknown program '{args[0]}'"
+  else:
+    echo &"unknown program '{args[0]}'"
     quit ""
 
-  dispatcher[args[0]].f()
 
 
 when isMainModule:
