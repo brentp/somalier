@@ -207,7 +207,7 @@ proc ab*(c:allele_count, min_depth:int): float {.inline.} =
     return 0
   result = c.nalt.float / (c.nalt + c.nref).float
 
-proc alts(ab:float): int8 {.inline.} =
+proc alts*(ab:float): int8 {.inline.} =
   if ab < 0: return -1
   if ab < 0.07:
     return 0
@@ -393,6 +393,7 @@ specified as comma-separated groups per line e.g.:
     normal2,tumor2a""")
     option("-p", "--ped", help="optional path to a ped/fam file indicating the expected relationships among samples.")
     option("-d", "--min-depth", default="7", help="only genotype sites with at least this depth.")
+    flag("-u", "--unknown", help="set uknown genotypes to hom-ref. it is often preferable to use this with VCF samples that were not jointly called")
     option("-o", "--output-prefix", help="output prefix for results.", default="somalier")
     arg("extracted", nargs= -1, help="$sample.somalier files for each sample.")
 
@@ -407,6 +408,7 @@ specified as comma-separated groups per line e.g.:
     groups: seq[pair]
     samples: seq[Sample]
     min_depth = parseInt(opts.min_depth)
+    unk2hr = opts.unknown
 
   if not opts.output_prefix.endswith(".") or opts.output_prefix.endswith("/"):
     opts.output_prefix &= '.'
@@ -457,6 +459,7 @@ specified as comma-separated groups per line e.g.:
     for i, stat in stats.mpairs:
       var c = final.allele_counts[i][rowi]
       var abi = c.ab(min_depth)
+      if abi < 0 and unk2hr: abi = 0
       stat.dp.push(int(c.nref + c.nalt))
       if c.nref > 0'u32 or c.nalt > 0'u32 or c.nother > 0'u32:
         stat.un.push(c.nother.float64 / float64(c.nref + c.nalt + c.nother))
@@ -467,6 +470,7 @@ specified as comma-separated groups per line e.g.:
         stat.gtdp.push(int(c.nref + c.nalt))
 
       alts[i] = abi.alts
+      if alts[i] < 0 and unk2hr: alts[i] = 0
       if abi > 0.02 and abi < 0.98 and (abi < 0.2 or abi > 0.8):
         gt_counts[4][i].inc
       if alts[i] == -1:
