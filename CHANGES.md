@@ -2,6 +2,7 @@ v0.2.1 (dev)
 ============
 + fix hover in html
 + add --unknown flag for `somalier relate` to set unknown genotypes to hom-ref (useful when merging single-sample VCFs).
++ change sites to be alphabetical by allele so that they are the same between genome builds
 
 v0.2.0
 ======

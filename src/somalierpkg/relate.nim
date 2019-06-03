@@ -30,6 +30,8 @@ type allele_count* = object
   nalt*: uint32
   nother*: uint32
 
+const formatVersion* = 2'u8
+
 type counts* = object
   sample_name*: string
   sites*: seq[allele_count]
@@ -251,10 +253,14 @@ proc read_extracted*(path: string, cnt: var counts) =
   var f = newFileStream(path, fmRead)
   var sl: uint8 = 0
   discard f.readData(sl.addr, sizeof(sl))
+  doAssert sl == formatVersion, &"expected matching versions got {sl}, expected {formatVersion}"
+
+  discard f.readData(sl.addr, sizeof(sl))
   cnt.sample_name = newString(sl)
   var n_sites: uint16
   var nx_sites: uint16
   var ny_sites: uint16
+
 
   discard f.readData(cnt.sample_name[0].addr, sl.int)
   discard f.readData(n_sites.addr, n_sites.sizeof.int)
@@ -301,6 +307,8 @@ proc read_extracted(paths: seq[string]): relation_matrices =
   for i, p in paths:
     var f = newFileStream(p, fmRead)
     var sl: uint8 = 0
+    discard f.readData(sl.addr, sizeof(sl))
+    doAssert sl == formatVersion, &"expected matching versions got {sl}, expected {formatVersion}"
     discard f.readData(sl.addr, sizeof(sl))
     result.samples[i] = newString(sl)
     discard f.readData(result.samples[i][0].addr, sl.int)

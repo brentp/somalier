@@ -15,8 +15,8 @@ import algorithm
 import strutils
 
 type Site* = object
-  ref_allele*: string
-  alt_allele*: string
+  A_allele*: string
+  B_allele*: string
   chrom*: string
   position*: int
 
@@ -25,13 +25,17 @@ proc toSite(toks: seq[string]): Site =
   result = Site()
   result.chrom = toks[0]
   result.position = parseInt(toks[1]) - 1
-  result.ref_allele = toks[3]
-  result.alt_allele = toks[4]
+  if toks[3] < toks[4]:
+    result.A_allele = toks[3]
+    result.B_allele = toks[4]
+  else:
+    result.B_allele = toks[3]
+    result.A_allele = toks[4]
 
 proc checkSiteRef(s:Site, fai:Fai) =
-  var fa_allele = fai.get(s.chrom, s.position, s.position + s.ref_allele.len - 1).toUpperAscii
-  if s.ref_allele != fa_allele:
-    quit "reference base from sites file:" & s.ref_allele & " does not match that from reference: " & fa_allele
+  var fa_allele = fai.get(s.chrom, s.position, s.position + s.A_allele.len - 1).toUpperAscii
+  if s.A_allele != fa_allele and s.B_allele != fa_allele:
+    quit "neither allele from sites file:" & s.A_allele & "/" & s.B_allele & " matches that from reference: " & fa_allele
 {.pop.}
 
 
@@ -47,7 +51,9 @@ proc get_sample_name(bam:Bam): string =
 
 proc get_variant(ivcf:VCF, site:Site): Variant =
   for v in ivcf.query(&"{site.chrom}:{site.position+1}-{site.position+2}"):
-    if v.start == site.position and v.REF == site.ref_allele and v.ALT[0] == site.alt_allele:
+    if v.start == site.position and (
+      (v.REF == site.A_allele and v.ALT[0] == site.B_allele) or
+      (v.REF == site.B_allele and v.ALT[0] == site.A_allele)):
       return v.copy()
 
 proc get_ref_alt_counts(ivcf:VCF, sites:seq[Site], fai:Fai=nil): seq[counts] =
@@ -89,16 +95,16 @@ proc get_ref_alt_counts(ibam:Bam, sites:seq[Site], fai:Fai): counts =
   # TODO: count X, Y, autosomal from sites so we can pre-allocate exactly.
 
   for i, site in sites:
-    doAssert site.ref_allele.len == 1 and site.alt_allele.len == 1, "[somalier] can only genotype single nucleotode variants directly from alignments"
+    doAssert site.A_allele.len == 1 and site.B_allele.len == 1, "[somalier] can only genotype single nucleotode variants directly from alignments"
     var h = hileup(ibam, site.chrom, site.position, fai, cfg)
     checkSiteRef(site, fai)
 
     var ac = allele_count()
 
     for b in h.bases:
-      if b.base.char == site.ref_allele[0]:
+      if b.base.char == site.A_allele[0]:
         ac.nref.inc
-      elif b.base.char == site.alt_allele[0]:
+      elif b.base.char == site.B_allele[0]:
         ac.nalt.inc
       else:
         ac.nother.inc
@@ -188,6 +194,7 @@ proc extract_main() =
 
   for cnts in sample_counts:
     var s = newFileStream(opts.outdir & "/" & cnts.sample_name & ".somalier", fmWrite)
+    s.write(formatVersion.uint8)
     s.write(cnts.sample_name.len.uint8)
     s.write(cnts.sample_name)
     s.write(cnts.sites.len.uint16)
