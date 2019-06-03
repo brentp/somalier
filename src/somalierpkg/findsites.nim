@@ -135,7 +135,7 @@ proc findsites_main*() =
     if $v.CHROM in ["chrY", "Y"]:
       if afs[0] < 0.04 or afs[0] > 0.96: continue
     else:
-      if afs[0] < 0.08 or afs[0] > 0.92: continue
+      if afs[0] < 0.12 or afs[0] > 0.88: continue
 
     if info.get("AS_FilterStatus", oms) == Status.OK and oms != "PASS":
       continue
@@ -189,7 +189,7 @@ proc findsites_main*() =
       elif $v.v.CHROM in ["chrX", "X"]:
         if (close - v.v.start).abs < 20000:
           continue
-      elif (close - v.v.start).abs < 12_000:
+      elif (close - v.v.start).abs < 10_000:
         continue
 
     #discard wtr.write_variant(v.v)
