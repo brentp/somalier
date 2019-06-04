@@ -3,6 +3,10 @@ v0.2.1 (dev)
 + fix hover in html
 + add --unknown flag for `somalier relate` to set unknown genotypes to hom-ref (useful when merging single-sample VCFs).
 + change sites to be alphabetical by allele so that they are the same between genome builds
++ add version to .somalier files created with extract -- these will not be compatible with those made with v0.2.0. I don't
+  forsee a backwards incompatible change like this one in the near future.
++ sites files for hg38 and GRCh37 are compatible. That is, we can extract sites from bams or vcfs from samples aligned to GRCh37
+  reference and accurately calculate relatedness on files extracted from samples aligned to hg38.
 
 v0.2.0
 ======
