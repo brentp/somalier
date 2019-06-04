@@ -29,10 +29,15 @@ REJECT=rejected_variants.19to38.vcf \
 R=/data/human/hg38.fa
 
 
+# remove sites that got mapped to alt contigs
+mv sites.hg38.vcf.gz{,.tmp}
+zgrep -Pv "^chr[^\t]+_alt" sites.hg38.vcf.gz.tmp | bgzip -c > sites.hg38.vcf.gz
+rm sites.hg38.vcf.gz.tmp
+
 if [[ -f hg38ToHg19.over.chain.gz ]]; then
-	echo "OK"
+  echo "OK"
 else
-wget -q http://hgdownload.soe.ucsc.edu/goldenPath/hg38/liftOver/hg38ToHg19.over.chain.gz
+  wget -q http://hgdownload.soe.ucsc.edu/goldenPath/hg38/liftOver/hg38ToHg19.over.chain.gz
 fi
 
 picard LiftoverVcf \
