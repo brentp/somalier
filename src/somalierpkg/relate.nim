@@ -38,6 +38,33 @@ type counts* = object
   x_sites*: seq[allele_count]
   y_sites*: seq[allele_count]
 
+type relation_matrices = object
+  sites_tested: int
+  ibs: seq[uint16]
+  n: seq[uint16]
+  hets: seq[uint16]
+  homs: seq[uint16]
+  x: seq[uint16]
+  shared_hom_alts: seq[uint16]
+  samples: seq[string]
+  # n-samples * n_sites
+  allele_counts: seq[seq[allele_count]]
+  x_allele_counts: seq[seq[allele_count]]
+  y_allele_counts: seq[seq[allele_count]]
+  stats: seq[Stat4]
+  gt_counts: array[5, seq[uint16]]
+
+proc `%`*(r:relation_matrices): JsonNode =
+  result = %* {
+     "ibs": r.ibs,
+     "n": r.n,
+     "hets": r.hets,
+     "homs": r.hets,
+     "shared_hom_alts": r.shared_hom_alts,
+     "samples": r.samples
+     }
+
+
 proc xrelated(alts: var seq[int8], x: var seq[uint16], n_samples:int): int {.inline.} =
   for j in 0..<(n_samples - 1):
     var aj = alts[j]
@@ -52,7 +79,7 @@ proc xrelated(alts: var seq[int8], x: var seq[uint16], n_samples:int): int {.inl
         x[j * n_samples + k] += 1
 
 
-proc krelated(alts: var seq[int8], ibs: var seq[uint16], n: var seq[uint16], hets: var seq[uint16], homs: var seq[uint16], shared_hom_alts: var seq[uint16], n_samples: int): int {.inline.} =
+proc krelated*(alts: var seq[int8], ibs: var seq[uint16], n: var seq[uint16], hets: var seq[uint16], homs: var seq[uint16], shared_hom_alts: var seq[uint16], n_samples: int): int {.inline.} =
 
   if alts[n_samples - 1] == 1:
     hets[n_samples-1] += 1
@@ -124,20 +151,6 @@ proc `$`(r:relation): string =
          "hets_a", $r.hets_a, "hets_b", $r.hets_b,
          "shared_hets", $r.shared_hets, "hom_alts_a", $r.hom_alts_a, "hom_alts_b", $r.hom_alts_b, "shared_hom_alts", $r.shared_hom_alts, "ibs0", $r.ibs0, "ibs2", $r.ibs2, "n", $r.n,
          "x_ibs0", $r.x_ibs0, "x_ibs2", $r.x_ibs2]
-
-type relation_matrices = object
-  sites_tested: int
-  ibs: seq[uint16]
-  n: seq[uint16]
-  hets: seq[uint16]
-  homs: seq[uint16]
-  x: seq[uint16]
-  shared_hom_alts: seq[uint16]
-  samples: seq[string]
-  # n-samples * n_sites
-  allele_counts: seq[seq[allele_count]]
-  x_allele_counts: seq[seq[allele_count]]
-  y_allele_counts: seq[seq[allele_count]]
 
 proc `%`*(v:uint16): JsonNode =
   new(result)
@@ -280,8 +293,7 @@ proc read_extracted*(path: string, cnt: var counts) =
     doAssert ny_sites.int * sizeof(cnt.y_sites[0]) == f.readData(cnt.y_sites[0].addr, ny_sites.int * sizeof(cnt.y_sites[0]))
   f.close()
 
-
-proc read_extracted(paths: seq[string]): relation_matrices =
+proc read_extracted*(paths: seq[string]): relation_matrices =
   var n_samples = paths.len
 
   # aggregated from all samples
@@ -295,6 +307,7 @@ proc read_extracted(paths: seq[string]): relation_matrices =
                              allele_counts: newSeq[seq[allele_count]](n_samples),
                              x_allele_counts: newSeq[seq[allele_count]](n_samples),
                              y_allele_counts: newSeq[seq[allele_count]](n_samples),
+                             stats: newSeq[Stat4](n_samples),
                              )
   var
     nsites = 0'u16
@@ -303,6 +316,9 @@ proc read_extracted(paths: seq[string]): relation_matrices =
     last_nsites = 0'u16
     last_nxsites = 0'u16
     last_nysites = 0'u16
+
+  for i in 0..<result.gt_counts.len:
+    result.gt_counts[i] = newSeq[uint16](n_samples)
 
   for i, p in paths:
     var f = newFileStream(p, fmRead)
@@ -438,10 +454,6 @@ specified as comma-separated groups per line e.g.:
   var n_used_sites = 0
   var alts = newSeq[int8](n_samples)
   # counts of hom-ref, het, hom-alt, unk, hets outside of 0.2..0.8
-  var gt_counts : array[5, seq[uint16]]
-  var stats = newSeq[Stat4](n_samples)
-  for i in 0..<gt_counts.len:
-    gt_counts[i] = newSeq[uint16](n_samples)
 
 
   #[
@@ -464,7 +476,7 @@ specified as comma-separated groups per line e.g.:
   ]#
   for rowi in 0..<nsites:
     var nun = 0
-    for i, stat in stats.mpairs:
+    for i, stat in final.stats.mpairs:
       var c = final.allele_counts[i][rowi]
       var abi = c.ab(min_depth)
       if abi < 0 and unk2hr: abi = 0
@@ -480,12 +492,12 @@ specified as comma-separated groups per line e.g.:
       alts[i] = abi.alts
       if alts[i] < 0 and unk2hr: alts[i] = 0
       if abi > 0.02 and abi < 0.98 and (abi < 0.2 or abi > 0.8):
-        gt_counts[4][i].inc
+        final.gt_counts[4][i].inc
       if alts[i] == -1:
         nun.inc
-        gt_counts[3][i].inc
+        final.gt_counts[3][i].inc
       else:
-        gt_counts[alts[i].int][i].inc
+        final.gt_counts[alts[i].int][i].inc
 
     if nun.float64 / n_samples.float64 > 0.6: continue
     n_used_sites += 1
@@ -493,7 +505,7 @@ specified as comma-separated groups per line e.g.:
     discard krelated(alts, final.ibs, final.n, final.hets, final.homs, final.shared_hom_alts, n_samples)
 
   for rowi in 0..<final.x_allele_counts[0].len:
-    for i, stat in stats.mpairs:
+    for i, stat in final.stats.mpairs:
       var c = final.x_allele_counts[i][rowi]
       var abi = c.ab(min_depth)
       # NOTE: we just skip missed sites on X
@@ -510,7 +522,7 @@ specified as comma-separated groups per line e.g.:
     discard xrelated(alts, final.x, n_samples)
 
   for rowi in 0..<final.y_allele_counts[0].len:
-    for i, stat in stats.mpairs:
+    for i, stat in final.stats.mpairs:
       var c = final.y_allele_counts[i][rowi]
       var abi = c.ab(min_depth)
       # NOTE: we just skip missed sites on Y
@@ -526,9 +538,6 @@ specified as comma-separated groups per line e.g.:
     grouped: seq[pair]
 
   # empty this so it doesn't get sent to html
-  final.allele_counts.setLen(0)
-  final.x_allele_counts.setLen(0)
-  final.y_allele_counts.setLen(0)
 
   if not open(fh_tsv, opts.output_prefix & "pairs.tsv", fmWrite):
     quit "couldn't open output file"
@@ -542,14 +551,13 @@ specified as comma-separated groups per line e.g.:
   for rel in relatedness(final, grouped):
     fh_tsv.write_line $rel
 
-  final.x.setLen(0)
   var j = % final
   j["expected-relatedness"] = %* groups
-  fh_html.write(tmpl_html.replace("<INPUT_JSON>", $j).replace("<SAMPLE_JSON>", toj(sample_names, stats, gt_counts, sample_sexes)))
+  fh_html.write(tmpl_html.replace("<INPUT_JSON>", $j).replace("<SAMPLE_JSON>", toj(sample_names, final.stats, final.gt_counts, sample_sexes)))
   fh_html.close()
   stderr.write_line("[somalier] wrote interactive HTML output to: ",  opts.output_prefix & "html")
 
-  fh_samples.write(sample_names, stats, gt_counts, sample_sexes)
+  fh_samples.write(sample_names, final.stats, final.gt_counts, sample_sexes)
 
 
   fh_tsv.close()
