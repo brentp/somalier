@@ -556,10 +556,13 @@ function find_index(result, rel) {
   return result.length - 1
 }
 
-
 function get_xy_data_by_group(input, metric, rel_pairs) {
     var result = [{rel:0, data:[], text: [], ix: []}]
     var m = accessors[metric]
+    var many = input.n_samples > 500;
+    var pdrop = 0.8;
+    if(input.n_samples > 1000) { pdrop = 0.95; }
+    if(input.n_samples > 5000) { pdrop = 0.99; }
     for(var i = 0; i < input.n_samples - 1; i++) {
         for(j=i+1; j < input.n_samples; j++){
             var c = getc(rel_pairs, input.samples[i], input.samples[j])
@@ -567,12 +570,14 @@ function get_xy_data_by_group(input, metric, rel_pairs) {
             if(c > 0) {
               ci = find_index(result, c)
             }
+            // can't use Math.random() to sample because we need the same points each time.
+            if((ci == 0) && many && ((i + j) % 100) / 100 < pdrop && (accessors["relatedness"](input, i, j)) < 0.09){ continue; }
             var v = m(input, i, j)
             if (v < 15 && metric != "relatedness" && metric != "concordance") {
                 v += (Math.random() - 0.5) / (7.0 * (v + 1))
             }
             result[ci].data.push(v)
-            result[ci].text.push(input.samples[i] + "<br>" + input.samples[j])
+            result[ci].text.push(input.samples[i] + "<br>" + input.samples[j] +  "<br>ci:" + ci + "<br>rel:" + accessors["relatedness"](input, i, j))
             result[ci].ix.push([i, j])
         }
     }
@@ -632,7 +637,7 @@ if(input.n_samples > 200) {
     size = 7
 }
 if(input.n_samples > 700) {
-    size = 5
+    size = 6
 }
 
 var l = {0: "unrelated", 0.5: "parent-child", 0.49: "sib-sib", 1: "identical"}
@@ -665,9 +670,9 @@ x_data = null
 y_data = null
 
 var traces_b = [
-	{x:[], y:[], text: [], type: 'scatter', mode: 'markers', marker: {size: size + 3, color: '#bbbbbb'}, showlegend:false, name: "unknown"},
-	{x:[], y:[], text: [], type: 'scatter', mode: 'markers', marker: {size: size + 3, color: '#1111bb'}, showlegend:true, name: "male"},
-	{x:[], y:[], text: [], type: 'scatter', mode: 'markers', marker: {size: size + 3, color: '#ff99aa'}, showlegend:true, name: "female"},
+  {x:[], y:[], text: [], type: 'scatter', mode: 'markers', marker: {size: size + 3, color: '#bbbbbb', line:{color: '#222', width: []}}, showlegend:false, name: "unknown"},
+  {x:[], y:[], text: [], type: 'scatter', mode: 'markers', marker: {size: size + 3, color: '#99ccff', line:{color: '#222', width: []}}, showlegend:true, name: "male"},
+  {x:[], y:[], text: [], type: 'scatter', mode: 'markers', marker: {size: size + 3, color: '#ff99aa', line:{color: '#222', width: []}}, showlegend:true, name: "female"},
                ]
 var xf = jQuery('#plotbx_select').val()
 var yf = jQuery('#plotby_select').val()
@@ -680,6 +685,12 @@ for(i in sample_data){
    traces_b[idx].x.push(sample_data[i][xf])
    traces_b[idx].y.push(sample_data[i][yf])
    traces_b[idx].text.push("sample:" + sample_data[i].sample)
+   if(sample_data[i]["y_depth_mean"] > 0.2) {
+     traces_b[idx].marker.line.width.push(size < 7 ? 1.5 : 3);
+   } else {
+     traces_b[idx].marker.line.width.push(0);
+   }
+
 }
 
 

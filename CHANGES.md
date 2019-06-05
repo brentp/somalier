@@ -7,6 +7,8 @@ v0.2.1 (dev)
   forsee a backwards incompatible change like this one in the near future.
 + sites files for hg38 and GRCh37 are compatible. That is, we can extract sites from bams or vcfs from samples aligned to GRCh37
   reference and accurately calculate relatedness on files extracted from samples aligned to hg38.
++ better HTML performance for large numbers of samples by sub-sampling individiuals that are expected to be unrelated and that 
+  have a calculated relatedness < 0.09.
 
 v0.2.0
 ======
