@@ -403,6 +403,91 @@ proc to_sex_lookup(samples: seq[Sample]): TableRef[string, string] =
   for s in samples:
     result[s.id] = if s.sex == 1: "male" elif s.sex == 2: "female" else: "unknown"
 
+proc fill*(r:var relation_matrices, min_depth:int, unk2hr:bool): int =
+  var
+    sample_names = r.samples
+    n_samples = sample_names.len
+
+  var nsites = r.allele_counts[0].len
+  var n_used_sites = 0
+  var alts = newSeq[int8](n_samples)
+  # counts of hom-ref, het, hom-alt, unk, hets outside of 0.2..0.8
+
+
+  #[
+  var
+    a = newSeq[float32](final.allele_counts[0].len)
+    b = newSeq[float32](final.allele_counts[0].len)
+  for i in 0..<final.allele_counts.len:
+    for k, p in final.allele_counts[i]:
+      a[k] = p.ab(min_depth)
+
+    for o in 0..<final.allele_counts.len:
+      if i == o: continue
+      for k, p in final.allele_counts[i]:
+        b[k] = p.ab(min_depth)
+
+      # estimate contamination of a, by b
+      var res = estimate_contamination(a, b)
+      if res[0] == 0 or res[1] < 10: continue
+      echo sample_names[i], " contaminated by ", sample_names[o], " =>", res
+  ]#
+  for rowi in 0..<nsites:
+    var nun = 0
+    for i, stat in r.stats.mpairs:
+      var c = r.allele_counts[i][rowi]
+      var abi = c.ab(min_depth)
+      if abi < 0 and unk2hr: abi = 0
+      stat.dp.push(int(c.nref + c.nalt))
+      if c.nref > 0'u32 or c.nalt > 0'u32 or c.nother > 0'u32:
+        stat.un.push(c.nother.float64 / float64(c.nref + c.nalt + c.nother))
+      # TODO: why is this here?
+      if c.nref.float > min_depth / 2 or c.nalt.float > min_depth / 2:
+        stat.ab.push(abi)
+      if abi != -1:
+        stat.gtdp.push(int(c.nref + c.nalt))
+
+      alts[i] = abi.alts
+      if alts[i] < 0 and unk2hr: alts[i] = 0
+      if abi > 0.02 and abi < 0.98 and (abi < 0.2 or abi > 0.8):
+        r.gt_counts[4][i].inc
+      if alts[i] == -1:
+        nun.inc
+        r.gt_counts[3][i].inc
+      else:
+        r.gt_counts[alts[i].int][i].inc
+
+    if nun.float64 / n_samples.float64 > 0.6: continue
+    n_used_sites += 1
+
+    discard krelated(alts, r.ibs, r.n, r.hets, r.homs, r.shared_hom_alts, n_samples)
+
+  for rowi in 0..<r.x_allele_counts[0].len:
+    for i, stat in r.stats.mpairs:
+      var c = r.x_allele_counts[i][rowi]
+      var abi = c.ab(min_depth)
+      # NOTE: we just skip missed sites on X
+      var alt = abi.alts
+      alts[i] = alt
+      if abi == -1: continue
+      stat.x_dp.push(int(c.nref + c.nalt))
+      if alt == 0:
+        stat.x_hom_ref.inc
+      elif alt == 1:
+        stat.x_het.inc
+      elif alt == 2:
+        stat.x_hom_alt.inc
+    discard xrelated(alts, r.x, n_samples)
+
+  for rowi in 0..<r.y_allele_counts[0].len:
+    for i, stat in r.stats.mpairs:
+      var c = r.y_allele_counts[i][rowi]
+      var abi = c.ab(min_depth)
+      # NOTE: we just skip missed sites on Y
+      if abi == -1: continue
+      stat.y_dp.push(int(c.nref + c.nalt))
+  return n_used_sites
+
 proc rel_main*() =
   ## need to track samples names from bams first, then vcfs since
   ## thats the order for the alts array.
@@ -439,96 +524,18 @@ specified as comma-separated groups per line e.g.:
 
   var
     final = read_extracted(opts.extracted)
-    sample_names = final.samples
-    n_samples = sample_names.len
+    t0 = cpuTime()
 
   if opts.ped != "":
     samples = parse_ped(opts.ped)
 
-  stderr.write_line &"[somalier] collected sites from all {n_samples} samples"
+
   groups.add_ped_samples(samples, final.samples)
   groups.add(readGroups(opts.groups))
 
-  var t0 = cpuTime()
-  var nsites = final.allele_counts[0].len
-  var n_used_sites = 0
-  var alts = newSeq[int8](n_samples)
-  # counts of hom-ref, het, hom-alt, unk, hets outside of 0.2..0.8
-
-
-  #[
-  var
-    a = newSeq[float32](final.allele_counts[0].len)
-    b = newSeq[float32](final.allele_counts[0].len)
-  for i in 0..<final.allele_counts.len:
-    for k, p in final.allele_counts[i]:
-      a[k] = p.ab(min_depth)
-
-    for o in 0..<final.allele_counts.len:
-      if i == o: continue
-      for k, p in final.allele_counts[i]:
-        b[k] = p.ab(min_depth)
-
-      # estimate contamination of a, by b
-      var res = estimate_contamination(a, b)
-      if res[0] == 0 or res[1] < 10: continue
-      echo sample_names[i], " contaminated by ", sample_names[o], " =>", res
-  ]#
-  for rowi in 0..<nsites:
-    var nun = 0
-    for i, stat in final.stats.mpairs:
-      var c = final.allele_counts[i][rowi]
-      var abi = c.ab(min_depth)
-      if abi < 0 and unk2hr: abi = 0
-      stat.dp.push(int(c.nref + c.nalt))
-      if c.nref > 0'u32 or c.nalt > 0'u32 or c.nother > 0'u32:
-        stat.un.push(c.nother.float64 / float64(c.nref + c.nalt + c.nother))
-      # TODO: why is this here?
-      if c.nref.float > min_depth / 2 or c.nalt.float > min_depth / 2:
-        stat.ab.push(abi)
-      if abi != -1:
-        stat.gtdp.push(int(c.nref + c.nalt))
-
-      alts[i] = abi.alts
-      if alts[i] < 0 and unk2hr: alts[i] = 0
-      if abi > 0.02 and abi < 0.98 and (abi < 0.2 or abi > 0.8):
-        final.gt_counts[4][i].inc
-      if alts[i] == -1:
-        nun.inc
-        final.gt_counts[3][i].inc
-      else:
-        final.gt_counts[alts[i].int][i].inc
-
-    if nun.float64 / n_samples.float64 > 0.6: continue
-    n_used_sites += 1
-
-    discard krelated(alts, final.ibs, final.n, final.hets, final.homs, final.shared_hom_alts, n_samples)
-
-  for rowi in 0..<final.x_allele_counts[0].len:
-    for i, stat in final.stats.mpairs:
-      var c = final.x_allele_counts[i][rowi]
-      var abi = c.ab(min_depth)
-      # NOTE: we just skip missed sites on X
-      var alt = abi.alts
-      alts[i] = alt
-      if abi == -1: continue
-      stat.x_dp.push(int(c.nref + c.nalt))
-      if alt == 0:
-        stat.x_hom_ref.inc
-      elif alt == 1:
-        stat.x_het.inc
-      elif alt == 2:
-        stat.x_hom_alt.inc
-    discard xrelated(alts, final.x, n_samples)
-
-  for rowi in 0..<final.y_allele_counts[0].len:
-    for i, stat in final.stats.mpairs:
-      var c = final.y_allele_counts[i][rowi]
-      var abi = c.ab(min_depth)
-      # NOTE: we just skip missed sites on Y
-      if abi == -1: continue
-      stat.y_dp.push(int(c.nref + c.nalt))
-
+  var n_used_sites = final.fill(min_depth, unk2hr)
+  var n_samples = final.samples.len
+  stderr.write_line &"[somalier] collected sites from all {n_samples} samples"
 
   stderr.write_line &"[somalier] time to calculate relatedness on {n_used_sites} usable sites: {cpuTime() - t0:.3f}"
   var
@@ -553,11 +560,11 @@ specified as comma-separated groups per line e.g.:
 
   var j = % final
   j["expected-relatedness"] = %* groups
-  fh_html.write(tmpl_html.replace("<INPUT_JSON>", $j).replace("<SAMPLE_JSON>", toj(sample_names, final.stats, final.gt_counts, sample_sexes)))
+  fh_html.write(tmpl_html.replace("<INPUT_JSON>", $j).replace("<SAMPLE_JSON>", toj(final.samples, final.stats, final.gt_counts, sample_sexes)))
   fh_html.close()
   stderr.write_line("[somalier] wrote interactive HTML output to: ",  opts.output_prefix & "html")
 
-  fh_samples.write(sample_names, final.stats, final.gt_counts, sample_sexes)
+  fh_samples.write(final.samples, final.stats, final.gt_counts, sample_sexes)
 
 
   fh_tsv.close()
