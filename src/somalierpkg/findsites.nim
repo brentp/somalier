@@ -143,7 +143,8 @@ proc findsites_main*() =
       continue
     if info.get("OLD_VARIANT", oms) == Status.OK:
       continue
-    if info.has_flag("segdup"):
+
+    if $v.CHROM notin ["chrY", "Y"] and info.has_flag("segdup"):
       continue
     if info.has_flag("lcr"):
       continue
