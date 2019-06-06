@@ -63,18 +63,19 @@ proc get_ref_alt_counts(ivcf:VCF, sites:seq[Site], fai:Fai=nil): seq[counts] =
     result[j].sample_name = s
     result[j].sites = newSeqOfCap[allele_count](sites.len)
 
-  var AD = newSeq[int32]()
+  var AD = newSeq[int32](5*vcf_samples.len)
   var n = 0
 
   for i, site in sites:
     var v = ivcf.get_variant(site)
     if v == nil or v.format.get("AD", AD) != Status.OK:
-      AD = newSeq[int32](vcf_samples.len * 2)
+      AD.setLen(vcf_samples.len * 2)
+      zeroMem(AD[0].addr, AD.len * sizeof(AD[0]))
     else:
       n += 1
     var mult = int(AD.len / vcf_samples.len)
     for j, s in vcf_samples:
-      var ac = allele_count(nref: max(0, AD[mult * j]).uint32, nalt: max(0, AD[mult * j + 1]).uint32)
+      var ac = allele_count(nref: max(0, AD[mult * j]).uint32, nalt: max(0, AD[mult * j + 1]).uint32, nother: 0)
 
       case site.chrom:
         of ["X", "chrX"]:
