@@ -473,6 +473,7 @@ there.
 
 
     </select>
+    <br/>
         Y:
     <select id="plotby_select">
         <option value="gt_depth_mean">mean depth of genotyped sites</option>
@@ -556,16 +557,16 @@ function find_index(result, rel) {
   return result.length - 1
 }
 
-function get_xy_data_by_group(input, metric, rel_pairs) {
+function get_xy_data_by_group(input, metric, rel_pairs, just_xy) {
     var result = [{rel:0, data:[], text: [], ix: []}]
-    var m = accessors[metric]
-    var many = input.n_samples > 500;
+    let m = accessors[metric]
+    let many = input.n_samples > 500;
     var pdrop = 0.8;
     if(input.n_samples > 1000) { pdrop = 0.95; }
     if(input.n_samples > 5000) { pdrop = 0.99; }
     for(var i = 0; i < input.n_samples - 1; i++) {
-        for(j=i+1; j < input.n_samples; j++){
-            var c = getc(rel_pairs, input.samples[i], input.samples[j])
+        for(var j=i+1; j < input.n_samples; j++){
+            let c = getc(rel_pairs, input.samples[i], input.samples[j])
             var ci = 0
             if(c > 0) {
               ci = find_index(result, c)
@@ -577,8 +578,10 @@ function get_xy_data_by_group(input, metric, rel_pairs) {
                 v += (Math.random() - 0.5) / (7.0 * (v + 1))
             }
             result[ci].data.push(v)
-            result[ci].text.push(input.samples[i] + "<br>" + input.samples[j] +  "<br>ci:" + ci + "<br>rel:" + accessors["relatedness"](input, i, j))
-            result[ci].ix.push([i, j])
+            if(!just_xy) {
+              result[ci].text.push(input.samples[i] + "<br>" + input.samples[j])
+              result[ci].ix.push([i, j])
+            }
         }
     }
     result.sort(function(a, b) {return a.rel - b.rel })
@@ -624,8 +627,8 @@ var layout_b = {
 }
 
 
-x_data = get_xy_data_by_group(input, jQuery('#plotax_select').val(), rel_pairs)
-y_data = get_xy_data_by_group(input, jQuery('#plotay_select').val(), rel_pairs)
+x_data = get_xy_data_by_group(input, jQuery('#plotax_select').val(), rel_pairs, false)
+y_data = get_xy_data_by_group(input, jQuery('#plotay_select').val(), rel_pairs, false)
 var size = 12
 if(input.n_samples > 20) {
     size = 10
@@ -764,7 +767,7 @@ pb.on('plotly_unhover',  function(e) {
 
 jQuery('#plotay_select, #plotax_select').on('change', function() {
     var metric = this.value
-    var extracted = get_xy_data_by_group(input, metric, rel_pairs)
+    var extracted = get_xy_data_by_group(input, metric, rel_pairs, true)
 
     if(this.id == 'plotay_select') {
         layout_a.yaxis.title = jQuery("#plotay_select option:selected").text();
