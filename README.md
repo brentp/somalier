@@ -1,4 +1,4 @@
-# somalier: extract informative sites and evaluate relatedness and quality-control
+# somalier: extract informative sites, evaluate relatedness, and perform quality-control
 
 Existing software for checking relatedness requires jointly-called germ-line variant calls,
 but cancer projects have only somatic calls between tumor-normal pairs.
@@ -28,9 +28,32 @@ to add/remove samples or adjust a pedigree file and re-run iteratively.
 For example to add the **n + 1th** samples, just run `somalier extract` on the new sample and then re-use
 the already extracted data from the `n` original samples.
 
+## Usage
+
+The usage is described above. Briefly, run:
+```
+somalier extract -d cohort/ --sites sites.hg38.vcf.gz -f $reference $sample.bam
+```
+for each sample to create a small binary file of the ref and alt counts for the variants listed
+in sites.hg38.vcf.gz. Then run:
+```
+somalier relate --ped $pedigree_file cohort/*.somalier
+```
+This will create an html file for QC in a few seconds. 
+
+Note that if a new sample is added to the cohort, it's only necessary to perform
+the `extract` step on that sample and then run the (fast) `relate` step again with all
+of the extracted files.
+
+From here, it's also possible to make a depth plot for each sample with:
+```
+somalier depthview -o cohort.html -v sites.hg38.vcf.gz cohort/*somalier
+```
+This can be useful to see large (>20MB) deletions and duplications.
+
 ## VCF
 
-`somalier` can also `extract` from a multi or single-sample VCF. This will be much faster, in cases where it's available,
+`somalier` can `extract` from a multi or single-sample VCF. This will be much faster, in cases where it's available,
 this would look like:
 
 ```

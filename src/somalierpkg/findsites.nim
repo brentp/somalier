@@ -86,6 +86,8 @@ proc findsites_main*() =
     wtr:VCF
 
   var exclude_regions = newTable[string, seq[region]]()
+  var indels = newTable[string, seq[region]]()
+  var snps = newTable[string, seq[region]]()
   for e in opts.exclude:
     bed_to_table(e, exclude_regions)
 
@@ -120,12 +122,23 @@ proc findsites_main*() =
     # stuff outside of PAR on human only.
     if $last_chrom in ["X", "chrX"] and (v.start < 2781479 or v.start > 154931044) : continue
 
-    if v.REF.len > 1 or v.ALT.len > 1 or v.ALT[0].len > 1: continue
-    var f = v.FILTER
-    #if f != "PASS" and not ("RF" in f or "AC0" in f or "LCR" in f or "SEGDUP" in f or "InbreedingCoeff" in f):
-    #  quit v.FILTER
-    if f != "PASS":
+    if v.FILTER != "PASS":
       continue
+    if v.info.get("AF", afs) != Status.OK:
+      afs = @[0'f32]
+
+    if v.REF.len > 1 or v.ALT.len > 1 or v.ALT[0].len > 1:
+      if afs[0] > 0.02:
+        discard indels.hasKeyOrPut($v.CHROM, newSeq[region]())
+        var r = region(chrom: $v.CHROM, start: max(v.start - 7, 0), stop: v.stop + 7)
+        indels[$v.CHROM].add(r)
+
+      continue
+
+    if afs[0] > 0.02:
+      var r = region(chrom: $v.CHROM, start: max(v.start - 1, 0), stop: v.stop + 1)
+      discard snps.hasKeyOrPut($v.CHROM, newSeq[region]())
+      snps[$v.CHROM].add(r)
 
     var info = v.info
     if info.get("AF", afs) != Status.OK:
@@ -170,6 +183,15 @@ proc findsites_main*() =
   if not wtr.write_header:
     quit "couldn't write vcf header"
 
+  var indel_lappers = newTable[string, Lapper[region]]()
+  for k, vs in indels.mpairs:
+    indel_lappers[k] = lapify(vs)
+  var snp_lappers = newTable[string, Lapper[region]]()
+  for k, vs in snps.mpairs:
+    snp_lappers[k] = lapify(vs)
+
+
+
   # Sort all variants by reverse AF, then write any variant that's
   # not within X bases of a previously added variant.
   saved.sort(vf_by)
@@ -177,8 +199,14 @@ proc findsites_main*() =
   var added = newTable[cstring, seq[Variant]]()
 
   var used = newSeqOfCap[Variant](8192)
+  var empty: seq[region]
 
   for v in saved:
+    if indel_lappers[$v.v.CHROM].find(v.v.start, v.v.stop, empty):
+      continue
+    if snp_lappers[$v.v.CHROM].find(v.v.start, v.v.stop, empty) and empty.len > 1:
+      echo "skipping with nearby snp"
+      continue
     discard added.hasKeyOrPut(v.v.CHROM, newSeq[Variant]())
     var vs = added[v.v.CHROM]
 

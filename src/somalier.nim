@@ -6,38 +6,14 @@ import streams
 import hile
 import tables
 import times
+import ./somalierpkg/common
 import ./somalierpkg/version
 import ./somalierpkg/relate
 import ./somalierpkg/findsites
+import ./somalierpkg/depthview
 import strformat
 import argparse
-import algorithm
 import strutils
-
-type Site* = object
-  A_allele*: string
-  B_allele*: string
-  chrom*: string
-  position*: int
-
-{.push checks: off, optimization:speed.}
-proc toSite(toks: seq[string]): Site =
-  result = Site()
-  result.chrom = toks[0]
-  result.position = parseInt(toks[1]) - 1
-  if toks[3] < toks[4]:
-    result.A_allele = toks[3]
-    result.B_allele = toks[4]
-  else:
-    result.B_allele = toks[3]
-    result.A_allele = toks[4]
-
-proc checkSiteRef(s:Site, fai:Fai) =
-  var fa_allele = fai.get(s.chrom, s.position, s.position + s.A_allele.len - 1).toUpperAscii
-  if s.A_allele != fa_allele and s.B_allele != fa_allele:
-    quit "neither allele from sites file:" & s.A_allele & "/" & s.B_allele & " matches that from reference: " & fa_allele
-{.pop.}
-
 
 proc get_sample_name(bam:Bam): string =
     var txt = newString(bam.hdr.hdr.l_text)
@@ -68,7 +44,7 @@ proc get_ref_alt_counts(ivcf:VCF, sites:seq[Site], fai:Fai=nil): seq[counts] =
 
   for i, site in sites:
     var v = ivcf.get_variant(site)
-    if v == nil or v.format.get("AD", AD) != Status.OK:
+    if v == nil or ($v.CHROM notin ["chrX", "X", "chrY", "Y"] and v.FILTER notin ["PASS", ""]) or v.format.get("AD", AD) != Status.OK:
       AD.setLen(vcf_samples.len * 2)
       zeroMem(AD[0].addr, AD.len * sizeof(AD[0]))
     else:
@@ -119,33 +95,6 @@ proc get_ref_alt_counts(ibam:Bam, sites:seq[Site], fai:Fai): counts =
         result.sites.add(ac)
 
 
-proc siteOrder(a:Site, b:Site): int =
-  if a.chrom == b.chrom:
-    return cmp(a.position, b.position)
-  return cmp(a.chrom, b.chrom)
-
-proc readSites(path: string, fai:var Fai): seq[Site] =
-  result = newSeqOfCap[Site](8192)
-  var kstr = kstring_t(l:0, m:0, s:nil)
-  var hf = hts_open(path.cstring, "r")
-
-  while hts_getline(hf, cint(10), kstr.addr) > 0:
-    var line  = $kstr.s
-    if line[0] == '#': continue
-    var sep = '\t'
-    # handle ":" or tab. with ":", there is no id field.
-    if sep notin line:
-      sep = ':'
-    var toks = line.strip().split(sep)
-    if sep == ':':
-      toks.insert(".", 2)
-
-    result.add(toSite(toks))
-  if len(result) > 65535:
-    stderr.write_line "warning:cant use more than 65535 sites"
-  sort(result, siteOrder)
-  # check reference after sorting so we get much faster access.
-
 proc extract_main() =
   var argv = commandLineParams()
   if argv[0] == "extract":
@@ -174,7 +123,7 @@ proc extract_main() =
   if not open(fai, opts.fasta):
     quit "[somalier] unable to open fasta file:" & opts.fasta
 
-  var sites = readSites(opts.sites, fai)
+  var sites = readSites(opts.sites)
   createDir(opts.out_dir)
 
   var ibam: Bam
@@ -218,6 +167,7 @@ proc main() =
   var dispatcher = {
     "extract": pair(f:extract_main, description: "extract genotype-like information for a single sample from VCF/BAM/CRAM."),
     "relate": pair(f:rel_main, description: "aggregate `extract`ed information and calculate relatedness among samples."),
+    "depthview": pair(f:depth_main, description: "plot per-chromosome depth for each sample for quick quality-control"),
     "find-sites": pair(f:findsites_main, description: "create a new sites.vcf.gz file from a population VCF (this is rarely needed)."),
   }.toOrderedTable
 

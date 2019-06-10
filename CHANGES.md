@@ -9,6 +9,7 @@ v0.2.1 (dev)
   reference and accurately calculate relatedness on files extracted from samples aligned to hg38.
 + better HTML performance for large numbers of samples by sub-sampling individiuals that are expected to be unrelated and that 
   have a calculated relatedness < 0.09.
++ add a `depthview` sub-command to plot the depth of each sample along each chromosome.
 
 v0.2.0
 ======
