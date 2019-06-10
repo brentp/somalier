@@ -574,9 +574,6 @@ function get_xy_data_by_group(input, metric, rel_pairs, just_xy) {
             // can't use Math.random() to sample because we need the same points each time.
             if((ci == 0) && many && ((i + j) % 100) / 100 < pdrop && (accessors["relatedness"](input, i, j)) < 0.09){ continue; }
             var v = m(input, i, j)
-            if (v < 15 && metric != "relatedness" && metric != "concordance") {
-                v += (Math.random() - 0.5) / (7.0 * (v + 1))
-            }
             result[ci].data.push(v)
             if(!just_xy) {
               result[ci].text.push(input.samples[i] + "<br>" + input.samples[j])
