@@ -48,49 +48,58 @@ proc sample_normalize(by_chrom: TableRef[string, seq[Trace]], cnt: var counts, s
 proc colNormalize(traces: var seq[Trace]) =
   for i in 0..<traces[0].y.len:
     var rs: RunningStat
-    var rsc: RunningStat
     for t in traces:
       if t.y[i].classify != fcNaN:
         rs.push(t.y[i])
     for t in traces.mitems:
       if t.y[i].classify != fcNaN:
         t.y[i] /= rs.mean.float32
-        rsc.push(t.y[i])
-
-    #if rsc.n < 2: return
-    #var lo = rsc.mean - 3.5 * rsc.standardDeviation
-    #var hi = rsc.mean + 2.0 * rsc.standardDeviation
-    #for t in traces.mitems:
-    #  if t.y[i].classify != fcNaN and t.y[i] > lo and t.y[i] < hi:
-    #    t.y[i] = NaN
 
 proc colNormalize(by_chrom: var TableRef[string, seq[Trace]]) =
   for traces in by_chrom.mvalues:
     traces.colNormalize
 
 
-
-proc smooth(trace: var Trace) =
+proc smooth(trace: var Trace, rsc: var RunningStat, w:int=5) =
+  var w = int(w.float / 2)
 
   for i in 1..<trace.y.high:
-    if trace.y[i - 1].classify == fcNaN: continue
+    #if trace.y[i - 1].classify == fcNaN: continue
     if trace.y[i].classify == fcNaN: continue
-    if trace.y[i + 1].classify == fcNaN: continue
+    #if trace.y[i + 1].classify == fcNaN: continue
+    rsc.push(trace.y[i])
 
-    if i == 1 or i == trace.y.high - 1 or trace.y[i - 2].classify == fcNaN or trace.y[i + 2].classify == fcNaN:
-      trace.y[i] = (trace.y[i-1] + trace.y[i] + trace.y[i + 1])/3'f32
-    else:
-      trace.y[i] = (trace.y[i-2] + trace.y[i-1] + trace.y[i] + trace.y[i + 1] + trace.y[i + 2])/5'f32
+    var S = 0'f32
+    var n = 0'f32
+    for k in max(0, i - w)..min(trace.y.high, i + w):
+      if trace.y[k].classify == fcNaN: continue
+      S += trace.y[k]
+      n += 1
+    if n > 1:
+      trace.y[i] = S / n
 
-
-proc smooth(by_chrom: var TableRef[string, seq[Trace]]) =
+proc smooth(by_chrom: var TableRef[string, seq[Trace]], rscs: var seq[RunningStat], w:int=9) =
   for traces in by_chrom.mvalues:
-    for t in traces.mitems:
-      t.smooth()
+    for i, t in traces.mpairs:
+      t.smooth(rscs[i], w)
 
-proc drop(trace: var Trace, chrom: string, lo: float32, hi:float32) =
+proc drop(trace: var Trace, chrom: string, rsc: RunningStat, z:float64=1.3) =
   var ys = newSeq[float32]()
   var xs = newSeq[int]()
+
+  #[
+  var rsc: RunningStat
+
+  for y in trace.y:
+    if y.classify != fcNaN:
+      rsc.push(y)
+
+  var lo = rsc.mean - 1.5 * rsc.standardDeviation
+  var hi = rsc.mean + 1.5 * rsc.standardDeviation
+  echo lo, " ", hi
+  ]#
+  var lo = min(rsc.mean - z * rsc.standardDeviation, 0.8)
+  var hi = max(rsc.mean + z * rsc.standardDeviation, 1.3)
 
   var ok = (proc(y: float32): bool =
     return y > lo and y < hi
@@ -119,16 +128,16 @@ proc drop(trace: var Trace, chrom: string, lo: float32, hi:float32) =
         xs.add(i)
         ys.add(NaN)
 
-    ys.add(y)
+    ys.add(min(2.2, y))
     xs.add(i)
     lastNa = false
   trace.x = xs
   trace.y = ys
 
-proc drop(by_chrom: var TableRef[string, seq[Trace]], lo: float32, hi: float32) =
+proc drop(by_chrom: var TableRef[string, seq[Trace]], rscs: var seq[RunningStat], z:float64) =
   for chrom, traces in by_chrom.mpairs:
-    for t in traces.mitems:
-      t.drop(chrom, lo, hi)
+    for i, t in traces.mpairs:
+      t.drop(chrom, rscs[i], z)
 
 proc depth_main*() =
 
@@ -138,9 +147,8 @@ proc depth_main*() =
 
   var p = newParser("somalier depth"):
     help("depth plot on somalier-extracted data")
+    option("-w", "--window", default="5", help="smoothing window")
     option("-v", "--vcf", help="sites vcf file to indicate genomic positions")
-    option("--lo", default="0.8", help="don't plot values above this threshold and below --hi (helps reduce size of html output)")
-    option("--hi", default="1.3", help="don't plot values below this threshold and above --lo (helps reduce size of html output)")
     option("-o", default="somalier-depthview.html", help="html output file")
     arg("extracted", nargs= -1, help="$sample.somalier files for each sample.")
 
@@ -153,24 +161,29 @@ proc depth_main*() =
     quit "send argument for extracted files"
 
   var
-    lo = parseFloat(opts.lo).float32
-    hi = parseFloat(opts.hi).float32
-
-  var sites = readSites(opts.vcf)
-  var text_by_chrom = newTable[string, seq[string]]()
+    sites = readSites(opts.vcf)
+    text_by_chrom = newTable[string, seq[string]]()
+    w = parseInt(opts.window)
   for s in sites:
     if s.chrom notin text_by_chrom: text_by_chrom[s.chrom] = newSeq[string]()
     text_by_chrom[s.chrom].add(&"{s.chrom}:{s.position}")
 
   var cnt : counts
   var by_chrom = newTable[string, seq[Trace]]()
+  var samples = newSeq[string]()
   for i, f in opts.extracted:
     read_extracted(f, cnt)
     by_chrom.sample_normalize(cnt, sites)
+    samples.add(cnt.sample_name)
+  var rscs = newSeq[RunningStat](opts.extracted.len)
+
+  var z = 1.3
+  if samples.len > 1500:
+    z = 1.5
 
   by_chrom.colNormalize()
-  by_chrom.smooth()
-  by_chrom.drop(lo, hi)
+  by_chrom.smooth(rscs, w)
+  by_chrom.drop(rscs, z)
 
   var s = %* by_chrom
   var t = tmpl_html.replace("<INPUT_TEXT>", $(%text_by_chrom))

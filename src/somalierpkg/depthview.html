@@ -459,7 +459,6 @@ function plot() {
 	var chrom = jQuery("#chromosomes option:selected").val()
 
 	var traces = chrom_traces[chrom]
-	var colors = ['#377eb8bb', '#e41a1cbb', '#4daf4a', '#984ea3', '#ff7f00', '#ffff33', '#a65628', '#f781bf', '#999999', '#e41a1c', '#377eb8', '#4daf4a']
 
 	var layout = {
 	    autosize: true,
@@ -472,6 +471,7 @@ function plot() {
 	    },
 	    hovermode: 'closest',
 	    showlegend: true,
+	    colorway : ['#377eb8bb', '#e41a1cbb', '#4daf4a', '#984ea3', '#ff7f00', '#ffff33', '#a65628', '#f781bf', '#999999', '#e41a1c', '#377eb8', '#4daf4a'],
 	}
 
 	var size = 2
@@ -501,5 +501,15 @@ jQuery('#chromosomes').on("change", plot)
 plot()
 
 </script>
+<div id="text" class="twelve columns">
+This plot is created by <a href="https://github.com/brentp/somalier" target="_blank">somalier</a>.
+It provides a quick view of depth across each chromosome. Because there can be so
+many points, it does not draw points around a normalized depth of 1. As a result,
+only regions and points with a depth outside of the expected ranges will be shown
+these are potential deletions or duplications
+</div>
+
+</div>
+
 </body>
 </html>
