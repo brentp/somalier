@@ -79,48 +79,6 @@ proc xrelated(alts: var seq[int8], x: var seq[uint16], n_samples:int): int {.inl
         x[j * n_samples + k] += 1
 
 
-proc krelated*(alts: var seq[int8], ibs: var seq[uint16], n: var seq[uint16], hets: var seq[uint16], homs: var seq[uint16], shared_hom_alts: var seq[uint16], n_samples: int): int {.inline.} =
-
-  if alts[n_samples - 1] == 1:
-    hets[n_samples-1] += 1
-  elif alts[n_samples - 1] == 2:
-    homs[n_samples-1] += 1
-
-  var is_het: bool
-  var aj, ak: int8
-  var nused = 0
-
-  for j in 0..<(n_samples-1):
-    aj = alts[j]
-    if aj == -1: continue
-    is_het = (aj == 1)
-
-    if is_het:
-      hets[j] += 1
-    elif aj == 2:
-      homs[j] += 1
-
-    nused += 1
-
-    for k in j+1..<n_samples:
-      ak = alts[k]
-      if ak == -1: continue
-      n[j * n_samples + k] += 1
-      if is_het:
-        # shared hets
-        if ak == 1:
-          ibs[k * n_samples + j] += 1
-      else:
-        # ibs0
-        if aj != ak and aj + ak == 2:
-          ibs[j * n_samples + k] += 1
-      # ibs2
-      if aj == ak: #and not is_het:
-        n[k * n_samples + j] += 1
-        if aj == 2:
-          shared_hom_alts[j * n_samples + k] += 1
-  return nused
-
 type relation = object
   sample_a: string
   sample_b: string
@@ -153,9 +111,7 @@ proc `$`(r:relation): string =
          "x_ibs0", $r.x_ibs0, "x_ibs2", $r.x_ibs2]
 
 proc `%`*(v:uint16): JsonNode =
-  new(result)
-  result.kind = JInt
-  result.num = v.int64
+  result = JsonNode(kind: JInt, num:v.int64)
 
 type pair = tuple[a:string, b:string, rel:float64]
 proc `%`*(p:pair): JsonNode =
@@ -226,11 +182,67 @@ proc alts*(ab:float): int8 {.inline.} =
   if ab < 0: return -1
   if ab < 0.07:
     return 0
-  if ab > 0.88:
+  if ab > 0.90:
     return 2
-  if ab < 0.2 or ab > 0.8: return -1 # exclude mid-range hets.
+  if ab < 0.15 or ab > 0.85: return -1 # exclude mid-range hets.
   return 1
 
+{.push checks: off, optimization: speed.}
+template depth*(c:allele_count): uint32 =
+  c.nref + c.nalt
+
+proc alts*(c:allele_count, min_depth:int=7): int8 {.inline.} =
+  if c.proportion_other > 0.04: return -1
+  if int(c.nref + c.nalt) < min_depth: return -1
+  if c.nref == 0: return 2
+  if c.nalt == 0: return 0
+  var ab = c.nalt.float / (c.depth).float
+  if ab < 0.07: return 0
+  if ab > 0.90: return 2
+  if 0.15 < ab and ab < 0.85: return 1
+  return -1
+
+proc krelated*(alts: var seq[int8], ibs: var seq[uint16], n: var seq[uint16], hets: var seq[uint16], homs: var seq[uint16], shared_hom_alts: var seq[uint16], n_samples: int): int {.inline.} =
+
+  if alts[n_samples - 1] == 1:
+    hets[n_samples-1] += 1
+  elif alts[n_samples - 1] == 2:
+    homs[n_samples-1] += 1
+
+  var is_het: bool
+  var aj, ak: int8
+  var nused = 0
+
+  for j in 0..<(n_samples-1):
+    aj = alts[j]
+    if aj == -1: continue
+    is_het = (aj == 1)
+
+    if is_het:
+      hets[j] += 1
+    elif aj == 2:
+      homs[j] += 1
+
+    nused += 1
+
+    for k in j+1..<n_samples:
+      ak = alts[k]
+      if ak == -1: continue
+      n[j * n_samples + k] += 1
+      if is_het:
+        # shared hets
+        if ak == 1:
+          ibs[k * n_samples + j] += 1
+      else:
+        # ibs0
+        if aj != ak and aj + ak == 2:
+          ibs[j * n_samples + k] += 1
+      # ibs2
+      if aj == ak: #and not is_het:
+        n[k * n_samples + j] += 1
+        if aj == 2:
+          shared_hom_alts[j * n_samples + k] += 1
+  return nused
 
 iterator relatedness(r:relation_matrices, grouped: var seq[pair]): relation =
   var sample_names = r.samples
@@ -239,8 +251,10 @@ iterator relatedness(r:relation_matrices, grouped: var seq[pair]): relation =
     for sk in sj + 1..<r.n_samples:
       if sj == sk: quit "logic error"
 
-      var bottom = min(r.hets[sk], r.hets[sj]).float64
-      if bottom == 0:
+      var bottom: float64 = 0
+      if (r.hets[sj] > 0'u16) and (r.hets[sk] > 0'u16):
+        bottom = 2 / (1 / r.hets[sk].float64 + 1 / r.hets[sj].float64).float64
+      else:
         bottom = max(r.hets[sk], r.hets[sj]).float64
       if bottom == 0:
         # can't calculate relatedness
@@ -260,6 +274,7 @@ iterator relatedness(r:relation_matrices, grouped: var seq[pair]): relation =
                      n: r.n[sj * r.n_samples + sk],
                      x_ibs0: r.x[sj * r.n_samples + sk],
                      x_ibs2: r.x[sk * r.n_samples + sj])
+{.pop.}
 
 proc read_extracted*(path: string, cnt: var counts) =
   # read a single sample, used by versus
@@ -449,7 +464,7 @@ proc fill*(r:var relation_matrices, min_depth:int, unk2hr:bool): int =
 
       alts[i] = abi.alts
       if alts[i] < 0 and unk2hr: alts[i] = 0
-      if abi > 0.02 and abi < 0.98 and (abi < 0.2 or abi > 0.8):
+      if abi > 0.02 and abi < 0.98 and (abi < 0.1 or abi > 0.9):
         r.gt_counts[4][i].inc
       if alts[i] == -1:
         nun.inc
@@ -465,12 +480,11 @@ proc fill*(r:var relation_matrices, min_depth:int, unk2hr:bool): int =
   for rowi in 0..<r.x_allele_counts[0].len:
     for i, stat in r.stats.mpairs:
       var c = r.x_allele_counts[i][rowi]
-      var abi = c.ab(min_depth)
       # NOTE: we just skip missed sites on X
-      var alt = abi.alts
+      var alt = c.alts
       alts[i] = alt
-      if abi == -1: continue
-      stat.x_dp.push(int(c.nref + c.nalt))
+      if alt == -1: continue
+      stat.x_dp.push(int(c.depth))
       if alt == 0:
         stat.x_hom_ref.inc
       elif alt == 1:
@@ -537,7 +551,7 @@ specified as comma-separated groups per line e.g.:
   var n_samples = final.samples.len
   stderr.write_line &"[somalier] collected sites from all {n_samples} samples"
 
-  stderr.write_line &"[somalier] time to calculate relatedness on {n_used_sites} usable sites: {cpuTime() - t0:.3f}"
+  stderr.write_line &"[somalier] time to calculate relatedness on {n_used_sites} usable sites: {cpuTime() - t0:.2f}"
   var
     fh_tsv:File
     fh_samples:File
