@@ -1,517 +1,146 @@
+<!DOCTYPE html>
 <html>
 <head>
-    <style>
-/* https://codepen.io/chriddyp/pen/bWLwgP.css */
-/* Table of contents
-––––––––––––––––––––––––––––––––––––––––––––––––––
-- Plotly.js
-- Grid
-- Base Styles
-- Typography
-- Links
-- Buttons
-- Forms
-- Lists
-- Code
-- Tables
-- Spacing
-- Utilities
-- Clearing
-- Media Queries
-*/
-
-/* PLotly.js
-–––––––––––––––––––––––––––––––––––––––––––––––––– */
-/* plotly.js's modebar's z-index is 1001 by default
- * https://github.com/plotly/plotly.js/blob/7e4d8ab164258f6bd48be56589dacd9bdd7fded2/src/css/_modebar.scss#L5
- * In case a dropdown is above the graph, the dropdown's options
- * will be rendered below the modebar
- * Increase the select option's z-index
- */
-
-/* This was actually not quite right -
-   dropdowns were overlapping each other (edited October 26)
-
-.Select {
-    z-index: 1002;
-}*/
-
-/* Grid
-–––––––––––––––––––––––––––––––––––––––––––––––––– */
-.container {
-  position: relative;
-  width: 100%;
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 0 20px;
-  box-sizing: border-box; }
-.column,
-.columns {
-  width: 100%;
-  float: left;
-  box-sizing: border-box; }
-
-/* For devices larger than 400px */
-@media (min-width: 400px) {
-  .container {
-    width: 85%;
-    padding: 0; }
-}
-
-/* For devices larger than 550px */
-@media (min-width: 550px) {
-  .container {
-    width: 80%; }
-  .column,
-  .columns {
-    margin-left: 4%; }
-  .column:first-child,
-  .columns:first-child {
-    margin-left: 0; }
-
-  .one.column,
-  .one.columns                    { width: 4.66666666667%; }
-  .two.columns                    { width: 13.3333333333%; }
-  .three.columns                  { width: 22%;            }
-  .four.columns                   { width: 30.6666666667%; }
-  .five.columns                   { width: 39.3333333333%; }
-  .six.columns                    { width: 48%;            }
-  .seven.columns                  { width: 56.6666666667%; }
-  .eight.columns                  { width: 65.3333333333%; }
-  .nine.columns                   { width: 74.0%;          }
-  .ten.columns                    { width: 82.6666666667%; }
-  .eleven.columns                 { width: 91.3333333333%; }
-  .twelve.columns                 { width: 100%; margin-left: 0; }
-
-  .one-third.column               { width: 30.6666666667%; }
-  .two-thirds.column              { width: 65.3333333333%; }
-
-  .one-half.column                { width: 48%; }
-
-  /* Offsets */
-  .offset-by-one.column,
-  .offset-by-one.columns          { margin-left: 8.66666666667%; }
-  .offset-by-two.column,
-  .offset-by-two.columns          { margin-left: 17.3333333333%; }
-  .offset-by-three.column,
-  .offset-by-three.columns        { margin-left: 26%;            }
-  .offset-by-four.column,
-  .offset-by-four.columns         { margin-left: 34.6666666667%; }
-  .offset-by-five.column,
-  .offset-by-five.columns         { margin-left: 43.3333333333%; }
-  .offset-by-six.column,
-  .offset-by-six.columns          { margin-left: 52%;            }
-  .offset-by-seven.column,
-  .offset-by-seven.columns        { margin-left: 60.6666666667%; }
-  .offset-by-eight.column,
-  .offset-by-eight.columns        { margin-left: 69.3333333333%; }
-  .offset-by-nine.column,
-  .offset-by-nine.columns         { margin-left: 78.0%;          }
-  .offset-by-ten.column,
-  .offset-by-ten.columns          { margin-left: 86.6666666667%; }
-  .offset-by-eleven.column,
-  .offset-by-eleven.columns       { margin-left: 95.3333333333%; }
-
-  .offset-by-one-third.column,
-  .offset-by-one-third.columns    { margin-left: 34.6666666667%; }
-  .offset-by-two-thirds.column,
-  .offset-by-two-thirds.columns   { margin-left: 69.3333333333%; }
-
-  .offset-by-one-half.column,
-  .offset-by-one-half.columns     { margin-left: 52%; }
-
-}
-
-
-/* Base Styles
-–––––––––––––––––––––––––––––––––––––––––––––––––– */
-/* NOTE
-html is set to 62.5% so that all the REM measurements throughout Skeleton
-are based on 10px sizing. So basically 1.5rem = 15px :) */
-html {
-  font-size: 62.5%; }
-body {
-  font-size: 1.5em; /* currently ems cause chrome bug misinterpreting rems on body element */
-  line-height: 1.6;
-  font-weight: 400;
-  font-family: "Open Sans", "HelveticaNeue", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  color: rgb(50, 50, 50); }
-
-
-/* Typography
-–––––––––––––––––––––––––––––––––––––––––––––––––– */
-h1, h2, h3, h4, h5, h6 {
-  margin-top: 0;
-  margin-bottom: 0;
-  font-weight: 300; }
-h1 { font-size: 4.5rem; line-height: 1.2;  letter-spacing: -.1rem; margin-bottom: 2rem; }
-h2 { font-size: 3.6rem; line-height: 1.25; letter-spacing: -.1rem; margin-bottom: 1.8rem; margin-top: 1.8rem;}
-h3 { font-size: 3.0rem; line-height: 1.3;  letter-spacing: -.1rem; margin-bottom: 1.5rem; margin-top: 1.5rem;}
-h4 { font-size: 2.6rem; line-height: 1.35; letter-spacing: -.08rem; margin-bottom: 1.2rem; margin-top: 1.2rem;}
-h5 { font-size: 2.2rem; line-height: 1.5;  letter-spacing: -.05rem; margin-bottom: 0.6rem; margin-top: 0.6rem;}
-h6 { font-size: 2.0rem; line-height: 1.6;  letter-spacing: 0; margin-bottom: 0.75rem; margin-top: 0.75rem;}
-
-p {
-  margin-top: 0; }
-
-
-/* Blockquotes
-–––––––––––––––––––––––––––––––––––––––––––––––––– */
-blockquote {
-  border-left: 4px lightgrey solid;
-  padding-left: 1rem;
-  margin-top: 2rem;
-  margin-bottom: 2rem;
-  margin-left: 0rem;
-}
-
-
-/* Links
-–––––––––––––––––––––––––––––––––––––––––––––––––– */
-a {
-  color: #1EAEDB;
-  text-decoration: underline;
-  cursor: pointer;}
-a:hover {
-  color: #0FA0CE; }
-
-
-/* Buttons
-–––––––––––––––––––––––––––––––––––––––––––––––––– */
-.button,
-button,
-input[type="submit"],
-input[type="reset"],
-input[type="button"] {
-  display: inline-block;
-  height: 38px;
-  padding: 0 30px;
-  color: #555;
-  text-align: center;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 38px;
-  letter-spacing: .1rem;
-  text-transform: uppercase;
-  text-decoration: none;
-  white-space: nowrap;
-  background-color: transparent;
-  border-radius: 4px;
-  border: 1px solid #bbb;
-  cursor: pointer;
-  box-sizing: border-box; }
-.button:hover,
-button:hover,
-input[type="submit"]:hover,
-input[type="reset"]:hover,
-input[type="button"]:hover,
-.button:focus,
-button:focus,
-input[type="submit"]:focus,
-input[type="reset"]:focus,
-input[type="button"]:focus {
-  color: #333;
-  border-color: #888;
-  outline: 0; }
-.button.button-primary,
-button.button-primary,
-input[type="submit"].button-primary,
-input[type="reset"].button-primary,
-input[type="button"].button-primary {
-  color: #FFF;
-  background-color: #33C3F0;
-  border-color: #33C3F0; }
-.button.button-primary:hover,
-button.button-primary:hover,
-input[type="submit"].button-primary:hover,
-input[type="reset"].button-primary:hover,
-input[type="button"].button-primary:hover,
-.button.button-primary:focus,
-button.button-primary:focus,
-input[type="submit"].button-primary:focus,
-input[type="reset"].button-primary:focus,
-input[type="button"].button-primary:focus {
-  color: #FFF;
-  background-color: #1EAEDB;
-  border-color: #1EAEDB; }
-
-
-/* Forms
-–––––––––––––––––––––––––––––––––––––––––––––––––– */
-input[type="email"],
-input[type="number"],
-input[type="search"],
-input[type="text"],
-input[type="tel"],
-input[type="url"],
-input[type="password"],
-textarea,
-select {
-  height: 38px;
-  padding: 6px 10px; /* The 6px vertically centers text on FF, ignored by Webkit */
-  background-color: #fff;
-  border: 1px solid #D1D1D1;
-  border-radius: 4px;
-  box-shadow: none;
-  box-sizing: border-box;
-  font-family: inherit;
-  font-size: inherit; /*https://stackoverflow.com/questions/6080413/why-doesnt-input-inherit-the-font-from-body*/}
-/* Removes awkward default styles on some inputs for iOS */
-input[type="email"],
-input[type="number"],
-input[type="search"],
-input[type="text"],
-input[type="tel"],
-input[type="url"],
-input[type="password"],
-textarea {
-  -webkit-appearance: none;
-     -moz-appearance: none;
-          appearance: none; }
-textarea {
-  min-height: 65px;
-  padding-top: 6px;
-  padding-bottom: 6px; }
-input[type="email"]:focus,
-input[type="number"]:focus,
-input[type="search"]:focus,
-input[type="text"]:focus,
-input[type="tel"]:focus,
-input[type="url"]:focus,
-input[type="password"]:focus,
-textarea:focus,
-select:focus {
-  border: 1px solid #33C3F0;
-  outline: 0; }
-label,
-legend {
-  display: block;
-  margin-bottom: 0px; }
-fieldset {
-  padding: 0;
-  border-width: 0; }
-input[type="checkbox"],
-input[type="radio"] {
-  display: inline; }
-label > .label-body {
-  display: inline-block;
-  margin-left: .5rem;
-  font-weight: normal; }
-
-
-/* Lists
-–––––––––––––––––––––––––––––––––––––––––––––––––– */
-ul {
-  list-style: circle inside; }
-ol {
-  list-style: decimal inside; }
-ol, ul {
-  padding-left: 0;
-  margin-top: 0; }
-ul ul,
-ul ol,
-ol ol,
-ol ul {
-  margin: 1.5rem 0 1.5rem 3rem;
-  font-size: 90%; }
-li {
-  margin-bottom: 1rem; }
-
-
-/* Tables
-–––––––––––––––––––––––––––––––––––––––––––––––––– */
-table {
-  border-collapse: collapse;
-}
-th,
-td {
-  padding: 12px 15px;
-  text-align: left;
-  border-bottom: 1px solid #E1E1E1; }
-th:first-child,
-td:first-child {
-  padding-left: 0; }
-th:last-child,
-td:last-child {
-  padding-right: 0; }
-
-
-/* Spacing
-–––––––––––––––––––––––––––––––––––––––––––––––––– */
-button,
-.button {
-  margin-bottom: 0rem; }
-input,
-textarea,
-select,
-fieldset {
-  margin-bottom: 0rem; }
-pre,
-dl,
-figure,
-table,
-form {
-  margin-bottom: 0rem; }
-p,
-ul,
-ol {
-  margin-bottom: 0.75rem; }
-
-/* Utilities
-–––––––––––––––––––––––––––––––––––––––––––––––––– */
-.u-full-width {
-  width: 100%;
-  box-sizing: border-box; }
-.u-max-full-width {
-  max-width: 100%;
-  box-sizing: border-box; }
-.u-pull-right {
-  float: right; }
-.u-pull-left {
-  float: left; }
-
-
-/* Misc
-–––––––––––––––––––––––––––––––––––––––––––––––––– */
-hr {
-  margin-top: 3rem;
-  margin-bottom: 3.5rem;
-  border-width: 0;
-  border-top: 1px solid #E1E1E1; }
-
-
-/* Clearing
-–––––––––––––––––––––––––––––––––––––––––––––––––– */
-
-/* Self Clearing Goodness */
-.container:after,
-.row:after,
-.u-cf {
-  content: "";
-  display: table;
-  clear: both; }
-
-
-/* Media Queries
-–––––––––––––––––––––––––––––––––––––––––––––––––– */
-/*
-Note: The best way to structure the use of media queries is to create the queries
-near the relevant code. For example, if you wanted to change the styles for buttons
-on small devices, paste the mobile query code up in the buttons section and style it
-there.
-*/
-
-
-/* Larger than mobile */
-@media (min-width: 400px) {}
-
-/* Larger than phablet (also point when grid becomes active) */
-@media (min-width: 550px) {}
-
-/* Larger than tablet */
-@media (min-width: 750px) {}
-
-/* Larger than desktop */
-@media (min-width: 1000px) {}
-
-/* Larger than Desktop HD */
-@media (min-width: 1200px) {}
-    </style>
-
+    <meta charset="utf-8" />
+    <meta name="author" content="Brent Pedersen" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/selectize.js/0.12.6/css/selectize.bootstrap3.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.3.1/css/bootstrap.min.css">
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/selectize.js/0.12.6/js/standalone/selectize.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+    <style>
+    html,body { height: 100%; margin: 0px; padding: 0px; }
+    .form-control.selectize-control {
+        padding: 5px 6px 0px;
+        height: unset !important;
+    }
+    </style>
 </head>
 <body>
 
-<div class = "seven columns">
-        X:
-    <select id="plotax_select">
-        <option value="shared_hets">shared hets</option>
-        <option value="shared_hom_alts">shared hom-alts</option>
-        <option value="concordance">homozygous concordance</option>
-        <option value="relatedness">relatedness</option>
-        <option value="ibs0" selected >IBS0</option>
-        <option value="ibs2">IBS2</option>
-    </select>
-        Y:
-    <select id="plotay_select">
-        <option value="shared_hets">shared hets</option>
-        <option value="shared_hom_alts">shared hom-alts</option>
-        <option value="concordance">homozygous concordance</option>
-        <option value="relatedness">relatedness</option>
-        <option value="ibs0">IBS0</option>
-        <option value="ibs2" selected>IBS2</option>
-    </select>
+<nav class="navbar navbar-expand-lg navbar-dark p-0" style="background-color:#4b636e !important">
+  <a class="navbar-brand ml-2" href="https://github.com/brentp/somalier">somalier</a>
+  <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#toggler" aria-controls="toggler" aria-expanded="false" aria-label="Toggle navigation">
+    <span class="navbar-toggler-icon"></span>
+  </button>
 
-    <div id="plota" style="width: 100%; height: 90%"></div>
+  <div class="collapse navbar-collapse" id="toggler">
+    <div class="navbar-nav mr-auto">
+    </div>
+    <div>
+        <div class="input-group" style="width:300px">
+            <input type="text" class="form-control" id="sample-search" aria-label="sample-search">
+        </div>
+    </div>
+  </div>
+</nav>
+<div class="container-fluid h-100">
+    <div class="row h-100">
+        <div class="col-6 h-100 bg-light pt-2 border-right">
+            <div class="row pb-2">
+                <div class="col-6">
+                    <div class="input-group">
+                        <div class="input-group-prepend">
+                            <div class="input-group-text">X Axis</div>
+                        </div>
+                        <select class="custom-select" id="plotax_select">
+                            <option value="shared_hets" title="the number of sites where both samples are heterozygotes">shared hets</option>
+                            <option value="shared_hom_alts" title="the number of sites where both samples are homozygous alternate">shared hom-alts</option>
+                            <option value="concordance">homozygous concordance</option>
+                            <option value="relatedness">relatedness</option>
+                            <option value="ibs0" title="the number of sites where one sample is hom-ref and another is hom-alt" selected>IBS0</option>
+                            <option value="ibs2" title="the number of sites where the samples have the same genotype">IBS2</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="input-group">
+                        <div class="input-group-prepend">
+                            <div class="input-group-text">Y Axis</div>
+                        </div>
+                        <select class="custom-select" id="plotay_select">
+                            <option value="shared_hets" title="the number of sites where both samples are heterozygotes">shared hets</option>
+                            <option value="shared_hom_alts" title="the number of sites where both samples are homozygous alternate">shared hom-alts</option>
+                            <option value="concordance">homozygous concordance</option>
+                            <option value="relatedness">relatedness</option>
+                            <option value="ibs0" title="the number of sites where one sample is hom-ref and another is hom-alt">IBS0</option>
+                            <option value="ibs2" title="the number of sites where the samples have the same genotype" selected>IBS2</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="row h-100">
+                <div class="col h-100">
+                    <div id="plota" style="height: 90%"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-6 h-100 bg-light pt-2">
+            <div class="row pb-2">
+                <div class="col-6">
+                    <div class="input-group">
+                        <div class="input-group-prepend">
+                            <div class="input-group-text">X Axis</div>
+                        </div>
+                        <select class="custom-select" id="plotbx_select">
+                            <option value="gt_depth_mean">mean depth of genotyped sites</option>
+                            <option value="depth_mean">mean depth of all sites</option>
+                            <option value="ab_mean">mean allele balance</option>
+                            <option value="pct_other_alleles">% reads with neither REF nor ALT</option>
+                            <option value="n_hom_ref">number of 0/0 sites</option>
+                            <option value="n_het">number of 0/1 sites</option>
+                            <option value="n_hom_alt">number of 1/1 sites</option>
+                            <option value="n_unknown">number of unknown sites</option>
+                            <option value="n_known">number of known sites</option>
+                            <option value="p_middling_ab">proportion sites with AB &lt; 0.2 or AB &gt; 0.8</option>
+                            <option value="x_depth_mean">scaled mean depth on X</option>
+                            <option value="x_hom_ref">number of 0/0 sites on X</option>
+                            <option value="x_het">number of 0/1 sites on X</option>
+                            <option value="x_hom_alt" selected>number of 1/1 sites on X</option>
+                            <option value="y_depth_mean">scaled mean depth on Y</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="input-group">
+                        <div class="input-group-prepend">
+                            <div class="input-group-text">Y Axis</div>
+                        </div>
+                        <select class="custom-select" id="plotby_select">
+                            <option value="gt_depth_mean">mean depth of genotyped sites</option>
+                            <option value="depth_mean">mean depth of all sites</option>
+                            <option value="ab_mean">mean allele balance</option>
+                            <option value="pct_other_alleles">% reads with neither REF nor ALT</option>
+                            <option value="n_hom_ref">number of 0/0 sites</option>
+                            <option value="n_het">number of 0/1 sites</option>
+                            <option value="n_hom_alt">number of 1/1 sites</option>
+                            <option value="n_unknown">number of unknown sites</option>
+                            <option value="n_known">number of known sites</option>
+                            <option value="p_middling_ab">proportion sites with AB &lt; 0.2 or AB &gt; 0.8</option>
+                            <option value="x_depth_mean" selected>scaled mean depth on X</option>
+                            <option value="x_hom_ref">number of 0/0 sites on X</option>
+                            <option value="x_het">number of 0/1 sites on X</option>
+                            <option value="x_hom_alt">number of 1/1 sites on X</option>
+                            <option value="y_depth_mean">scaled mean depth on Y</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="row h-100">
+                <div class="col h-100">
+                    <div id="plotb" style="height: 90%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
-<div class = "five columns">
-    <div id="plotb" style="width: 100%; height: 90%"></div>
-        X:
-    <select id="plotbx_select">
-        <option value="gt_depth_mean">mean depth of genotyped sites</option>
-        <option value="depth_mean">mean depth of all sites</option>
 
-        <option value="ab_mean">mean allele balance</option>
-
-        <option value="pct_other_alleles">% reads with neither REF nor ALT</option>
-
-        <option value="n_hom_ref">number of 0/0 sites</option>
-        <option value="n_het">number of 0/1 sites</option>
-        <option value="n_hom_alt">number of 1/1 sites</option>
-        <option value="n_unknown">number of unknown sites</option>
-        <option value="n_known">number of known sites</option>
-        <option value="p_middling_ab">proportion sites with AB &lt; 0.2 or AB &gt; 0.8</option>
-
-
-        <option value="x_depth_mean">scaled mean depth on X</option>
-        <option value="x_hom_ref">number of 0/0 sites on X</option>
-        <option value="x_het">number of 0/1 sites on X</option>
-        <option value="x_hom_alt" selected>number of 1/1 sites on X</option>
-	
-        <option value="y_depth_mean">scaled mean depth on Y</option>
-
-
-    </select>
-    <br/>
-        Y:
-    <select id="plotby_select">
-        <option value="gt_depth_mean">mean depth of genotyped sites</option>
-        <option value="depth_mean">mean depth of all sites</option>
-
-        <option value="ab_mean">mean allele balance</option>
-
-        <option value="pct_other_alleles">% reads with neither REF nor ALT</option>
-
-        <option value="n_hom_ref">number of 0/0 sites</option>
-        <option value="n_het">number of 0/1 sites</option>
-        <option value="n_hom_alt">number of 1/1 sites</option>
-        <option value="n_unknown">number of unknown sites</option>
-        <option value="n_known">number of known sites</option>
-        <option value="p_middling_ab">proportion sites with AB &lt; 0.2 or AB &gt; 0.8</option>
-
-        <option value="x_depth_mean" selected>scaled mean depth on X</option>
-        <option value="x_hom_ref">number of 0/0 sites on X</option>
-        <option value="x_het">number of 0/1 sites on X</option>
-        <option value="x_hom_alt">number of 1/1 sites on X</option>
-	
-        <option value="y_depth_mean">scaled mean depth on Y</option>
-    </select>
-
-</div>
-
-<div class="two columns offset-by-nine columns">
-  <label for="txtAutoComplete">Choose a sample to highlight</label>
-  <input type="text" id="txtAutoComplete" list="sampleList"/>
-  <datalist id="sampleList">
-  </datalist>
-</div>
-
-    <script>
+<script>
 var nan = NaN; // hack to support json dumped with NaN values.
 var input = <INPUT_JSON>
 var sample_data = <SAMPLE_JSON>
-
 input.n_samples = input.samples.length;
 
 var accessors = {
@@ -586,7 +215,7 @@ function get_xy_data_by_group(input, metric, rel_pairs, just_xy) {
     return result
 }
 
-var colors = ['#377eb8bb', '#e41a1cbb', '#4daf4a', '#984ea3', '#ff7f00', '#ffff33', '#a65628', '#f781bf', '#999999', '#e41a1c', '#377eb8', '#4daf4a']
+var colors = ['rgb(55,126,184,0.5)', 'rgb(228,26,28,0.5)', 'rgb(77,175,74,0.5)', 'rgb(152,78,163,0.5)', 'rgb(255,127,0,0.5)', 'rgb(166,86,40,0.5)', 'rgb(247,129,191,0.5)']
 
 var rel_pairs = new Map()
 if ("expected-relatedness" in input) {
@@ -599,8 +228,8 @@ if ("expected-relatedness" in input) {
 }
 
 var layout_a = {
-    dragmode: "lasso",
     autosize: true,
+    margin: {t: 30, pad: 0},
     xaxis: {
         title: jQuery("#plotax_select option:selected").text(),
     },
@@ -609,11 +238,20 @@ var layout_a = {
     },
     hovermode: 'closest',
     showlegend: true,
+    legend: {
+        xanchor: "right",
+        yanchor: "top",
+        y: 1,
+        x: 1,
+        orientation: "h",
+        borderwidth: 1,
+        bordercolor: '#eeeeee'
+    }
 }
 
 var layout_b = {
-    dragmode: "lasso",
     autosize: true,
+    margin: {t: 30, pad: 0},
     xaxis: {
         title: jQuery("#plotbx_select option:selected").text(),
     },
@@ -621,24 +259,32 @@ var layout_b = {
         title: jQuery("#plotby_select option:selected").text(),
     },
     hovermode: 'closest',
-    showlegend: false,
+    showlegend: true,
+    legend: {
+        xanchor: "right",
+        yanchor: "top",
+        y: 1,
+        x: 1,
+        orientation: "h",
+        borderwidth: 1,
+        bordercolor: '#eeeeee'
+	},
 }
-
 
 x_data = get_xy_data_by_group(input, jQuery('#plotax_select').val(), rel_pairs, false)
 y_data = get_xy_data_by_group(input, jQuery('#plotay_select').val(), rel_pairs, false)
-var size = 12
-if(input.n_samples > 20) {
-    size = 10
-}
-if(input.n_samples > 50) {
-    size = 8
-}
-if(input.n_samples > 200) {
-    size = 7
-}
-if(input.n_samples > 700) {
+
+var size
+if (input.n_samples > 700) {
     size = 6
+} else if (input.n_samples > 200) {
+    size = 7
+} else if (input.n_samples > 50) {
+    size = 8
+} else if (input.n_samples > 20) {
+    size = 10
+} else {
+    size = 12
 }
 
 var l = {0: "unrelated", 0.5: "parent-child", 0.49: "sib-sib", 1: "identical"}
@@ -647,7 +293,7 @@ var traces_a = []
 for (i in x_data) {
     var name = l[x_data[i].rel]
     if (name == "undefined") {
-      name = x_data[i].rel
+        name = x_data[i].rel
     }
 
     traces_a.push({
@@ -657,101 +303,117 @@ for (i in x_data) {
         hovertext: x_data[i].text,
         hoverinfo: 'text+x+y',
         ix: x_data[i].ix,
-        // this gets around an apparent bug in plotly webgl instead of using all scattergl.
-        // since first trace is unrelated and with the most points..
-        type: x_data[i].data.length > 5000 ? 'scattergl': 'scatter',
+        type: 'scattergl',
         mode: 'markers',
         marker: {size: size, color: colors[traces_a.length]},
         showlegend:true,
     })
 }
-traces_a.push({mode:"markers", hoverinfo:'text+x+y', showlegend:false, name:'hovered', x:[], y:[], hovertext:[], marker:{size:size+3, opacity: 1, color:'#000000'}})
+// append final trace to hold plot B hover action markers
+traces_a.push({mode:"markers", type:'scattergl', hoverinfo:'text+x+y', showlegend:false, name:'hovered', x:[], y:[], hovertext:[], marker:{size:size+3, opacity: 1, color:'#000000'}})
 
 x_data = null
 y_data = null
 
 var traces_b = [
-  {x:[], y:[], text: [], type: 'scatter', mode: 'markers', marker: {size: size + 3, color: '#bbbbbb', line:{color: '#222', width: []}}, showlegend:false, name: "unknown"},
-  {x:[], y:[], text: [], type: 'scatter', mode: 'markers', marker: {size: size + 3, color: '#99ccff', line:{color: '#222', width: []}}, showlegend:true, name: "male"},
-  {x:[], y:[], text: [], type: 'scatter', mode: 'markers', marker: {size: size + 3, color: '#ff99aa', line:{color: '#222', width: []}}, showlegend:true, name: "female"},
-               ]
+    // gray
+    {x:[], y:[], text: [], type: 'scatter', mode: 'markers', marker: {size: size + 3, color: 'rgba(187,187,187,0.9)', line:{color: '#222', width: []}}, showlegend:false, name: "unknown"},
+    // light blue
+    {x:[], y:[], text: [], type: 'scatter', mode: 'markers', marker: {size: size + 3, color: 'rgba(153,204,255,0.9)', line:{color: '#222', width: []}}, showlegend:true, name: "male"},
+    // light red
+    {x:[], y:[], text: [], type: 'scatter', mode: 'markers', marker: {size: size + 3, color: 'rgba(255,153,170,0.9)', line:{color: '#222', width: []}}, showlegend:true, name: "female"},
+]
 var xf = jQuery('#plotbx_select').val()
 var yf = jQuery('#plotby_select').val()
-for(i in sample_data){
-   var idx = 0;
-   var sex = sample_data[i].sex;
-   if(sex == "male") {idx = 1}
-   if(sex == "female") {idx = 2}
 
-   traces_b[idx].x.push(sample_data[i][xf])
-   traces_b[idx].y.push(sample_data[i][yf])
-   traces_b[idx].text.push("sample:" + sample_data[i].sample)
-   if(sample_data[i]["y_depth_mean"] > 0.2) {
-     traces_b[idx].marker.line.width.push(size < 7 ? 1.5 : 3);
-   } else {
-     traces_b[idx].marker.line.width.push(0);
-   }
+for (i in sample_data) {
+    var idx = 0
+    var sex = sample_data[i].sex
+    if (sex == "male") {
+        idx = 1
+    } else if (sex == "female") {
+        idx = 2
+    }
 
+    traces_b[idx].x.push(sample_data[i][xf])
+    traces_b[idx].y.push(sample_data[i][yf])
+    traces_b[idx].text.push("sample:" + sample_data[i].sample)
+
+    // // individual is male; highlight points of low Y coverage
+    // if (idx == 1) {
+    //     // these samples could be female mislabeled as male
+    //     if (sample_data[i]["y_depth_mean"] <= 0.2) {
+    //         traces_b[idx].marker.line.width.push(size < 7 ? 1.5 : 2)
+    //     } else {
+    //         traces_b[idx].marker.line.width.push(0)
+    //     }
+    // // handle unknown and female
+    // } else {
+    //     // these samples could be male and mislabeled as female
+    //     if (sample_data[i]["y_depth_mean"] > 0.2) {
+    //         traces_b[idx].marker.line.width.push(size < 7 ? 1.5 : 2)
+    //     } else {
+    //         traces_b[idx].marker.line.width.push(0)
+    //     }
+    // }
 }
-
-
-var plota = Plotly.newPlot('plota', traces_a, layout_a)
-var plotb = Plotly.newPlot('plotb', traces_b, layout_b)
 
 var pa = document.getElementById("plota")
 var pb = document.getElementById("plotb")
+var plota = Plotly.newPlot(pa, traces_a, layout_a)
+var plotb = Plotly.newPlot(pb, traces_b, layout_b)
 
-pa.on('plotly_hover',  function(e) {
+pa.on('plotly_hover', function(e) {
     var p = e.points[0]
     var idxs = traces_a[p.curveNumber].ix[p.pointIndex]
-    Plotly.Fx.hover('plotb', [{curveNumber: 0, pointNumber: idxs[0]},
-                         {curveNumber: 0, pointNumber: idxs[1]}])
-    pa_clear(1.0)
+    Plotly.Fx.hover('plotb',
+        [
+            {curveNumber: 0, pointNumber: idxs[0]},
+            {curveNumber: 0, pointNumber: idxs[1]}
+        ]
+    )
 })
 
-pa.on('plotly_unhover',  function(e) {
+pa.on('plotly_unhover', function(e) {
     Plotly.Fx.unhover(pb)
 })
 
 pb.on('plotly_hover',  function(e) {
     var p = e.points[0]
-    if(p.text[6] != ":") {
+    if (p.text[6] != ":") {
         alert("bad sample name:" + p.text[6])
     }
     var sample = p.text.substring(7, p.text.length)
     pa_hover(sample)
 })
 
-function pa_clear(val) {
-    for(j = 0; j < traces_a.length; j++){
-        traces_a[j].marker.opacity = val
-    }
-}
-
-
 function pa_hover(sample) {
     var ht = []
-    var xs = []; var ys = [];
-    for(var j=0;j<traces_a.length-1;j++){
-        var otr = traces_a[j];
-        for(var k=0; k < otr.x.length; k++){
-            if(otr.hovertext[k].startsWith(sample) || otr.hovertext[k].endsWith(sample)) {
+    var xs = []
+    var ys = []
+    for (var j=0; j < traces_a.length-1; j++) {
+        var otr = traces_a[j]
+        for (var k=0; k < otr.x.length; k++) {
+            if (otr.hovertext[k].startsWith(sample) || otr.hovertext[k].endsWith(sample)) {
                 xs.push(otr.x[k])
                 ys.push(otr.y[k])
                 ht.push(otr.hovertext[k])
             }
         }
-
     }
-    traces_a[traces_a.length-1].x = xs;
-    traces_a[traces_a.length-1].y = ys;
-    traces_a[traces_a.length-1].hovertext = ht;
-    
-    pa_clear(0.35)
-    Plotly.react(pa, traces_a, layout_a)
 
+    traces_a[traces_a.length-1].x = xs
+    traces_a[traces_a.length-1].y = ys
+    traces_a[traces_a.length-1].hovertext = ht
+    traces_a[traces_a.length-1].marker.opacity = 1
+
+    // remove all existing markers so highlights will be drawn on top
+    Plotly.purge(pa)
+    // redraw with existing + marker traces
+    Plotly.react(pa, traces_a, layout_a)
 }
 
+// remove the markers and fix opacity on unhover
 pb.on('plotly_unhover',  function(e) {
     traces_a[traces_a.length-1].x = [];
     traces_a[traces_a.length-1].y = [];
@@ -762,7 +424,7 @@ pb.on('plotly_unhover',  function(e) {
     Plotly.react(pa, traces_a, layout_a)
 })
 
-
+// select listeners for plot A
 jQuery('#plotay_select, #plotax_select').on('change', function() {
     var metric = this.value
     var extracted = get_xy_data_by_group(input, metric, rel_pairs, true)
@@ -781,67 +443,75 @@ jQuery('#plotay_select, #plotax_select').on('change', function() {
     Plotly.react(pa, traces_a, layout_a)
 })
 
-
+// select listeners for plot B
 jQuery('#plotbx_select, #plotby_select').on('change', function() {
     var field = this.value
-    var extracted = [[], [], []];
-    for(i in sample_data) {
-        var idx = 0;
-	var sex = sample_data[i].sex
-	if(sex == "male"){ idx = 1}
-	if(sex == "female"){ idx = 2}
+    var extracted = [[], [], []]
+    for (i in sample_data) {
+        var idx = 0
+	    var sex = sample_data[i].sex
+	    if (sex == "male") {
+            idx = 1
+        }
+	    if (sex == "female") {
+            idx = 2
+        }
         extracted[idx].push(sample_data[i][field])
     }
-    if(this.id == 'plotbx_select') {
-      layout_b.xaxis.title = jQuery("#plotbx_select option:selected").text();
-      traces_b[0].x = extracted[0]
-      traces_b[1].x = extracted[1]
-      traces_b[2].x = extracted[2]
+    if (this.id == 'plotbx_select') {
+        layout_b.xaxis.title = jQuery("#plotbx_select option:selected").text()
+        traces_b[0].x = extracted[0]
+        traces_b[1].x = extracted[1]
+        traces_b[2].x = extracted[2]
     } else {
-      layout_b.yaxis.title = jQuery("#plotby_select option:selected").text();
-      traces_b[0].y = extracted[0]
-      traces_b[1].y = extracted[1]
-      traces_b[2].y = extracted[2]
+        layout_b.yaxis.title = jQuery("#plotby_select option:selected").text()
+        traces_b[0].y = extracted[0]
+        traces_b[1].y = extracted[1]
+        traces_b[2].y = extracted[2]
     }
     Plotly.react(pb, traces_b, layout_b)
 })
 
+// responsive plots
 window.onresize = function() {
-    Plotly.Plots.resize('plota');
-    Plotly.Plots.resize('plotb');
+    Plotly.Plots.resize('plota')
+    Plotly.Plots.resize('plotb')
 };
 
-(function() {
-var _sl = jQuery('#sampleList')
-_sl.append('<option value="" />');
-for(var i=0; i < input.n_samples; i++){
-  _sl.append('<option value="' + input.samples[i] + '" />');
-}
-jQuery('#txtAutoComplete').on("click", function() {
-    jQuery(this).val("").trigger("change")
+// sample search
+const sample_list = input.samples.map(function(x) {
+    return { item: x }
 })
-
-jQuery('#txtAutoComplete').on("change", function() {
-  Plotly.Fx.unhover('plota');
-  Plotly.Fx.unhover('plotb');
-  var pb = document.getElementById("plotb")
-
-  if(this.value == "") { return false; }
-  var sample = this.value;
-  for(var i=0; i < pb.data[0].text.length;i++){
-    var p = pb.data[0].text[i];
-    var psample = p.substring(7, p.length)
-    if(sample != psample) { continue; }
-    Plotly.Fx.hover('plotb', [{curveNumber: 0, pointNumber: i}])
-    break;
-  }
+const sample_search = $('#sample-search').selectize({
+    valueField: 'item',
+    labelField: 'item',
+    searchField: 'item',
+    options: sample_list,
+    placeholder: 'Sample ID',
+    mode: 'single',
 })
+const sample_search_obj = sample_search[0].selectize
 
-})()
+$('#sample-search').on('change', function() {
+    // get selection
+    var sample = sample_search_obj.items[0]
+    if (sample) {
+        // get curve and sample index
+        for (let curve_idx=0; curve_idx < pb.data.length; curve_idx++) {
+            for (let sample_idx=0; sample_idx < pb.data[curve_idx].text.length; sample_idx++) {
+                let b_sample = pb.data[curve_idx].text[sample_idx]
+                b_sample = b_sample.substring(7, b_sample.length)
+                if (b_sample == sample) {
+                    Plotly.Fx.hover(pb, [
+                        {curveNumber: curve_idx, pointNumber: sample_idx}
+                    ])
+                    pa_hover(sample)
+                }
+            }
+        }
+    }
+})
 </script>
-<div id="text" class="twelve columns">
-This plot is created by <a href="https://github.com/brentp/somalier" target="_blank">somalier</a>.
-</div>
 
 </body>
 </html>
