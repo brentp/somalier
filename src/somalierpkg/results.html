@@ -15,6 +15,11 @@
         padding: 5px 6px 0px;
         height: unset !important;
     }
+    .remove-single {
+        color: gray !important;
+        top: -1px !important;
+        font-size: 20px !important;
+    }
     </style>
 </head>
 <body>
@@ -31,13 +36,21 @@
     <div>
         <div class="input-group" style="width:300px">
             <input type="text" class="form-control" id="sample-search" aria-label="sample-search">
+            <span class="form-control-clear glyphicon glyphicon-remove form-control-feedback hidden"></span>
         </div>
+
     </div>
+
   </div>
 </nav>
 <div class="container-fluid h-100">
     <div class="row h-100">
         <div class="col-6 h-100 bg-light pt-2 border-right">
+            <div class="row">
+                <div class="col">
+                    <h5>Sample to Sample Relatedness</h5>
+                </div>
+            </div>
             <div class="row pb-2">
                 <div class="col-6">
                     <div class="input-group">
@@ -45,10 +58,10 @@
                             <div class="input-group-text">X Axis</div>
                         </div>
                         <select class="custom-select" id="plotax_select">
-                            <option value="shared_hets" title="the number of sites where both samples are heterozygotes">shared hets</option>
-                            <option value="shared_hom_alts" title="the number of sites where both samples are homozygous alternate">shared hom-alts</option>
-                            <option value="concordance">homozygous concordance</option>
-                            <option value="relatedness">relatedness</option>
+                            <option value="shared_hets" title="the number of sites where both samples are heterozygotes">Shared hets</option>
+                            <option value="shared_hom_alts" title="the number of sites where both samples are homozygous alternate">Shared hom-alts</option>
+                            <option value="concordance">Homozygous concordance</option>
+                            <option value="relatedness">Relatedness</option>
                             <option value="ibs0" title="the number of sites where one sample is hom-ref and another is hom-alt" selected>IBS0</option>
                             <option value="ibs2" title="the number of sites where the samples have the same genotype">IBS2</option>
                         </select>
@@ -60,10 +73,10 @@
                             <div class="input-group-text">Y Axis</div>
                         </div>
                         <select class="custom-select" id="plotay_select">
-                            <option value="shared_hets" title="the number of sites where both samples are heterozygotes">shared hets</option>
-                            <option value="shared_hom_alts" title="the number of sites where both samples are homozygous alternate">shared hom-alts</option>
-                            <option value="concordance">homozygous concordance</option>
-                            <option value="relatedness">relatedness</option>
+                            <option value="shared_hets" title="the number of sites where both samples are heterozygotes">Shared hets</option>
+                            <option value="shared_hom_alts" title="the number of sites where both samples are homozygous alternate">Shared hom-alts</option>
+                            <option value="concordance">Homozygous concordance</option>
+                            <option value="relatedness">Relatedness</option>
                             <option value="ibs0" title="the number of sites where one sample is hom-ref and another is hom-alt">IBS0</option>
                             <option value="ibs2" title="the number of sites where the samples have the same genotype" selected>IBS2</option>
                         </select>
@@ -78,6 +91,11 @@
         </div>
 
         <div class="col-6 h-100 bg-light pt-2">
+            <div class="row pt-0 pb-0">
+                <div class="col pt-0 pb-0">
+                    <h5>Sample Depth Metrics</h5>
+                </div>
+            </div>
             <div class="row pb-2">
                 <div class="col-6">
                     <div class="input-group">
@@ -85,21 +103,21 @@
                             <div class="input-group-text">X Axis</div>
                         </div>
                         <select class="custom-select" id="plotbx_select">
-                            <option value="gt_depth_mean">mean depth of genotyped sites</option>
-                            <option value="depth_mean">mean depth of all sites</option>
-                            <option value="ab_mean">mean allele balance</option>
+                            <option value="gt_depth_mean">Mean depth of genotyped sites</option>
+                            <option value="depth_mean">Mean depth of all sites</option>
+                            <option value="ab_mean">Mean allele balance</option>
                             <option value="pct_other_alleles">% reads with neither REF nor ALT</option>
-                            <option value="n_hom_ref">number of 0/0 sites</option>
-                            <option value="n_het">number of 0/1 sites</option>
-                            <option value="n_hom_alt">number of 1/1 sites</option>
-                            <option value="n_unknown">number of unknown sites</option>
-                            <option value="n_known">number of known sites</option>
-                            <option value="p_middling_ab">proportion sites with AB &lt; 0.2 or AB &gt; 0.8</option>
-                            <option value="x_depth_mean">scaled mean depth on X</option>
-                            <option value="x_hom_ref">number of 0/0 sites on X</option>
-                            <option value="x_het">number of 0/1 sites on X</option>
-                            <option value="x_hom_alt" selected>number of 1/1 sites on X</option>
-                            <option value="y_depth_mean">scaled mean depth on Y</option>
+                            <option value="n_hom_ref">Number of 0/0 sites</option>
+                            <option value="n_het">Number of 0/1 sites</option>
+                            <option value="n_hom_alt">Number of 1/1 sites</option>
+                            <option value="n_unknown">Number of unknown sites</option>
+                            <option value="n_known">Number of known sites</option>
+                            <option value="p_middling_ab">Proportion sites with AB &lt; 0.2 or AB &gt; 0.8</option>
+                            <option value="x_depth_mean">Scaled mean depth on X</option>
+                            <option value="x_hom_ref">Number of 0/0 sites on X</option>
+                            <option value="x_het">Number of 0/1 sites on X</option>
+                            <option value="x_hom_alt" selected>Number of 1/1 sites on X</option>
+                            <option value="y_depth_mean">Scaled mean depth on Y</option>
                         </select>
                     </div>
                 </div>
@@ -109,21 +127,21 @@
                             <div class="input-group-text">Y Axis</div>
                         </div>
                         <select class="custom-select" id="plotby_select">
-                            <option value="gt_depth_mean">mean depth of genotyped sites</option>
-                            <option value="depth_mean">mean depth of all sites</option>
-                            <option value="ab_mean">mean allele balance</option>
+                            <option value="gt_depth_mean">Mean depth of genotyped sites</option>
+                            <option value="depth_mean">Mean depth of all sites</option>
+                            <option value="ab_mean">Mean allele balance</option>
                             <option value="pct_other_alleles">% reads with neither REF nor ALT</option>
-                            <option value="n_hom_ref">number of 0/0 sites</option>
-                            <option value="n_het">number of 0/1 sites</option>
-                            <option value="n_hom_alt">number of 1/1 sites</option>
-                            <option value="n_unknown">number of unknown sites</option>
-                            <option value="n_known">number of known sites</option>
-                            <option value="p_middling_ab">proportion sites with AB &lt; 0.2 or AB &gt; 0.8</option>
-                            <option value="x_depth_mean" selected>scaled mean depth on X</option>
-                            <option value="x_hom_ref">number of 0/0 sites on X</option>
-                            <option value="x_het">number of 0/1 sites on X</option>
-                            <option value="x_hom_alt">number of 1/1 sites on X</option>
-                            <option value="y_depth_mean">scaled mean depth on Y</option>
+                            <option value="n_hom_ref">Number of 0/0 sites</option>
+                            <option value="n_het">Number of 0/1 sites</option>
+                            <option value="n_hom_alt">Number of 1/1 sites</option>
+                            <option value="n_unknown">Number of unknown sites</option>
+                            <option value="n_known">Number of known sites</option>
+                            <option value="p_middling_ab">Proportion sites with AB &lt; 0.2 or AB &gt; 0.8</option>
+                            <option value="x_depth_mean" selected>Scaled mean depth on X</option>
+                            <option value="x_hom_ref">Number of 0/0 sites on X</option>
+                            <option value="x_het">Number of 0/1 sites on X</option>
+                            <option value="x_hom_alt">Number of 1/1 sites on X</option>
+                            <option value="y_depth_mean">Scaled mean depth on Y</option>
                         </select>
                     </div>
                 </div>
@@ -229,7 +247,7 @@ if ("expected-relatedness" in input) {
 
 var layout_a = {
     autosize: true,
-    margin: {t: 30, pad: 0},
+    margin: {t: 50, pad: 0},
     xaxis: {
         title: jQuery("#plotax_select option:selected").text(),
     },
@@ -246,7 +264,7 @@ var layout_a = {
         orientation: "h",
         borderwidth: 1,
         bordercolor: '#eeeeee'
-    }
+    },
 }
 
 var layout_b = {
@@ -360,8 +378,8 @@ for (i in sample_data) {
 
 var pa = document.getElementById("plota")
 var pb = document.getElementById("plotb")
-var plota = Plotly.newPlot(pa, traces_a, layout_a)
-var plotb = Plotly.newPlot(pb, traces_b, layout_b)
+Plotly.newPlot(pa, traces_a, layout_a)
+init_depth_metrics_plot()
 
 pa.on('plotly_hover', function(e) {
     var p = e.points[0]
@@ -378,26 +396,20 @@ pa.on('plotly_unhover', function(e) {
     Plotly.Fx.unhover(pb)
 })
 
-pb.on('plotly_hover',  function(e) {
-    var p = e.points[0]
-    if (p.text[6] != ":") {
-        alert("bad sample name:" + p.text[6])
-    }
-    var sample = p.text.substring(7, p.text.length)
-    pa_hover(sample)
-})
-
 function pa_hover(sample) {
     var ht = []
     var xs = []
     var ys = []
-    for (var j=0; j < traces_a.length-1; j++) {
-        var otr = traces_a[j]
-        for (var k=0; k < otr.x.length; k++) {
-            if (otr.hovertext[k].startsWith(sample) || otr.hovertext[k].endsWith(sample)) {
-                xs.push(otr.x[k])
-                ys.push(otr.y[k])
-                ht.push(otr.hovertext[k])
+    if (sample) {
+        console.log(sample)
+        for (var j=0; j < traces_a.length-1; j++) {
+            var otr = traces_a[j]
+            for (var k=0; k < otr.x.length; k++) {
+                if (otr.hovertext[k].startsWith(sample) || otr.hovertext[k].endsWith(sample)) {
+                    xs.push(otr.x[k])
+                    ys.push(otr.y[k])
+                    ht.push(otr.hovertext[k])
+                }
             }
         }
     }
@@ -413,19 +425,62 @@ function pa_hover(sample) {
     Plotly.react(pa, traces_a, layout_a)
 }
 
-// remove the markers and fix opacity on unhover
-pb.on('plotly_unhover',  function(e) {
-    traces_a[traces_a.length-1].x = [];
-    traces_a[traces_a.length-1].y = [];
-    traces_a[traces_a.length-1].hovertext = [];
-    for(j = 0; j < traces_a.length-1; j++){
-        traces_a[j].marker.opacity = 1
+function select_and_hover() {
+    // get selection
+    var sample = sample_search_obj.items[0]
+    if (sample) {
+        // get curve and sample index
+        for (let curve_idx=0; curve_idx < pb.data.length; curve_idx++) {
+            for (let sample_idx=0; sample_idx < pb.data[curve_idx].text.length; sample_idx++) {
+                let b_sample = pb.data[curve_idx].text[sample_idx]
+                b_sample = b_sample.substring(7, b_sample.length)
+                if (b_sample == sample) {
+                    Plotly.Fx.hover(pb, [
+                        {curveNumber: curve_idx, pointNumber: sample_idx}
+                    ])
+                    pa_hover(sample)
+                }
+            }
+        }
+    } else {
+        // sample de-selected; reset A
+        pa_hover(false)
+        // reset B
+        Plotly.purge(pb)
+        init_depth_metrics_plot()
     }
-    Plotly.react(pa, traces_a, layout_a)
-})
+}
+
+function init_depth_metrics_plot() {
+    Plotly.react(pb, traces_b, layout_b)
+
+    pb.removeAllListeners('plotly_hover')
+    pb.removeAllListeners('plotly_unhover')
+
+    pb.on('plotly_hover',  function(e) {
+        var p = e.points[0]
+        if (p.text[6] != ":") {
+            alert("bad sample name:" + p.text[6])
+        }
+        var sample = p.text.substring(7, p.text.length)
+        pa_hover(sample)
+    })
+
+    // remove the markers and fix opacity on unhover
+    pb.on('plotly_unhover',  function(e) {
+        traces_a[traces_a.length-1].x = [];
+        traces_a[traces_a.length-1].y = [];
+        traces_a[traces_a.length-1].hovertext = [];
+        for(j = 0; j < traces_a.length-1; j++){
+            traces_a[j].marker.opacity = 1
+        }
+        Plotly.react(pa, traces_a, layout_a)
+    })
+}
 
 // select listeners for plot A
 jQuery('#plotay_select, #plotax_select').on('change', function() {
+    pa_hover(false)
     var metric = this.value
     var extracted = get_xy_data_by_group(input, metric, rel_pairs, true)
 
@@ -441,10 +496,12 @@ jQuery('#plotay_select, #plotax_select').on('change', function() {
         }
     }
     Plotly.react(pa, traces_a, layout_a)
+    select_and_hover()
 })
 
 // select listeners for plot B
 jQuery('#plotbx_select, #plotby_select').on('change', function() {
+    console.log("selection on b")
     var field = this.value
     var extracted = [[], [], []]
     for (i in sample_data) {
@@ -470,6 +527,9 @@ jQuery('#plotbx_select, #plotby_select').on('change', function() {
         traces_b[2].y = extracted[2]
     }
     Plotly.react(pb, traces_b, layout_b)
+
+    // check if sample is selected in sample-select dropdown
+    select_and_hover()
 })
 
 // responsive plots
@@ -483,33 +543,19 @@ const sample_list = input.samples.map(function(x) {
     return { item: x }
 })
 const sample_search = $('#sample-search').selectize({
+    plugins: ['remove_button'],
     valueField: 'item',
     labelField: 'item',
     searchField: 'item',
     options: sample_list,
     placeholder: 'Sample ID',
     mode: 'single',
+    closeAfterSelect: false,
 })
 const sample_search_obj = sample_search[0].selectize
 
 $('#sample-search').on('change', function() {
-    // get selection
-    var sample = sample_search_obj.items[0]
-    if (sample) {
-        // get curve and sample index
-        for (let curve_idx=0; curve_idx < pb.data.length; curve_idx++) {
-            for (let sample_idx=0; sample_idx < pb.data[curve_idx].text.length; sample_idx++) {
-                let b_sample = pb.data[curve_idx].text[sample_idx]
-                b_sample = b_sample.substring(7, b_sample.length)
-                if (b_sample == sample) {
-                    Plotly.Fx.hover(pb, [
-                        {curveNumber: curve_idx, pointNumber: sample_idx}
-                    ])
-                    pa_hover(sample)
-                }
-            }
-        }
-    }
+    select_and_hover()
 })
 </script>
 
