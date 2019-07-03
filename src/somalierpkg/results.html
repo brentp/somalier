@@ -36,11 +36,8 @@
     <div>
         <div class="input-group" style="width:300px">
             <input type="text" class="form-control" id="sample-search" aria-label="sample-search">
-            <span class="form-control-clear glyphicon glyphicon-remove form-control-feedback hidden"></span>
         </div>
-
     </div>
-
   </div>
 </nav>
 <div class="container-fluid h-100">
@@ -247,7 +244,7 @@ if ("expected-relatedness" in input) {
 
 var layout_a = {
     autosize: true,
-    margin: {t: 50, pad: 0},
+    margin: {t: 30, pad: 0},
     xaxis: {
         title: jQuery("#plotax_select option:selected").text(),
     },
@@ -401,7 +398,6 @@ function pa_hover(sample) {
     var xs = []
     var ys = []
     if (sample) {
-        console.log(sample)
         for (var j=0; j < traces_a.length-1; j++) {
             var otr = traces_a[j]
             for (var k=0; k < otr.x.length; k++) {
