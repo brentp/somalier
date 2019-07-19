@@ -1,5 +1,5 @@
-v0.2.1 (dev)
-============
+v0.2.1 
+======
 + fix hover in html
 + add --unknown flag for `somalier relate` to set unknown genotypes to hom-ref (useful when merging single-sample VCFs).
 + change sites to be alphabetical by allele so that they are the same between genome builds
@@ -10,6 +10,7 @@ v0.2.1 (dev)
 + better HTML performance for large numbers of samples by sub-sampling individiuals that are expected to be unrelated and that 
   have a calculated relatedness < 0.09.
 + add a `depthview` sub-command to plot the depth of each sample along each chromosome.
++ much nicer html and several fixes thanks to Joe Brown
 
 v0.2.0
 ======

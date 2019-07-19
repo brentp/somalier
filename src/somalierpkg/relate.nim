@@ -135,7 +135,7 @@ proc add_ped_samples(grouped: var seq[pair], samples:seq[Sample], sample_names:s
     if sampleA.id notin ss: continue
     for j, sampleB in samples[i + 1..samples.high]:
       if sampleB.id notin ss: continue
-      var rel = relatedness(sampleA, sampleB, samples)
+      var rel = sampleA.relatedness(sampleB)
       if rel <= 0: continue
       if sampleA.id < sampleB.id:
         grouped.add((sampleA.id, sampleB.id, rel))
