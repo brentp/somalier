@@ -1,3 +1,8 @@
+v0.2.2
+======
++ add a default output directory
++ static build with libcurl
+
 v0.2.1 
 ======
 + fix hover in html
