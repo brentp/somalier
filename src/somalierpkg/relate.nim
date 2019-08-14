@@ -516,7 +516,7 @@ specified as comma-separated groups per line e.g.:
     normal2,tumor2a""")
     option("-p", "--ped", help="optional path to a ped/fam file indicating the expected relationships among samples.")
     option("-d", "--min-depth", default="7", help="only genotype sites with at least this depth.")
-    flag("-u", "--unknown", help="set uknown genotypes to hom-ref. it is often preferable to use this with VCF samples that were not jointly called")
+    flag("-u", "--unknown", help="set unknown genotypes to hom-ref. it is often preferable to use this with VCF samples that were not jointly called")
     option("-o", "--output-prefix", help="output prefix for results.", default="somalier")
     arg("extracted", nargs= -1, help="$sample.somalier files for each sample.")
 
