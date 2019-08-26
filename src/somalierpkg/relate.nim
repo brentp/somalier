@@ -9,8 +9,9 @@ import sets
 import json
 import stats
 import math
-import bpbiopkg/pedfile
+import slivarpkg/pedfile
 import ./results_html
+import ./estimate_contamination
 
 type Stat4 = object
     dp: RunningStat
@@ -429,24 +430,23 @@ proc fill*(r:var relation_matrices, min_depth:int, unk2hr:bool): int =
   # counts of hom-ref, het, hom-alt, unk, hets outside of 0.2..0.8
 
 
-  #[
   var
-    a = newSeq[float32](final.allele_counts[0].len)
-    b = newSeq[float32](final.allele_counts[0].len)
-  for i in 0..<final.allele_counts.len:
-    for k, p in final.allele_counts[i]:
+    a = newSeq[float32](r.allele_counts[0].len)
+    b = newSeq[float32](r.allele_counts[0].len)
+  for i in 0..<r.allele_counts.len:
+    for k, p in r.allele_counts[i]:
       a[k] = p.ab(min_depth)
 
-    for o in 0..<final.allele_counts.len:
+    for o in 0..<r.allele_counts.len:
       if i == o: continue
-      for k, p in final.allele_counts[i]:
+      for k, p in r.allele_counts[i]:
         b[k] = p.ab(min_depth)
 
       # estimate contamination of a, by b
       var res = estimate_contamination(a, b)
       if res[0] == 0 or res[1] < 10: continue
       echo sample_names[i], " contaminated by ", sample_names[o], " =>", res
-  ]#
+
   for rowi in 0..<nsites:
     var nun = 0
     for i, stat in r.stats.mpairs:

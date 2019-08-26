@@ -1,3 +1,8 @@
+v0.2.3 (dev)
+============
++ calculate relatedness correctly for samples with parent-ids specified
+  when the parents are not actually in the pedigree file.
+
 v0.2.2
 ======
 + add a default output directory
