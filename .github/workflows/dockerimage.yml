@@ -10,5 +10,5 @@ jobs:
  
     steps:
     - uses: actions/checkout@v1
-    - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag brentp/somalier:$(date +%s)
+    - name: docker-build
+      run: docker build docker/  --tag brentp/somalier:$(date +%s)

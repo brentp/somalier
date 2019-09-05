@@ -33,7 +33,7 @@ template ab(a:AD): float32 =
 
 const error_rate = 2e-3
 
-proc estimate_contamination(self_abs: seq[float32], other_abs: seq[float32]): (float, int) =
+proc estimate_contamination*(self_abs: seq[float32], other_abs: seq[float32]): (float, int) =
   ## estimate contamination of self, by other.
   var sites_used = 0
   var c: counter

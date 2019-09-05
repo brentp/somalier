@@ -1,5 +1,7 @@
 # somalier: extract informative sites, evaluate relatedness, and perform quality-control
 
+[![Actions Status](https://github.com/brentp/somalier/workflows/Docker%20Image%20CI/badge.svg)](https://github.com/brentp/somalier/actions)
+
 Existing software for checking relatedness requires jointly-called germ-line variant calls,
 but cancer projects have only somatic calls between tumor-normal pairs.
 
