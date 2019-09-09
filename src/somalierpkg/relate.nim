@@ -590,6 +590,22 @@ specified as comma-separated groups per line e.g.:
   stderr.write_line &"[somalier] time to calculate all vs all relatedness with bits: {cpuTime() - t0:.2f}"
 
 
+
+  t0 = cpuTime()
+  var bitarrsx = newSeq[genotypes](final.x_allele_counts.len)
+  for i, c in final.x_allele_counts:
+    bitarrsx[i] = c.to_bits
+  stderr.write_line &"[somalier] time to convert X to bits: {cpuTime() - t0:.2f}"
+
+
+  t0 = cpuTime()
+  for i in 1..bitarrsx.high:
+    for j in 0..<i:
+      tmp = bitarrsx[i].IBS(bitarrsx[j])
+  echo tmp
+
+  stderr.write_line &"[somalier] time to calculate all vs all X relatedness with bits: {cpuTime() - t0:.2f}"
+
   var
     fh_tsv:File
     fh_samples:File
