@@ -1,5 +1,6 @@
 import os
 import strformat
+import bitset
 import times
 import streams
 import argparse
@@ -203,6 +204,19 @@ proc alts*(c:allele_count, min_depth:int=7): int8 {.inline.} =
   if 0.15 < ab and ab < 0.85: return 1
   return -1
 
+proc to_bits*(cs:seq[allele_count], min_depth:int=7): genotypes =
+  result.hom_ref = create_bitset(cs.len)
+  result.het = create_bitset(cs.len)
+  result.hom_alt = create_bitset(cs.len)
+  for i, c in cs:
+    var a = c.alts(min_depth)
+    if a == 0:
+      result.hom_ref.set(i)
+    elif a == 1:
+      result.het.set(i)
+    elif a == 2:
+      result.hom_alt.set(i)
+
 proc krelated*(alts: var seq[int8], ibs: var seq[uint16], n: var seq[uint16], hets: var seq[uint16], homs: var seq[uint16], shared_hom_alts: var seq[uint16], n_samples: int): int {.inline.} =
 
   if alts[n_samples - 1] == 1:
@@ -261,6 +275,7 @@ iterator relatedness(r:relation_matrices, grouped: var seq[pair]): relation =
         # can't calculate relatedness
         bottom = -1'f64
 
+      # shared_hets - 2 * 
       var grelatedness = (r.ibs[sk * r.n_samples + sj].float64 - 2 * r.ibs[sj * r.n_samples + sk].float64) / bottom
       if grelatedness > 0.125:
         grouped.add((sample_names[sj], sample_names[sk], grelatedness))
@@ -536,9 +551,11 @@ specified as comma-separated groups per line e.g.:
   if not opts.output_prefix.endswith(".") or opts.output_prefix.endswith("/"):
     opts.output_prefix &= '.'
 
-  var
-    final = read_extracted(opts.extracted)
-    t0 = cpuTime()
+  var t0 = cpuTime()
+  var final = read_extracted(opts.extracted)
+  stderr.write_line &"[somalier] time to read files for {opts.extracted.len} samples: {cpuTime() - t0:.2f}"
+
+  t0 = cpuTime()
 
   if opts.ped != "":
     samples = parse_ped(opts.ped)
@@ -548,10 +565,31 @@ specified as comma-separated groups per line e.g.:
   groups.add(readGroups(opts.groups))
 
   var n_used_sites = final.fill(min_depth, unk2hr)
+  # HERE
+
+
   var n_samples = final.samples.len
   stderr.write_line &"[somalier] collected sites from all {n_samples} samples"
 
   stderr.write_line &"[somalier] time to calculate relatedness on {n_used_sites} usable sites: {cpuTime() - t0:.2f}"
+
+  t0 = cpuTime()
+  var bitarrs = newSeq[genotypes](final.allele_counts.len)
+  for i, c in final.allele_counts:
+    bitarrs[i] = c.to_bits
+  stderr.write_line &"[somalier] time to convert to bits: {cpuTime() - t0:.2f}"
+
+
+  t0 = cpuTime()
+  var tmp : IBSResult
+  for i in 1..bitarrs.high:
+    for j in 0..<i:
+      tmp = bitarrs[i].IBS(bitarrs[j])
+  echo tmp
+
+  stderr.write_line &"[somalier] time to calculate all vs all relatedness with bits: {cpuTime() - t0:.2f}"
+
+
   var
     fh_tsv:File
     fh_samples:File
