@@ -2,6 +2,8 @@ v0.2.3 (dev)
 ============
 + calculate relatedness correctly for samples with parent-ids specified
   when the parents are not actually in the pedigree file.
++ use bit-vectors to calculate relatedness. this gives about a 250X speedup.
+  with this code, I can now evaluate relatedness for 3756 in under 30 seconds on my laptop.
 
 v0.2.2
 ======

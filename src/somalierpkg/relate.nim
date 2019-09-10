@@ -8,7 +8,7 @@ import strutils
 import tables
 import sets
 import json
-import stats
+import ./litestats
 import math
 import slivarpkg/pedfile
 import ./results_html
@@ -44,8 +44,6 @@ type relation_matrices = object
   sites_tested: int
   ibs: seq[uint16]
   n: seq[uint16]
-  hets: seq[uint16]
-  homs: seq[uint16]
   x: seq[uint16]
   shared_hom_alts: seq[uint16]
   samples: seq[string]
@@ -55,30 +53,18 @@ type relation_matrices = object
   y_allele_counts: seq[seq[allele_count]]
   stats: seq[Stat4]
   gt_counts: array[5, seq[uint16]]
+  genotypes: seq[genotypes]
+  x_genotypes: seq[genotypes]
 
 proc `%`*(r:relation_matrices): JsonNode =
   result = %* {
      "ibs": r.ibs,
      "n": r.n,
-     "hets": r.hets,
-     "homs": r.hets,
+     "hets": r.gt_counts[1],
+     "homs": r.gt_counts[2],
      "shared_hom_alts": r.shared_hom_alts,
      "samples": r.samples
      }
-
-
-proc xrelated(alts: var seq[int8], x: var seq[uint16], n_samples:int): int {.inline.} =
-  for j in 0..<(n_samples - 1):
-    var aj = alts[j]
-    if aj == -1: continue
-    for k in (j+1..<n_samples):
-      var ak = alts[k]
-      if ak == -1: continue
-
-      if aj == ak: #ibs2
-        x[k * n_samples + j] += 1
-      elif aj + ak == 2: #ibs0
-        x[j * n_samples + k] += 1
 
 
 type relation = object
@@ -104,13 +90,8 @@ proc rel(r:relation): float64 {.inline.} =
 
 const header = "$sample_a\t$sample_b\t$relatedness\t$hom_concordance\t$hets_a\t$hets_b\t$shared_hets\t$hom_alts_a\t$hom_alts_b\t$shared_hom_alts\t$ibs0\t$ibs2\t$n\t$x_ibs0\t$x_ibs2"
 proc `$`(r:relation): string =
-  return header % [
-         "sample_a", r.sample_a, "sample_b", r.sample_b,
-         "relatedness", formatFloat(r.rel, ffDecimal, precision=3),
-         "hom_concordance", formatFloat(r.hom_alt_concordance, ffDecimal, precision=3),
-         "hets_a", $r.hets_a, "hets_b", $r.hets_b,
-         "shared_hets", $r.shared_hets, "hom_alts_a", $r.hom_alts_a, "hom_alts_b", $r.hom_alts_b, "shared_hom_alts", $r.shared_hom_alts, "ibs0", $r.ibs0, "ibs2", $r.ibs2, "n", $r.n,
-         "x_ibs0", $r.x_ibs0, "x_ibs2", $r.x_ibs2]
+  result = &"{r.sample_a}\t{r.sample_b}\t{r.rel:.3f}\t{r.hom_alt_concordance:.3f}\t{r.hets_a}\t{r.hets_b}\t{r.shared_hets}\t{r.hom_alts_a}\t{r.hom_alts_b}\t{r.shared_hom_alts}\t{r.ibs0}\t{r.ibs2}\t{r.n}\t{r.x_ibs0}\t{r.xibs2}"
+
 
 proc `%`*(v:uint16): JsonNode =
   result = JsonNode(kind: JInt, num:v.int64)
@@ -165,9 +146,91 @@ proc readGroups(path:string): seq[pair] =
         else:
           result.add((y, x, rel))
 
-
 proc n_samples(r: relation_matrices): int {.inline.} =
   return r.samples.len
+#[
+iterator relatedness(r:relation_matrices, grouped: var seq[pair]): relation =
+  var sample_names = r.samples
+
+  for sj in 0..<r.n_samples - 1:
+    for sk in sj + 1..<r.n_samples:
+      if sj == sk: quit "logic error"
+
+      var bottom: float64 = 0
+      if (r.hets[sj] > 0'u16) and (r.hets[sk] > 0'u16):
+        bottom = 2 / (1 / r.hets[sk].float64 + 1 / r.hets[sj].float64).float64
+      else:
+        bottom = max(r.hets[sk], r.hets[sj]).float64
+      if bottom == 0:
+        # can't calculate relatedness
+        bottom = -1'f64
+
+      # shared_hets - 2 * 
+      var grelatedness = (r.ibs[sk * r.n_samples + sj].float64 - 2 * r.ibs[sj * r.n_samples + sk].float64) / bottom
+      if grelatedness > 0.125:
+        grouped.add((sample_names[sj], sample_names[sk], grelatedness))
+      yield relation(sample_a: sample_names[sj],
+                     sample_b: sample_names[sk],
+                     hets_a: r.hets[sj], hets_b: r.hets[sk],
+                     hom_alts_a: r.homs[sj], hom_alts_b: r.homs[sk],
+                     ibs0: r.ibs[sj * r.n_samples + sk],
+                     shared_hets: r.ibs[sk * r.n_samples + sj],
+                     shared_hom_alts: r.shared_hom_alts[sj * r.n_samples + sk],
+                     ibs2: r.n[sk * r.n_samples + sj],
+                     n: r.n[sj * r.n_samples + sk],
+                     x_ibs0: r.x[sj * r.n_samples + sk],
+                     x_ibs2: r.x[sk * r.n_samples + sj])
+]#
+
+iterator relatedness(r: var relation_matrices, grouped: var seq[pair]): relation =
+  var
+    ir:IBSResult
+    xir:IBSResult
+    sample_names = r.samples
+
+  for j in 0..<r.genotypes.high:
+    let hets_j = r.gt_counts[1][j]
+    for k in (j + 1) .. r.genotypes.high:
+      let hets_k = r.gt_counts[1][k]
+
+      var bottom: float64 = 0
+      if (hets_j > 0'u16) and (hets_k > 0'u16):
+        bottom = 2 / (1 / hets_k.float64 + 1 / hets_j.float64).float64
+      else:
+        bottom = max(hets_j, hets_k).float64
+      if bottom == 0:
+        # can't calculate relatedness
+        bottom = -1'f64
+
+      ir = r.genotypes[j].IBS(r.genotypes[k])
+      let grel = (ir.shared_hets.float64 - 2 * ir.IBS0.float64) / bottom
+      if grel > 0.125:
+        grouped.add((sample_names[j], sample_names[k], grel))
+      # now fill the matrices so they can be used from javascript
+      r.ibs[j * r.n_samples + k] = ir.IBS0.uint16
+      r.ibs[k * r.n_samples + j] = ir.shared_hets.uint16
+      r.n[j * r.n_samples + k] = ir.N.uint16
+      r.n[k * r.n_samples + j] = ir.IBS2.uint16
+      r.shared_hom_alts[j * r.n_samples + k] = ir.shared_hom_alts.uint16
+
+      xir = r.x_genotypes[j].XIBS(r.x_genotypes[k])
+      r.x[j * r.n_samples + k] = xir.IBS0.uint16
+      r.x[k * r.n_samples + j] = xir.IBS2.uint16
+
+      yield relation(sample_a: sample_names[j],
+                     sample_b: sample_names[k],
+                     hets_a: hets_j, hets_b: hets_k,
+                     hom_alts_a: r.gt_counts[2][j], hom_alts_b: r.gt_counts[2][k],
+                     ibs0: ir.IBS0.uint16,
+                     shared_hets: ir.shared_hets.uint16,
+                     shared_hom_alts: ir.shared_hom_alts.uint16,
+                     ibs2: ir.IBS2.uint16,
+                     n: ir.N.uint16,
+                     x_ibs0: xir.IBS0.uint16,
+                     x_ibs2: xir.IBS2.uint16,
+                     )
+
+
 
 template proportion_other(c:allele_count): float =
   if c.nother == 0: 0'f else: c.nother.float / (c.nother + c.nref + c.nalt).float
@@ -208,6 +271,7 @@ proc to_bits*(cs:seq[allele_count], min_depth:int=7): genotypes =
   result.hom_ref = create_bitset(cs.len)
   result.het = create_bitset(cs.len)
   result.hom_alt = create_bitset(cs.len)
+
   for i, c in cs:
     var a = c.alts(min_depth)
     if a == 0:
@@ -216,115 +280,69 @@ proc to_bits*(cs:seq[allele_count], min_depth:int=7): genotypes =
       result.het.set(i)
     elif a == 2:
       result.hom_alt.set(i)
-
-proc krelated*(alts: var seq[int8], ibs: var seq[uint16], n: var seq[uint16], hets: var seq[uint16], homs: var seq[uint16], shared_hom_alts: var seq[uint16], n_samples: int): int {.inline.} =
-
-  if alts[n_samples - 1] == 1:
-    hets[n_samples-1] += 1
-  elif alts[n_samples - 1] == 2:
-    homs[n_samples-1] += 1
-
-  var is_het: bool
-  var aj, ak: int8
-  var nused = 0
-
-  for j in 0..<(n_samples-1):
-    aj = alts[j]
-    if aj == -1: continue
-    is_het = (aj == 1)
-
-    if is_het:
-      hets[j] += 1
-    elif aj == 2:
-      homs[j] += 1
-
-    nused += 1
-
-    for k in j+1..<n_samples:
-      ak = alts[k]
-      if ak == -1: continue
-      n[j * n_samples + k] += 1
-      if is_het:
-        # shared hets
-        if ak == 1:
-          ibs[k * n_samples + j] += 1
-      else:
-        # ibs0
-        if aj != ak and aj + ak == 2:
-          ibs[j * n_samples + k] += 1
-      # ibs2
-      if aj == ak: #and not is_het:
-        n[k * n_samples + j] += 1
-        if aj == 2:
-          shared_hom_alts[j * n_samples + k] += 1
-  return nused
-
-iterator relatedness(r:relation_matrices, grouped: var seq[pair]): relation =
-  var sample_names = r.samples
-
-  for sj in 0..<r.n_samples - 1:
-    for sk in sj + 1..<r.n_samples:
-      if sj == sk: quit "logic error"
-
-      var bottom: float64 = 0
-      if (r.hets[sj] > 0'u16) and (r.hets[sk] > 0'u16):
-        bottom = 2 / (1 / r.hets[sk].float64 + 1 / r.hets[sj].float64).float64
-      else:
-        bottom = max(r.hets[sk], r.hets[sj]).float64
-      if bottom == 0:
-        # can't calculate relatedness
-        bottom = -1'f64
-
-      # shared_hets - 2 * 
-      var grelatedness = (r.ibs[sk * r.n_samples + sj].float64 - 2 * r.ibs[sj * r.n_samples + sk].float64) / bottom
-      if grelatedness > 0.125:
-        grouped.add((sample_names[sj], sample_names[sk], grelatedness))
-      yield relation(sample_a: sample_names[sj],
-                     sample_b: sample_names[sk],
-                     hets_a: r.hets[sj], hets_b: r.hets[sk],
-                     hom_alts_a: r.homs[sj], hom_alts_b: r.homs[sk],
-                     ibs0: r.ibs[sj * r.n_samples + sk],
-                     shared_hets: r.ibs[sk * r.n_samples + sj],
-                     shared_hom_alts: r.shared_hom_alts[sj * r.n_samples + sk],
-                     ibs2: r.n[sk * r.n_samples + sj],
-                     n: r.n[sj * r.n_samples + sk],
-                     x_ibs0: r.x[sj * r.n_samples + sk],
-                     x_ibs2: r.x[sk * r.n_samples + sj])
 {.pop.}
 
-proc read_extracted*(path: string, cnt: var counts) =
-  # read a single sample, used by versus
-  var f = newFileStream(path, fmRead)
-  var sl: uint8 = 0
-  discard f.readData(sl.addr, sizeof(sl))
-  doAssert sl == formatVersion, &"expected matching versions got {sl}, expected {formatVersion}"
+proc fill_sample_info(r:var relation_matrices, sample_i:int, min_depth:int, unk2hr:bool) =
 
-  discard f.readData(sl.addr, sizeof(sl))
-  cnt.sample_name = newString(sl)
-  var n_sites: uint16
-  var nx_sites: uint16
-  var ny_sites: uint16
+  var n = r.allele_counts[sample_i].len
+  r.genotypes[sample_i].hom_ref = create_bitset(n)
+  r.genotypes[sample_i].het = create_bitset(n)
+  r.genotypes[sample_i].hom_alt = create_bitset(n)
+
+  var stat = r.stats[sample_i]
+  for k, c in r.allele_counts[sample_i]:
+    var abi = c.ab(min_depth)
+    if abi < 0 and unk2hr: abi = 0
+    stat.dp.push(int(c.nref + c.nalt))
+    if c.nref > 0'u32 or c.nalt > 0'u32 or c.nother > 0'u32:
+      stat.un.push(c.nother.float64 / float64(c.nref + c.nalt + c.nother))
+      # TODO: why is this here?
+    if c.nref.float > min_depth / 2 or c.nalt.float > min_depth / 2:
+      stat.ab.push(abi)
+    if abi != -1:
+      stat.gtdp.push(int(c.nref + c.nalt))
+    var alt = abi.alts
+    if alt < 0 and unk2hr: alt = 0
+    if abi > 0.02 and abi < 0.98 and (abi < 0.1 or abi > 0.9):
+      r.gt_counts[4][sample_i].inc
+    if alt == -1:
+      r.gt_counts[3][sample_i].inc
+    else:
+      r.gt_counts[alt][sample_i].inc
+      if alt == 0:
+        r.genotypes[sample_i].hom_ref.set(k)
+      elif alt == 1:
+        r.genotypes[sample_i].het.set(k)
+      elif alt == 2:
+        r.genotypes[sample_i].hom_alt.set(k)
 
 
-  discard f.readData(cnt.sample_name[0].addr, sl.int)
-  discard f.readData(n_sites.addr, n_sites.sizeof.int)
-  discard f.readData(nx_sites.addr, nx_sites.sizeof.int)
-  discard f.readData(ny_sites.addr, ny_sites.sizeof.int)
-  if cnt.sites.len.uint16 != n_sites:
-    cnt.sites = newSeq[allele_count](n_sites)
-  if cnt.x_sites.len.uint16 != nx_sites:
-    cnt.x_sites = newSeq[allele_count](nx_sites)
-  if cnt.y_sites.len.uint16 != ny_sites:
-    cnt.y_sites = newSeq[allele_count](ny_sites)
-  if nsites > 0'u16:
-    doAssert n_sites.int * sizeof(cnt.sites[0]) == f.readData(cnt.sites[0].addr, nsites.int * sizeof(cnt.sites[0]))
-  if nxsites > 0'u16:
-    doAssert nx_sites.int * sizeof(cnt.x_sites[0]) == f.readData(cnt.x_sites[0].addr, nx_sites.int * sizeof(cnt.x_sites[0]))
-  if nysites > 0'u16:
-    doAssert ny_sites.int * sizeof(cnt.y_sites[0]) == f.readData(cnt.y_sites[0].addr, ny_sites.int * sizeof(cnt.y_sites[0]))
-  f.close()
+  n = r.x_allele_counts[sample_i].len
+  r.x_genotypes[sample_i].hom_ref = create_bitset(n)
+  r.x_genotypes[sample_i].het = create_bitset(n)
+  r.x_genotypes[sample_i].hom_alt = create_bitset(n)
+  for k, c in r.x_allele_counts[sample_i]:
+    var alt = c.alts
+    if alt == -1: continue
+    stat.x_dp.push(c.depth.float)
+    if alt == 0:
+      stat.x_hom_ref.inc
+      r.x_genotypes[sample_i].hom_ref.set(k)
+    elif alt == 1:
+      stat.x_het.inc
+      r.x_genotypes[sample_i].het.set(k)
+    elif alt == 2:
+      stat.x_hom_alt.inc
+      r.x_genotypes[sample_i].hom_alt.set(k)
 
-proc read_extracted*(paths: seq[string]): relation_matrices =
+  for c in r.y_allele_counts[sample_i]:
+    var alt = c.alts
+    if alt == -1: continue
+    stat.y_dp.push(c.depth.float)
+  r.stats[sample_i] = stat
+
+
+proc read_extracted*(paths: seq[string], min_depth:int, unk2hr:bool): relation_matrices =
   var n_samples = paths.len
 
   # aggregated from all samples
@@ -332,13 +350,13 @@ proc read_extracted*(paths: seq[string]): relation_matrices =
                              n: newSeq[uint16](n_samples * n_samples),
                              shared_hom_alts: newSeq[uint16](n_samples * n_samples),
                              x: newSeq[uint16](n_samples * n_samples),
-                             hets: newSeq[uint16](n_samples),
-                             homs: newSeq[uint16](n_samples),
                              samples: newSeq[string](n_samples),
                              allele_counts: newSeq[seq[allele_count]](n_samples),
                              x_allele_counts: newSeq[seq[allele_count]](n_samples),
                              y_allele_counts: newSeq[seq[allele_count]](n_samples),
                              stats: newSeq[Stat4](n_samples),
+                             genotypes: newSeq[genotypes](n_samples),
+                             x_genotypes: newSeq[genotypes](n_samples),
                              )
   var
     nsites = 0'u16
@@ -382,6 +400,8 @@ proc read_extracted*(paths: seq[string]): relation_matrices =
 
     f.close()
 
+    result.fill_sample_info(i, min_depth, unk2hr)
+
 
 proc write(fh:File, sample_names: seq[string], stats: seq[Stat4], gt_counts: array[5, seq[uint16]], sample_sex: TableRef[string, string]) =
   fh.write("#sample\tpedigree_sex\tgt_depth_mean\tgt_depth_sd\tdepth_mean\tdepth_sd\tab_mean\tab_std\tn_hom_ref\tn_het\tn_hom_alt\tn_unknown\tp_middling_ab\t")
@@ -389,12 +409,12 @@ proc write(fh:File, sample_names: seq[string], stats: seq[Stat4], gt_counts: arr
   fh.write("Y_depth_mean\tY_n\n")
   for i, sample in sample_names:
     fh.write(&"{sample}\t{sample_sex.getOrDefault(sample)}\t")
-    fh.write(&"{stats[i].gtdp.mean():.1f}\t{stats[i].gtdp.standard_deviation():.1f}\t")
-    fh.write(&"{stats[i].dp.mean():.1f}\t{stats[i].dp.standard_deviation():.1f}\t")
-    fh.write(&"{stats[i].ab.mean():.2f}\t{stats[i].ab.standard_deviation():.2f}\t{gt_counts[0][i]}\t{gt_counts[1][i]}\t{gt_counts[2][i]}\t{gt_counts[3][i]}\t")
+    fh.write(&"{stats[i].gtdp.mean:.1f}\t{stats[i].gtdp.standard_deviation():.1f}\t")
+    fh.write(&"{stats[i].dp.mean:.1f}\t{stats[i].dp.standard_deviation():.1f}\t")
+    fh.write(&"{stats[i].ab.mean:.2f}\t{stats[i].ab.standard_deviation():.2f}\t{gt_counts[0][i]}\t{gt_counts[1][i]}\t{gt_counts[2][i]}\t{gt_counts[3][i]}\t")
     fh.write(&"{gt_counts[4][i].float / (gt_counts[0][i] + gt_counts[1][i] + gt_counts[2][i] + gt_counts[3][i] + gt_counts[4][i]).float:.3f}\t")
-    fh.write(&"{stats[i].x_dp.mean():.2f}\t{stats[i].x_dp.n}\t{stats[i].x_hom_ref}\t{stats[i].x_het}\t{stats[i].x_hom_alt}\t")
-    fh.write(&"{stats[i].y_dp.mean():.2f}\t{stats[i].y_dp.n}\n")
+    fh.write(&"{stats[i].x_dp.mean:.2f}\t{stats[i].x_dp.n}\t{stats[i].x_hom_ref}\t{stats[i].x_het}\t{stats[i].x_hom_alt}\t")
+    fh.write(&"{stats[i].y_dp.mean:.2f}\t{stats[i].y_dp.n}\n")
   fh.close()
 
 proc toj(sample_names: seq[string], stats: seq[Stat4], gt_counts: array[5, seq[uint16]], sample_sex: TableRef[string, string]): string =
@@ -406,11 +426,11 @@ proc toj(sample_names: seq[string], stats: seq[Stat4], gt_counts: array[5, seq[u
       "sample": s,
       "sex": sample_sex.getOrDefault(s, "unknown"),
 
-      "gt_depth_mean": stats[i].gtdp.mean(),
+      "gt_depth_mean": stats[i].gtdp.mean,
 
-      "depth_mean": stats[i].dp.mean(),
+      "depth_mean": stats[i].dp.mean,
 
-      "ab_mean": stats[i].ab.mean(),
+      "ab_mean": stats[i].ab.mean,
       "pct_other_alleles": 100.0 * stats[i].un.mean,
       "n_hom_ref": gt_counts[0][i],
       "n_het": gt_counts[1][i],
@@ -419,12 +439,12 @@ proc toj(sample_names: seq[string], stats: seq[Stat4], gt_counts: array[5, seq[u
       "n_known": gt_counts[0][i] + gt_counts[1][i] + gt_counts[2][i],
       "p_middling_ab": gt_counts[4][i].float / (gt_counts[0][i] + gt_counts[1][i] + gt_counts[2][i] + gt_counts[3][i] + gt_counts[4][i]).float,
 
-      "x_depth_mean": 2 * stats[i].x_dp.mean() / stats[i].dp.mean(),
+      "x_depth_mean": 2 * stats[i].x_dp.mean / stats[i].dp.mean,
       "x_hom_ref": stats[i].x_hom_ref,
       "x_het": stats[i].x_het,
       "x_hom_alt": stats[i].x_hom_alt,
 
-      "y_depth_mean": 2 * stats[i].y_dp.mean() / stats[i].dp.mean(),
+      "y_depth_mean": 2 * stats[i].y_dp.mean / stats[i].dp.mean,
     }
     ))
   result.add("]")
@@ -433,89 +453,6 @@ proc to_sex_lookup(samples: seq[Sample]): TableRef[string, string] =
   result = newTable[string, string]()
   for s in samples:
     result[s.id] = if s.sex == 1: "male" elif s.sex == 2: "female" else: "unknown"
-
-proc fill*(r:var relation_matrices, min_depth:int, unk2hr:bool): int =
-  var
-    sample_names = r.samples
-    n_samples = sample_names.len
-
-  var nsites = r.allele_counts[0].len
-  var n_used_sites = 0
-  var alts = newSeq[int8](n_samples)
-  # counts of hom-ref, het, hom-alt, unk, hets outside of 0.2..0.8
-
-
-  var
-    a = newSeq[float32](r.allele_counts[0].len)
-    b = newSeq[float32](r.allele_counts[0].len)
-  for i in 0..<r.allele_counts.len:
-    for k, p in r.allele_counts[i]:
-      a[k] = p.ab(min_depth)
-
-    for o in 0..<r.allele_counts.len:
-      if i == o: continue
-      for k, p in r.allele_counts[i]:
-        b[k] = p.ab(min_depth)
-
-      # estimate contamination of a, by b
-      var res = estimate_contamination(a, b)
-      if res[0] == 0 or res[1] < 10: continue
-      echo sample_names[i], " contaminated by ", sample_names[o], " =>", res
-
-  for rowi in 0..<nsites:
-    var nun = 0
-    for i, stat in r.stats.mpairs:
-      var c = r.allele_counts[i][rowi]
-      var abi = c.ab(min_depth)
-      if abi < 0 and unk2hr: abi = 0
-      stat.dp.push(int(c.nref + c.nalt))
-      if c.nref > 0'u32 or c.nalt > 0'u32 or c.nother > 0'u32:
-        stat.un.push(c.nother.float64 / float64(c.nref + c.nalt + c.nother))
-      # TODO: why is this here?
-      if c.nref.float > min_depth / 2 or c.nalt.float > min_depth / 2:
-        stat.ab.push(abi)
-      if abi != -1:
-        stat.gtdp.push(int(c.nref + c.nalt))
-
-      alts[i] = abi.alts
-      if alts[i] < 0 and unk2hr: alts[i] = 0
-      if abi > 0.02 and abi < 0.98 and (abi < 0.1 or abi > 0.9):
-        r.gt_counts[4][i].inc
-      if alts[i] == -1:
-        nun.inc
-        r.gt_counts[3][i].inc
-      else:
-        r.gt_counts[alts[i].int][i].inc
-
-    if nun.float64 / n_samples.float64 > 0.6: continue
-    n_used_sites += 1
-
-    discard krelated(alts, r.ibs, r.n, r.hets, r.homs, r.shared_hom_alts, n_samples)
-
-  for rowi in 0..<r.x_allele_counts[0].len:
-    for i, stat in r.stats.mpairs:
-      var c = r.x_allele_counts[i][rowi]
-      # NOTE: we just skip missed sites on X
-      var alt = c.alts
-      alts[i] = alt
-      if alt == -1: continue
-      stat.x_dp.push(int(c.depth))
-      if alt == 0:
-        stat.x_hom_ref.inc
-      elif alt == 1:
-        stat.x_het.inc
-      elif alt == 2:
-        stat.x_hom_alt.inc
-    discard xrelated(alts, r.x, n_samples)
-
-  for rowi in 0..<r.y_allele_counts[0].len:
-    for i, stat in r.stats.mpairs:
-      var c = r.y_allele_counts[i][rowi]
-      var abi = c.ab(min_depth)
-      # NOTE: we just skip missed sites on Y
-      if abi == -1: continue
-      stat.y_dp.push(int(c.nref + c.nalt))
-  return n_used_sites
 
 proc rel_main*() =
   ## need to track samples names from bams first, then vcfs since
@@ -552,59 +489,22 @@ specified as comma-separated groups per line e.g.:
     opts.output_prefix &= '.'
 
   var t0 = cpuTime()
-  var final = read_extracted(opts.extracted)
-  stderr.write_line &"[somalier] time to read files for {opts.extracted.len} samples: {cpuTime() - t0:.2f}"
-
+  var final = read_extracted(opts.extracted, min_depth, unk2hr)
+  var n_samples = final.samples.len
+  stderr.write_line &"[somalier] time to read files and get per-sample stats for {n_samples} samples: {cpuTime() - t0:.2f}"
   t0 = cpuTime()
 
   if opts.ped != "":
     samples = parse_ped(opts.ped)
-
+  if samples.len > 30000:
+    stderr.write_line "[somalier] WARNING!! somalier will work fine for even 100K samples, but it is not optimal for such scenarios."
+    stderr.write_line "[somalier] ......... please open an issue at: https://github.com/brentp/somalier/issues as larger cohorts"
+    stderr.write_line "[somalier] ......... can be supported."
 
   groups.add_ped_samples(samples, final.samples)
   groups.add(readGroups(opts.groups))
+  stderr.write_line &"[somalier] time to get expected relatedness from pedigree graph: {cpuTime() - t0:.2f}"
 
-  var n_used_sites = final.fill(min_depth, unk2hr)
-  # HERE
-
-
-  var n_samples = final.samples.len
-  stderr.write_line &"[somalier] collected sites from all {n_samples} samples"
-
-  stderr.write_line &"[somalier] time to calculate relatedness on {n_used_sites} usable sites: {cpuTime() - t0:.2f}"
-
-  t0 = cpuTime()
-  var bitarrs = newSeq[genotypes](final.allele_counts.len)
-  for i, c in final.allele_counts:
-    bitarrs[i] = c.to_bits
-  stderr.write_line &"[somalier] time to convert to bits: {cpuTime() - t0:.2f}"
-
-
-  t0 = cpuTime()
-  var tmp : IBSResult
-  for i in 1..bitarrs.high:
-    for j in 0..<i:
-      tmp = bitarrs[i].IBS(bitarrs[j])
-  echo tmp
-
-  stderr.write_line &"[somalier] time to calculate all vs all relatedness with bits: {cpuTime() - t0:.2f}"
-
-
-
-  t0 = cpuTime()
-  var bitarrsx = newSeq[genotypes](final.x_allele_counts.len)
-  for i, c in final.x_allele_counts:
-    bitarrsx[i] = c.to_bits
-  stderr.write_line &"[somalier] time to convert X to bits: {cpuTime() - t0:.2f}"
-
-
-  t0 = cpuTime()
-  for i in 1..bitarrsx.high:
-    for j in 0..<i:
-      tmp = bitarrsx[i].IBS(bitarrsx[j])
-  echo tmp
-
-  stderr.write_line &"[somalier] time to calculate all vs all X relatedness with bits: {cpuTime() - t0:.2f}"
 
   var
     fh_tsv:File
@@ -621,10 +521,15 @@ specified as comma-separated groups per line e.g.:
   if not open(fh_html, opts.output_prefix & "html", fmWrite):
     quit "couldn't open html output file"
 
+  t0 = cpuTime()
+
   fh_tsv.write_line '#', header.replace("$", "")
   var sample_sexes = samples.to_sex_lookup
-  for rel in relatedness(final, grouped):
+  var npairs:int
+  for rel in final.relatedness(grouped):
     fh_tsv.write_line $rel
+    npairs.inc
+  stderr.write_line &"[somalier] time to calculate all vs all relatedness for all {npairs} combinations: {cpuTime() - t0:.2f}"
 
   var j = % final
   j["expected-relatedness"] = %* groups
@@ -633,7 +538,6 @@ specified as comma-separated groups per line e.g.:
   stderr.write_line("[somalier] wrote interactive HTML output to: ",  opts.output_prefix & "html")
 
   fh_samples.write(final.samples, final.stats, final.gt_counts, sample_sexes)
-
 
   fh_tsv.close()
   grouped.write(opts.output_prefix)

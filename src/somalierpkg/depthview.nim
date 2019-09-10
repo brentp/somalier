@@ -139,6 +139,38 @@ proc drop(by_chrom: var TableRef[string, seq[Trace]], rscs: var seq[RunningStat]
     for i, t in traces.mpairs:
       t.drop(chrom, rscs[i], z)
 
+proc read_extracted*(path: string, cnt: var counts) =
+  # read a single sample, used by versus
+  var f = newFileStream(path, fmRead)
+  var sl: uint8 = 0
+  discard f.readData(sl.addr, sizeof(sl))
+  doAssert sl == formatVersion, &"expected matching versions got {sl}, expected {formatVersion}"
+
+  discard f.readData(sl.addr, sizeof(sl))
+  cnt.sample_name = newString(sl)
+  var n_sites: uint16
+  var nx_sites: uint16
+  var ny_sites: uint16
+
+
+  discard f.readData(cnt.sample_name[0].addr, sl.int)
+  discard f.readData(n_sites.addr, n_sites.sizeof.int)
+  discard f.readData(nx_sites.addr, nx_sites.sizeof.int)
+  discard f.readData(ny_sites.addr, ny_sites.sizeof.int)
+  if cnt.sites.len.uint16 != n_sites:
+    cnt.sites = newSeq[allele_count](n_sites)
+  if cnt.x_sites.len.uint16 != nx_sites:
+    cnt.x_sites = newSeq[allele_count](nx_sites)
+  if cnt.y_sites.len.uint16 != ny_sites:
+    cnt.y_sites = newSeq[allele_count](ny_sites)
+  if nsites > 0'u16:
+    doAssert n_sites.int * sizeof(cnt.sites[0]) == f.readData(cnt.sites[0].addr, nsites.int * sizeof(cnt.sites[0]))
+  if nxsites > 0'u16:
+    doAssert nx_sites.int * sizeof(cnt.x_sites[0]) == f.readData(cnt.x_sites[0].addr, nx_sites.int * sizeof(cnt.x_sites[0]))
+  if nysites > 0'u16:
+    doAssert ny_sites.int * sizeof(cnt.y_sites[0]) == f.readData(cnt.y_sites[0].addr, ny_sites.int * sizeof(cnt.y_sites[0]))
+  f.close()
+
 proc depth_main*() =
 
   var argv = commandLineParams()

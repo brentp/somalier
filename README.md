@@ -24,7 +24,7 @@ somalier relate --ped $pedigree extracted/*.somalier
 This will create text and interactive HTML output that's produced (similar to [peddy](https://github.com/brentp/peddy))
 makes it fast and easy to detect mismatched samples and sample-swaps.
 
-Note that the `somalier relate` command runs extremely quickly (10 seconds for 600 samples) so it's possible
+Note that the `somalier relate` command runs extremely quickly (< 2 seconds for 600 samples) so it's possible
 to add/remove samples or adjust a pedigree file and re-run iteratively.
 
 For example to add the **n + 1th** samples, just run `somalier extract` on the new sample and then re-use
@@ -83,7 +83,11 @@ In order to quickly calculate genotypes at these sites, `somalier` assays the ex
 The extraction step is done directly from the bam/cram files 1 sample at a time.
 
 The `rel` step is run on the output of the `extract` commands. It runs extremely quickly
-so that new samples can be added and compared.
+so that new samples can be added and compared. It uses 3 bit-vectors per sample for hom-ref,
+het, hom-alt. Each bitvector is a sequence of 64 bit integers where each bit is set if
+the variant at that index in the sample is for example, heterozygous. With this setup,
+we can use fast bitwise operations and [popcount](https://en.wikichip.org/wiki/population_count)
+hardware instructions to calculate relatedness extremely quickly.
 
 For each sample-pair, it reports:
 1. IBS0 -- the number of sites where one sample is hom-ref and another is hom-alt

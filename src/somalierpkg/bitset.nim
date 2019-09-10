@@ -1,10 +1,12 @@
+{.passC:"-mpopcnt".}
 import bitops
 
 type bitset* = seq[uint64]
 
 proc create_bitset*(size:SomeInteger): bitset =
   ## create a new bitset able to hold at least `size`
-  let L = (size + sizeof(uint64) * 8 - 1) div (sizeof(uint64) * 8)
+  let L = (size.int + sizeof(uint64) * 8 - 1) div (sizeof(uint64) * 8)
+  doAssert L * 8 * sizeof(uint64) >= size, $(size, L * sizeof(uint64), L)
   result = newSeq[uint64](L)
 
 proc set*(b:var bitset, i:SomeInteger) {.inline.} =
