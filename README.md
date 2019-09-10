@@ -110,6 +110,21 @@ Here, each point is a pair of samples. We can see that the expected identical sa
 and drawn in red mostly cluster together on the right. Unrelateds cluster on the lower left. The sample-swaps are the blue points that cluster with
 the red. In the somalier output, the user can **hover to see which sample-pairs are involved each point**
 
+
+## Ancestry Estimate
+
+You can use a background set of extracted `*.somalier` files, for example from thousand genomes along with labels for
+those samples to predict ancestry for a given set (or single sample). This would look like:
+
+```
+python scripts/ancestry-predict.py --labels scripts/ancestry-labels-1kg.tsv --samples $MY_SAMPLES/*.somalier --backgrounds 1kg-somalier/*.somalier > sample-ancestries.txt
+```
+
+The ancestry-predict.py and the `scripts/ancestry-labels-1kg.tsv` are in the somalier repository.
+The somalier files for thousand genomes can be downloaded from [here](https://zenodo.org/record/3404249/files/1kg.somalier.tar.gz?download=1)
+Note that these will work for either GRCh37 or hg38 as long as you use the most recent sites files distributed with `somalier`.
+
+ 
 ## License
 
 `somalier` is free and unrestricted for non-commercial use. For commercial use, please contact [bpedersen@base2genomics.com]
