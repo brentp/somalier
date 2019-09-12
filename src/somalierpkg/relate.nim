@@ -439,12 +439,12 @@ proc toj(sample_names: seq[string], stats: seq[Stat4], gt_counts: array[5, seq[u
       "n_known": gt_counts[0][i] + gt_counts[1][i] + gt_counts[2][i],
       "p_middling_ab": gt_counts[4][i].float / (gt_counts[0][i] + gt_counts[1][i] + gt_counts[2][i] + gt_counts[3][i] + gt_counts[4][i]).float,
 
-      "x_depth_mean": 2 * stats[i].x_dp.mean / stats[i].dp.mean,
+      "x_depth_mean": 2 * stats[i].x_dp.mean / stats[i].gtdp.mean,
       "x_hom_ref": stats[i].x_hom_ref,
       "x_het": stats[i].x_het,
       "x_hom_alt": stats[i].x_hom_alt,
 
-      "y_depth_mean": 2 * stats[i].y_dp.mean / stats[i].dp.mean,
+      "y_depth_mean": 2 * stats[i].y_dp.mean / stats[i].gtdp.mean,
     }
     ))
   result.add("]")
