@@ -20,10 +20,10 @@ proc get_sample_name(bam:Bam): string =
     copyMem(txt[0].addr, bam.hdr.hdr.text, txt.len)
     for line in txt.split("\n"):
       if line.startsWith("@RG") and "\tSM:" in line:
-        var t = line.split("\tSM:")[1].split("\t")[0].strip()
-        return t
+        result = line.split("\tSM:")[1].split("\t")[0].strip()
 
-    raise newException(ValueError, "[somalier] no read-group in bam file")
+    if result.len == 0:
+      raise newException(ValueError, "[somalier] no read-group in bam file")
 
 proc get_variant(ivcf:VCF, site:Site): Variant =
   for v in ivcf.query(&"{site.chrom}:{site.position+1}-{site.position+2}"):

@@ -5,6 +5,7 @@ v0.2.3 (dev)
 + use bit-vectors to calculate relatedness. this gives about a 250X speedup.
   with this code, I can now evaluate relatedness for 3756 in under 30 seconds on my laptop.
 + better scaling of X and Y depth
++ use final RG as the sample id in relate
 
 v0.2.2
 ======
