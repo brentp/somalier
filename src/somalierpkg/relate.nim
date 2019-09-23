@@ -245,12 +245,10 @@ proc ab*(c:allele_count, min_depth:int): float {.inline.} =
 
 proc alts*(ab:float): int8 {.inline.} =
   if ab < 0: return -1
-  if ab < 0.07:
-    return 0
-  if ab > 0.90:
-    return 2
-  if ab < 0.15 or ab > 0.85: return -1 # exclude mid-range hets.
-  return 1
+  if ab < 0.02: return 0
+  if ab > 0.98: return 2
+  if ab >= 0.2 and ab <= 0.8: return 1
+  return -1
 
 {.push checks: off, optimization: speed.}
 template depth*(c:allele_count): uint32 =
