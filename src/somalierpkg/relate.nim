@@ -3,6 +3,7 @@ import strformat
 import bitset
 import times
 import streams
+import algorithm
 import argparse
 import strutils
 import tables
@@ -88,9 +89,10 @@ proc hom_alt_concordance(r: relation): float64 {.inline.} =
 proc rel(r:relation): float64 {.inline.} =
   return (r.shared_hets.float64 - 2 * r.ibs0.float64) / min(r.hets_a, r.hets_b).float64
 
-const header = "$sample_a\t$sample_b\t$relatedness\t$hom_concordance\t$hets_a\t$hets_b\t$shared_hets\t$hom_alts_a\t$hom_alts_b\t$shared_hom_alts\t$ibs0\t$ibs2\t$n\t$x_ibs0\t$x_ibs2"
-proc `$`(r:relation): string =
-  result = &"{r.sample_a}\t{r.sample_b}\t{r.rel:.3f}\t{r.hom_alt_concordance:.3f}\t{r.hets_a}\t{r.hets_b}\t{r.shared_hets}\t{r.hom_alts_a}\t{r.hom_alts_b}\t{r.shared_hom_alts}\t{r.ibs0}\t{r.ibs2}\t{r.n}\t{r.x_ibs0}\t{r.xibs2}"
+const header = "$sample_a\t$sample_b\t$relatedness\t$hom_concordance\t$hets_a\t$hets_b\t$shared_hets\t$hom_alts_a\t$hom_alts_b\t$shared_hom_alts\t$ibs0\t$ibs2\t$n\t$x_ibs0\t$x_ibs2\t$expected_relatedness"
+
+proc tsv(r:relation, expected_relatedness:float= -1.0): string =
+  result = &"{r.sample_a}\t{r.sample_b}\t{r.rel:.3f}\t{r.hom_alt_concordance:.3f}\t{r.hets_a}\t{r.hets_b}\t{r.shared_hets}\t{r.hom_alts_a}\t{r.hom_alts_b}\t{r.shared_hom_alts}\t{r.ibs0}\t{r.ibs2}\t{r.n}\t{r.x_ibs0}\t{r.xibs2}\t{expected_relatedness}"
 
 
 proc `%`*(v:uint16): JsonNode =
@@ -99,6 +101,10 @@ proc `%`*(v:uint16): JsonNode =
 type pair = tuple[a:string, b:string, rel:float64]
 proc `%`*(p:pair): JsonNode =
   return %*{"a":p.a, "b":p.b, "rel":p.rel}
+
+proc cmp_pair(a: pair, b:pair): int =
+  result = cmp(a.a, b.a)
+  if result == 0: result = cmp(a.b, b.b)
 
 proc write(grouped: seq[pair], output_prefix:string) =
     if len(grouped) == 0: return
@@ -148,39 +154,6 @@ proc readGroups(path:string): seq[pair] =
 
 proc n_samples(r: relation_matrices): int {.inline.} =
   return r.samples.len
-#[
-iterator relatedness(r:relation_matrices, grouped: var seq[pair]): relation =
-  var sample_names = r.samples
-
-  for sj in 0..<r.n_samples - 1:
-    for sk in sj + 1..<r.n_samples:
-      if sj == sk: quit "logic error"
-
-      var bottom: float64 = 0
-      if (r.hets[sj] > 0'u16) and (r.hets[sk] > 0'u16):
-        bottom = 2 / (1 / r.hets[sk].float64 + 1 / r.hets[sj].float64).float64
-      else:
-        bottom = max(r.hets[sk], r.hets[sj]).float64
-      if bottom == 0:
-        # can't calculate relatedness
-        bottom = -1'f64
-
-      # shared_hets - 2 * 
-      var grelatedness = (r.ibs[sk * r.n_samples + sj].float64 - 2 * r.ibs[sj * r.n_samples + sk].float64) / bottom
-      if grelatedness > 0.125:
-        grouped.add((sample_names[sj], sample_names[sk], grelatedness))
-      yield relation(sample_a: sample_names[sj],
-                     sample_b: sample_names[sk],
-                     hets_a: r.hets[sj], hets_b: r.hets[sk],
-                     hom_alts_a: r.homs[sj], hom_alts_b: r.homs[sk],
-                     ibs0: r.ibs[sj * r.n_samples + sk],
-                     shared_hets: r.ibs[sk * r.n_samples + sj],
-                     shared_hom_alts: r.shared_hom_alts[sj * r.n_samples + sk],
-                     ibs2: r.n[sk * r.n_samples + sj],
-                     n: r.n[sj * r.n_samples + sk],
-                     x_ibs0: r.x[sj * r.n_samples + sk],
-                     x_ibs2: r.x[sk * r.n_samples + sj])
-]#
 
 iterator relatedness(r: var relation_matrices, grouped: var seq[pair]): relation =
   var
@@ -494,6 +467,7 @@ specified as comma-separated groups per line e.g.:
 
   if opts.ped != "":
     samples = parse_ped(opts.ped)
+    echo samples.len
   if samples.len > 30000:
     stderr.write_line "[somalier] WARNING!! somalier will work fine for even 100K samples, but it is not optimal for such scenarios."
     stderr.write_line "[somalier] ......... please open an issue at: https://github.com/brentp/somalier/issues as larger cohorts"
@@ -524,8 +498,12 @@ specified as comma-separated groups per line e.g.:
   fh_tsv.write_line '#', header.replace("$", "")
   var sample_sexes = samples.to_sex_lookup
   var npairs:int
+  sort(groups, cmp_pair)
   for rel in final.relatedness(grouped):
-    fh_tsv.write_line $rel
+    let idx = groups.binarySearch((rel.sample_a, rel.sample_b, -1.0), cmp_pair)
+    let expected_relatedness = if idx == -1: -1'f else: groups[idx].rel
+
+    fh_tsv.write_line rel.tsv(expected_relatedness)
     npairs.inc
   stderr.write_line &"[somalier] time to calculate all vs all relatedness for all {npairs} combinations: {cpuTime() - t0:.2f}"
 
