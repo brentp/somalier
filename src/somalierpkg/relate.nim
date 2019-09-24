@@ -500,7 +500,9 @@ specified as comma-separated groups per line e.g.:
   var npairs:int
   sort(groups, cmp_pair)
   for rel in final.relatedness(grouped):
-    let idx = groups.binarySearch((rel.sample_a, rel.sample_b, -1.0), cmp_pair)
+    var idx = groups.binarySearch((rel.sample_a, rel.sample_b, -1.0), cmp_pair)
+    if idx == -1:
+      idx = groups.binarySearch((rel.sample_b, rel.sample_a, -1.0), cmp_pair)
     let expected_relatedness = if idx == -1: -1'f else: groups[idx].rel
 
     fh_tsv.write_line rel.tsv(expected_relatedness)
