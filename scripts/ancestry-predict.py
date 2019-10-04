@@ -10,7 +10,7 @@ def read_somalier(path):
     """
     data = Path(path).read_bytes()
     version = int.from_bytes(data[:1], byteorder="little")
-    assert version == 2
+    assert version == 2, ("bad version for:", path)
     data = data[1:]
     sample_L = int.from_bytes(data[:1], byteorder="little")
     data = data[1:]
@@ -31,6 +31,13 @@ def read_somalier(path):
     y_sites = np.frombuffer(data[:nysites * 3 * 4], dtype=np.uint32).reshape((nysites, 3))
 
     return dict(sample=sample, sites=sites, x_sites=x_sites)
+
+def to_gt(ab):
+    result = np.zeros_like(ab) - 1
+    result[(ab >= 0) & (ab < 0.015)] = 0
+    result[(ab >= 0.2) & (ab <= 0.8)] = 1
+    result[(ab > 0.985)] = 2
+    return result
 
 if __name__ == "__main__":
 
@@ -69,6 +76,7 @@ if __name__ == "__main__":
         bg_ABs.append(ab)
         bg_samples.append(s["sample"])
 
+    if args.samples is None: args.samples = []
     for f in args.samples:
         s = read_somalier(f)
         depth = s["sites"].sum(axis=1)
@@ -90,12 +98,14 @@ if __name__ == "__main__":
     test_ABs = np.array(test_ABs, dtype=float)
 
     unk = (bg_ABs == -1).sum(axis=0)
-    rm = unk / float(len(bg_samples)) > 0.2
+    rm = unk / float(len(bg_samples)) > 0.3
     if len(test_ABs) > 0:
-        unk |= (test_ABs == -1).sum(axis=0)
-        rm |=  (unk / float(len(test_samples)) > 0.5)
+        unk = (test_ABs == -1).sum(axis=0)
+        rm |=  (unk / float(len(test_samples)) > 0.4)
 
     bg_ABs = bg_ABs[:, ~rm]
+
+    np.save("thousandG.npy", bg_ABs)
     if len(test_ABs) > 0:
         test_ABs = test_ABs[:, ~rm]
 
@@ -115,9 +125,9 @@ if __name__ == "__main__":
         np.set_printoptions(formatter={'float_kind':lambda x: "%.2f" % x})
 
 
-    print("#sample\t" + "\t".join(targetL))
-    for i, sample in enumerate(test_samples):
-        print(sample + "\t" + "\t".join("%.2f" % x for x in test_prob[i, :]))
+        print("#sample\t" + "\t".join(targetL))
+        for i, sample in enumerate(test_samples):
+            print(sample + "\t" + "\t".join("%.2f" % x for x in test_prob[i, :]))
 
     fig, axes = plt.subplots(1) #, len(targetL) + 1, figsize=(22, 12))
     axes = (axes,)
