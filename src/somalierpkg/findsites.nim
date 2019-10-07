@@ -28,7 +28,7 @@ proc stop(r: region): int {.inline.} = return r.stop
 proc bed_line_to_region(line: string): region =
   var cse = line.strip().split('\t', 5)
   if len(cse) < 3:
-    stderr.write_line("[mosdepth] skipping bad bed line:", line.strip())
+    stderr.write_line("[somalier] skipping bad bed line:", line.strip())
     return
   var
     s = parse_int(cse[1])
