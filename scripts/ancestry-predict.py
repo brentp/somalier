@@ -59,6 +59,7 @@ if __name__ == "__main__":
     p.add_argument("--label-column", help="column name with population label from --labels", default="superpop")
     p.add_argument("--backgrounds", nargs="+", help="path to background *.somalier files matching those specified in labels")
     p.add_argument("--samples", nargs="+", help="path to sample *.somalier for ancestry prediction")
+    p.add_argument("--plot", help="path to save figure. if not specified, the plot is `show`n")
 
     args = p.parse_args()
 
@@ -145,4 +146,7 @@ if __name__ == "__main__":
     #for ax in axes: ax.legend()
     plt.legend()
     plt.tight_layout()
-    plt.show()
+    if args.plot != "":
+        plt.savefig(args.plot)
+    else:
+        plt.show()
