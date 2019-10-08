@@ -146,7 +146,7 @@ if __name__ == "__main__":
     #for ax in axes: ax.legend()
     plt.legend()
     plt.tight_layout()
-    if args.plot != "":
-        plt.savefig(args.plot)
-    else:
+    if args.plot in ["", None]:
         plt.show()
+    else:
+        plt.savefig(args.plot)
