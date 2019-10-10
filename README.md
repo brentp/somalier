@@ -83,7 +83,7 @@ for GRCh37 and hg38.
 In order to quickly calculate genotypes at these sites, `somalier` assays the exact base.
 The extraction step is done directly from the bam/cram files 1 sample at a time.
 
-The `rel` step is run on the output of the `extract` commands. It runs extremely quickly
+The `relate` step is run on the output of the `extract` commands. It runs extremely quickly
 so that new samples can be added and compared. It uses 3 bit-vectors per sample for hom-ref,
 het, hom-alt. Each bitvector is a sequence of 64 bit integers where each bit is set if
 the variant at that index in the sample is for example, heterozygous. With this setup,
