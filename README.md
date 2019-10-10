@@ -21,8 +21,8 @@ The next step is to calculate relatedness on the extracted data:
 ```
 somalier relate --ped $pedigree extracted/*.somalier
 ```
-This will create text and interactive HTML output that's produced (similar to [peddy](https://github.com/brentp/peddy))
-makes it fast and easy to detect mismatched samples and sample-swaps.
+This will create text and interactive HTML output (similar to [peddy](https://github.com/brentp/peddy))
+that makes it fast and easy to detect mismatched samples and sample-swaps.
 
 Note that the `somalier relate` command runs extremely quickly (< 2 seconds for 600 samples) so it's possible
 to add/remove samples or adjust a pedigree file and re-run iteratively.
@@ -32,12 +32,19 @@ the already extracted data from the `n` original samples.
 
 ## Usage
 
-The usage is described above. Briefly, run:
+The usage is also described above. Briefly, run:
 ```
 somalier extract -d cohort/ --sites sites.hg38.vcf.gz -f $reference $sample.bam
 ```
 for each sample to create a small binary file of the ref and alt counts for the variants listed
-in sites.hg38.vcf.gz. Then run:
+in sites.hg38.vcf.gz.
+
+for a vcf, run:
+```
+somalier extract -d cohort/ --sites sites.hg38.vcf.gz -f $reference $cohort.bcf
+```
+
+Then run:
 ```
 somalier relate --ped $pedigree_file cohort/*.somalier
 ```
@@ -46,12 +53,6 @@ This will create an html file for QC in a few seconds.
 Note that if a new sample is added to the cohort, it's only necessary to perform
 the `extract` step on that sample and then run the (fast) `relate` step again with all
 of the extracted files.
-
-From here, it's also possible to make a depth plot for each sample with:
-```
-somalier depthview -o cohort.html -v sites.hg38.vcf.gz cohort/*somalier
-```
-This can be useful to see large (>20MB) deletions and duplications.
 
 ## VCF
 
