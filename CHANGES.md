@@ -7,6 +7,10 @@ v0.2.3 (dev)
 + better scaling of X and Y depth
 + use final RG as the sample id in relate
 + output expected relatedness in .pairs.tsv file
++ fix ref/alt (a/b-allele ordering for VCF) this was a bug that caused problems when comparing
+  samples extracted from VCF files to other samples extracted from BAM/CRAM files. Thanks very 
+  much to Filipe and Sergio for finding this issue and providing several test-cases. (if you
+  have previously downloaded the thousand genomes files from zenodo, please update to the latest).
 
 v0.2.2
 ======

@@ -52,6 +52,8 @@ proc get_ref_alt_counts(ivcf:VCF, sites:seq[Site], fai:Fai=nil): seq[counts] =
     var mult = int(AD.len / vcf_samples.len)
     for j, s in vcf_samples:
       var ac = allele_count(nref: max(0, AD[mult * j]).uint32, nalt: max(0, AD[mult * j + 1]).uint32, nother: 0)
+      if v != nil and v.ALT[0] < v.REF:
+        swap(ac.nref, ac.nalt)
 
       case site.chrom:
         of ["X", "chrX"]:
