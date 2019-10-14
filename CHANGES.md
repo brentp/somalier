@@ -1,3 +1,7 @@
+v0.2.4 (dev)
+============
++ unify genotyping between all code-paths (thanks Filipe)
+
 v0.2.3
 ======
 + calculate relatedness correctly for samples with parent-ids specified

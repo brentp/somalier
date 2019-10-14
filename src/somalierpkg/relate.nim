@@ -233,10 +233,7 @@ proc alts*(c:allele_count, min_depth:int=7): int8 {.inline.} =
   if c.nref == 0: return 2
   if c.nalt == 0: return 0
   var ab = c.nalt.float / (c.depth).float
-  if ab < 0.07: return 0
-  if ab > 0.90: return 2
-  if 0.15 < ab and ab < 0.85: return 1
-  return -1
+  return ab.alts
 
 proc to_bits*(cs:seq[allele_count], min_depth:int=7): genotypes =
   result.hom_ref = create_bitset(cs.len)
