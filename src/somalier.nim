@@ -71,7 +71,6 @@ proc get_ref_alt_counts(ibam:Bam, sites:seq[Site], fai:Fai): counts =
   result.sample_name = ibam.get_sample_name()
 
   var cfg = Config(MinMappingQuality: 1, ExcludeFlags:BAM_FUNMAP or BAM_FSECONDARY or BAM_FQCFAIL or BAM_FDUP)
-  # TODO: count X, Y, autosomal from sites so we can pre-allocate exactly.
 
   for i, site in sites:
     doAssert site.A_allele.len == 1 and site.B_allele.len == 1, "[somalier] can only genotype single nucleotode variants directly from alignments"
