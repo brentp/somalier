@@ -13,8 +13,11 @@ dfb = pd.read_csv(sys.argv[2], sep="\t")
 
 s = 30
 
+titles = ["Original Samples", "After Correction"]
+
 for i, df in enumerate((dfa, dfb)):
     ax = axes[i]
+    ax.set_title(titles[i])
 
     for j, ex_rel in enumerate(df.expected_relatedness.unique()):
         sub = df.loc[df.expected_relatedness == ex_rel, :]
@@ -30,4 +33,5 @@ for i, df in enumerate((dfa, dfb)):
         ax.legend(title="expected relatedness")
 
     sns.despine()
+plt.savefig("somalier-figure2.eps")
 plt.show()

@@ -6,23 +6,28 @@ import pandas as pd
 
 colors = sns.color_palette("Set2")
 
-fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+df = pd.read_csv(sys.argv[1], sep="\t") # 1kg.pairs.tsv
 
-df = pd.read_csv(sys.argv[1], sep="\t")
-#sample	pedigree_sex	gt_depth_mean	gt_depth_sd	depth_mean	depth_sd	ab_mean	ab_std	n_hom_ref	n_het	n_hom_alt	n_unknown	p_middling_ab	X_depth_mean	X_n	X_hom_ref	X_het	X_hom_alt	Y_depth_mean	Y_n
+s = 25
+if df.shape[0] > 1000:
+    s = 10
 
-for i, ex_sex in enumerate(df.pedigree_sex.unique()):
-    sub = df.loc[df.pedigree_sex == ex_sex, :]
-    ax[1].scatter(sub.X_hom_alt, sub.Y_depth_mean, label=ex_sex, ec="none", c=colors[i])
-    ax[0].scatter(sub.X_hom_alt, sub.X_het, label=ex_sex, ec="none", c=colors[i])
+print(s)
 
-ax[0].set_xlabel("Number of 1/1 sites on X chromosome")
-ax[0].set_ylabel("Number of 0/1 sites on X chromosome")
-ax[0].legend(title="reported sex")
 
-ax[1].set_xlabel("Number of 1/1 sites on X chromosome")
-ax[1].set_ylabel("Mean depth on Y chromosome")
+for i, ex_rel in enumerate(df.expected_relatedness.unique()):
+    sub = df.loc[df.expected_relatedness == ex_rel, :]
+    plt.scatter(sub.ibs0, sub.ibs2, label="unrelated" if ex_rel == -1 else
+            "identical", ec="none", c=colors[i], s=s)
+
+sub = df.loc[df.ibs0 < 600]
+plt.scatter(sub.ibs0, sub.ibs2, label="unexpected relatedness",
+        ec="k", c=colors[0], s=s+4)
+
+plt.xlabel("Number of IBS0 sites")
+plt.ylabel("Number of IBS2 sites")
 
 sns.despine()
-plt.tight_layout()
+plt.legend(title="expected relatedness")
+plt.savefig("somalier-figure3.eps")
 plt.show()
