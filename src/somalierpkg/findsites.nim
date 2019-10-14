@@ -70,13 +70,15 @@ proc closest(v:Variant, vs: seq[Variant]): Variant =
 proc findsites_main*() =
   var p = newParser("somalier find-sites"):
     option("-x", "--exclude", multiple=true, help="optional exclude files")
+    option("--snp-dist", help="minimum distance between autosomal SNPs to avoid linkage", default="10000")
+    option("--min-AN", help="minimum number of alleles (AN) at the site. (must be less than twice number of samples in the cohort)", default="115_000")
     arg("vcf", help="population VCF to use to find sites", nargs=1)
 
   var argv = commandLineParams()
+  if len(argv) > 0 and argv[0] == "find-sites":
+    argv = argv[1..argv.high]
   if len(argv) == 0:
     argv = @["-h"]
-  elif argv[0] == "find-sites":
-    argv = argv[1..argv.high]
   let opts = p.parse(argv)
   if opts.help:
     quit 0
@@ -84,6 +86,8 @@ proc findsites_main*() =
   var
     vcf:VCF
     wtr:VCF
+    snp_dist = parseInt(opts.snp_dist)
+    min_AN = parseInt(opts.min_AN)
 
   var exclude_regions = newTable[string, seq[region]]()
   var indels = newTable[string, seq[region]]()
@@ -143,7 +147,7 @@ proc findsites_main*() =
     var info = v.info
     if info.get("AF", afs) != Status.OK:
       continue
-    if info.get("AN", ans) == Status.OK and (($v.CHROM notin ["chrX", "X", "chrY", "Y"]) and ans[0] < 115_000) :
+    if info.get("AN", ans) == Status.OK and (($v.CHROM notin ["chrX", "X", "chrY", "Y"]) and ans[0] < min_AN) :
       continue
     if $v.CHROM in ["chrY", "Y"]:
       if afs[0] < 0.04 or afs[0] > 0.96: continue
@@ -218,7 +222,7 @@ proc findsites_main*() =
       elif $v.v.CHROM in ["chrX", "X"]:
         if (close - v.v.start).abs < 20000:
           continue
-      elif (close - v.v.start).abs < 10_000:
+      elif (close - v.v.start).abs < snp_dist:
         continue
 
     #discard wtr.write_variant(v.v)
