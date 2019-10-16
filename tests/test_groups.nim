@@ -25,7 +25,8 @@ FAM001	normal2	0	0	2	-9
     groups.add_ped_samples(samples, sample_names)
     groups.add(readGroups("_grps.txt", groups))
 
-    echo groups
+    check (a: "normal1", b: "tumor0", rel: 0.5) in groups
+    check (a: "normal2", b: "tumor0", rel: 0.5) in groups
 
 
 
