@@ -131,10 +131,20 @@ proc add_ped_samples(grouped: var seq[pair], samples:seq[Sample], sample_names:s
       else:
         grouped.add((sampleB.id, sampleA.id, rel))
 
-proc readGroups(path:string): seq[pair] =
+
+proc readGroups(path:string, existing_groups: var seq[pair]): seq[pair] =
   result = newSeq[pair]()
   if path == "":
     return
+
+
+  var extbl = newTable[string, seq[pair]]()
+  # seen makes sure we don't add a pair that's already present
+  var seen = newTable[tuple[a:string, b:string], bool]()
+  for ex in existing_groups:
+    extbl.mgetOrPut(ex.a, @[]).add(ex)
+    extbl.mgetOrPut(ex.b, @[]).add(ex)
+    seen[(ex.a, ex.b)] = true
 
   # expand out a,b,c to a,b, a,c, b,c
   for line in path.lines:
@@ -151,6 +161,27 @@ proc readGroups(path:string): seq[pair] =
           result.add((x, y, rel))
         else:
           result.add((y, x, rel))
+
+        var added = result[result.high]
+        echo added
+        for up in extbl.getOrDefault(added.a, @[]):
+          var toadd:pair = (added.b, up.b, up.rel)
+          if toadd.b > toadd.a: swap(toadd.a, toadd.b)
+          # we know up.a and added.a ar already pairs so we need to pair up.b
+          # and added.a
+          if (toadd.a, toadd.b) notin seen:
+            seen[(toadd.a, toadd.b)] = true
+            existing_groups.add(toadd)
+
+        for up in extbl.getOrDefault(added.b, @[]):
+          var toadd:pair = (added.a, up.b, up.rel)
+          if toadd.b > toadd.a: swap(toadd.a, toadd.b)
+          # we know up.a and added.b ar already pairs so we need to pair up.b
+          # and added.a
+          if (toadd.a, toadd.b) notin seen:
+            seen[(toadd.a, toadd.b)] = true
+            existing_groups.add(toadd)
+
 
 proc n_samples(r: relation_matrices): int {.inline.} =
   return r.samples.len
@@ -471,7 +502,8 @@ specified as comma-separated groups per line e.g.:
     stderr.write_line "[somalier] ......... can be supported."
 
   groups.add_ped_samples(samples, final.samples)
-  groups.add(readGroups(opts.groups))
+  # send in groups so we can adjust baed on self-self samples
+  groups.add(readGroups(opts.groups, groups))
   stderr.write_line &"[somalier] time to get expected relatedness from pedigree graph: {cpuTime() - t0:.2f}"
 
 
