@@ -137,7 +137,6 @@ proc readGroups(path:string, existing_groups: var seq[pair]): seq[pair] =
   if path == "":
     return
 
-
   var extbl = newTable[string, seq[pair]]()
   # seen makes sure we don't add a pair that's already present
   var seen = newTable[tuple[a:string, b:string], bool]()
@@ -163,21 +162,19 @@ proc readGroups(path:string, existing_groups: var seq[pair]): seq[pair] =
           result.add((y, x, rel))
 
         var added = result[result.high]
-        echo added
         for up in extbl.getOrDefault(added.a, @[]):
           var toadd:pair = (added.b, up.b, up.rel)
-          if toadd.b > toadd.a: swap(toadd.a, toadd.b)
+          if toadd.b < toadd.a: swap(toadd.a, toadd.b)
           # we know up.a and added.a ar already pairs so we need to pair up.b
           # and added.a
           if (toadd.a, toadd.b) notin seen:
             seen[(toadd.a, toadd.b)] = true
             existing_groups.add(toadd)
 
+        # repeat above for b
         for up in extbl.getOrDefault(added.b, @[]):
           var toadd:pair = (added.a, up.b, up.rel)
-          if toadd.b > toadd.a: swap(toadd.a, toadd.b)
-          # we know up.a and added.b ar already pairs so we need to pair up.b
-          # and added.a
+          if toadd.b < toadd.a: swap(toadd.a, toadd.b)
           if (toadd.a, toadd.b) notin seen:
             seen[(toadd.a, toadd.b)] = true
             existing_groups.add(toadd)
@@ -247,10 +244,10 @@ proc ab*(c:allele_count, min_depth:int): float {.inline.} =
     return 0
   result = c.nalt.float / (c.nalt + c.nref).float
 
-proc alts*(ab:float): int8 {.inline.} =
+proc alts*(ab:float, ab_cutoff:float=0.04): int8 {.inline.} =
   if ab < 0: return -1
-  if ab < 0.02: return 0
-  if ab > 0.98: return 2
+  if ab < ab_cutoff: return 0
+  if ab > (1 - ab_cutoff): return 2
   if ab >= 0.2 and ab <= 0.8: return 1
   return -1
 
