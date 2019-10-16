@@ -22,3 +22,6 @@ srcDir = "src"
 
 #bin = @["./somalier.nim"]
 
+task test, "run the tests":
+  exec "nim c  -d:useSysAssert -d:useGcAssert --lineDir:on --debuginfo -r tests/test_groups"
+
