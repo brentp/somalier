@@ -232,12 +232,14 @@ iterator relatedness(r: var relation_matrices, grouped: var seq[pair]): relation
                      )
 
 
-
 template proportion_other(c:allele_count): float =
   if c.nother == 0: 0'f else: c.nother.float / (c.nother + c.nref + c.nalt).float
 
 proc ab*(c:allele_count, min_depth:int): float {.inline.} =
-  if c.proportion_other > 0.04: return -1
+  ## get the allele balance for the allele_count object while requing a min depth
+  # allow high-ish proportion other see: 
+  # https://github.com/brentp/somalier/issues/26#issuecomment-543120582
+  if c.proportion_other > 0.1: return -1
   if int(c.nref + c.nalt) < min_depth:
     return -1
   if c.nalt == 0:
@@ -493,7 +495,7 @@ specified as comma-separated groups per line e.g.:
   if opts.ped != "":
     samples = parse_ped(opts.ped)
     echo samples.len
-  if samples.len > 30000:
+  if samples.len > 30_000:
     stderr.write_line "[somalier] WARNING!! somalier will work fine for even 100K samples, but it is not optimal for such scenarios."
     stderr.write_line "[somalier] ......... please open an issue at: https://github.com/brentp/somalier/issues as larger cohorts"
     stderr.write_line "[somalier] ......... can be supported."
