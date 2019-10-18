@@ -494,7 +494,6 @@ specified as comma-separated groups per line e.g.:
 
   if opts.ped != "":
     samples = parse_ped(opts.ped)
-    echo samples.len
   if samples.len > 30_000:
     stderr.write_line "[somalier] WARNING!! somalier will work fine for even 100K samples, but it is not optimal for such scenarios."
     stderr.write_line "[somalier] ......... please open an issue at: https://github.com/brentp/somalier/issues as larger cohorts"

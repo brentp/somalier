@@ -1,5 +1,6 @@
 import os
 import hts
+import hts/files
 import hts/private/hts_concat
 import streams
 
@@ -25,8 +26,18 @@ proc get_sample_name(bam:Bam): string =
     if result.len == 0:
       raise newException(ValueError, "[somalier] no read-group in bam file")
 
+proc looks_like_gvcf_variant(v:Variant): bool {.inline.} =
+  result = false
+  for a in v.ALT:
+    # match either <*> or <NON_REF>, etc.
+    if a.len > 0 and a[0] == '<' and a[a.high] == '>':
+      return true
+
 proc get_variant(ivcf:VCF, site:Site): Variant =
   for v in ivcf.query(&"{site.chrom}:{site.position+1}-{site.position+2}"):
+    if v.looks_like_gvcf_variant:
+      return v.copy()
+
     if v.start == site.position and (
       (v.REF == site.A_allele and v.ALT[0] == site.B_allele) or
       (v.REF == site.B_allele and v.ALT[0] == site.A_allele)):
@@ -44,15 +55,23 @@ proc get_ref_alt_counts(ivcf:VCF, sites:seq[Site], fai:Fai=nil): seq[counts] =
 
   for i, site in sites:
     var v = ivcf.get_variant(site)
-    if v == nil or ($v.CHROM notin ["chrX", "X", "chrY", "Y"] and v.FILTER notin ["PASS", ""]) or v.format.get("AD", AD) != Status.OK:
+    if v == nil or ($v.CHROM notin ["chrX", "X", "chrY", "Y"] and v.FILTER notin ["PASS", "", ".", "RefCall"]) or v.format.get("AD", AD) != Status.OK:
       AD.setLen(vcf_samples.len * 2)
       zeroMem(AD[0].addr, AD.len * sizeof(AD[0]))
+      if v.looks_like_gvcf_variant:
+        var dp:seq[int32]
+        if v.format.get("MIN_DP", dp) == Status.OK or v.format.get("DP", dp) == Status.OK:
+           AD[0] = dp[0]
+           n += 1
     else:
       n += 1
     var mult = int(AD.len / vcf_samples.len)
     for j, s in vcf_samples:
       var ac = allele_count(nref: max(0, AD[mult * j]).uint32, nalt: max(0, AD[mult * j + 1]).uint32, nother: 0)
-      if v != nil and v.ALT[0] < v.REF:
+      doAssert site.A_allele < site.B_allele
+      # we always store a site by alphabetical order, so sometimes we have to
+      # flip the alts.
+      if site.flip:
         swap(ac.nref, ac.nalt)
 
       case site.chrom:
@@ -132,7 +151,7 @@ proc extract_main() =
 
   var sample_counts: seq[counts]
 
-  if opts.sample_file.endsWith(".vcf.gz") or opts.sample_file.endswith(".vcf.bgz") or opts.sample_file.endswith(".bcf"):
+  if opts.sample_file.file_type in {FileType.VCF, FileType.BCF}:
     if not open(ivcf, opts.sample_file):
       quit "[somalier] couldn't open sample VCF file"
     sample_counts = ivcf.get_ref_alt_counts(sites, fai)

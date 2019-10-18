@@ -8,6 +8,10 @@ type Site* = object
   B_allele*: string
   chrom*: string
   position*: int
+  ## for GVCF, we don't know the actual REF/ALT allele so we can't compare to
+  ## A/B_allele so instead we keep the `flip` attribute and just swap ref, atl
+  ## counts if swap is true.
+  flip*:bool
 
 {.push checks: off, optimization:speed.}
 proc toSite(toks: seq[string]): Site =
@@ -20,6 +24,7 @@ proc toSite(toks: seq[string]): Site =
   else:
     result.B_allele = toks[3]
     result.A_allele = toks[4]
+    result.flip = true
 
 proc checkSiteRef*(s:Site, fai:Fai) =
   var fa_allele = fai.get(s.chrom, s.position, s.position + s.A_allele.len - 1).toUpperAscii
