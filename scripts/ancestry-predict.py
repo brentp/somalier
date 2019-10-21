@@ -125,7 +125,9 @@ if __name__ == "__main__":
     labels_pc = [("PC%d" % i) for i in range(1,(n_components+1))]
 
     # export csv
-    bg_reduced_df = pd.DataFrame(data=bg_reduced, index=bg_sample_df[label].values, columns=labels_pc)
+    bg_reduced_df = pd.DataFrame(
+        data=bg_reduced, 
+        index=bg_sample_df[label].values, columns=labels_pc)
     bg_reduced_df.index.name = "ancestry"
     bg_reduced_df.to_csv(path_or_buf="somalier.background_pca.csv")
 
@@ -135,7 +137,9 @@ if __name__ == "__main__":
         test_prob = clf.predict_proba(test_ABs)
 
         # export prediction and PC's as csv
-        sample_df = pd.DataFrame(data=np.hstack((test_prob.round(2), test_reduced)), index=test_samples, columns=[*targetL, *labels_pc])
+        sample_df = pd.DataFrame(
+            data=np.hstack((test_prob.round(2), test_reduced)), 
+            index=test_samples, columns=[*targetL, *labels_pc])
         sample_df.index.name = "#sample"
         sample_df.to_csv(path_or_buf="somalier.sample_prediction_pca.csv")
 
