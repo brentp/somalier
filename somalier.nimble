@@ -17,8 +17,11 @@ license       = "academic only"
 
 # Dependencies
 
-requires "nim >= 0.19.0", "hts >= 0.2.20", "https://github.com/brentp/slivar#head", "https://github.com/brentp/hileup", "argparse", "lapper", "arraymancer"
+requires "nim >= 0.19.0", "hts#head", "https://github.com/brentp/slivar#head", "https://github.com/brentp/hileup", "argparse", "lapper", "arraymancer"
 srcDir = "src"
 
 #bin = @["./somalier.nim"]
+
+task test, "run the tests":
+  exec "nim c  -d:useSysAssert -d:useGcAssert --lineDir:on --debuginfo -r tests/test_groups"
 
