@@ -1,5 +1,8 @@
-v0.2.4 (dev)
+v0.2.5 (dev)
 ============
+
+v0.2.4
+======
 + unify genotyping between all code-paths (thanks Filipe)
 + if both groups and pedigree information are specified, they correctly share information (#26)
 + relax allele balance to hom-ref is < 0.04 and hom-alt > 0.96 (was 0.02 and 0.98 respectively).
