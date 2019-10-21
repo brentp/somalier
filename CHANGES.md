@@ -1,5 +1,6 @@
 v0.2.5 (dev)
 ============
++ handle more types of GVCF
 
 v0.2.4
 ======

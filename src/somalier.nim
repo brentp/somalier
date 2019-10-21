@@ -27,10 +27,10 @@ proc get_sample_name(bam:Bam): string =
       raise newException(ValueError, "[somalier] no read-group in bam file")
 
 proc looks_like_gvcf_variant(v:Variant): bool {.inline.} =
-  result = false
+  result = v.c.n_allele == 1
   for a in v.ALT:
     # match either <*> or <NON_REF>, etc.
-    if a.len > 0 and a[0] == '<' and a[a.high] == '>':
+    if (a.len > 0 and a[0] == '<' and a[a.high] == '>') or a == ".":
       return true
 
 proc get_variant(ivcf:VCF, site:Site): Variant =
@@ -58,7 +58,7 @@ proc get_ref_alt_counts(ivcf:VCF, sites:seq[Site], fai:Fai=nil): seq[counts] =
     if v == nil or ($v.CHROM notin ["chrX", "X", "chrY", "Y"] and v.FILTER notin ["PASS", "", ".", "RefCall"]) or v.format.get("AD", AD) != Status.OK:
       AD.setLen(vcf_samples.len * 2)
       zeroMem(AD[0].addr, AD.len * sizeof(AD[0]))
-      if v.looks_like_gvcf_variant:
+      if v != nil and v.looks_like_gvcf_variant:
         var dp:seq[int32]
         if v.format.get("MIN_DP", dp) == Status.OK or v.format.get("DP", dp) == Status.OK:
            AD[0] = dp[0]
