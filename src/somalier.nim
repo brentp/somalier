@@ -127,7 +127,7 @@ proc extract_main() =
     option("-s", "--sites", help="sites vcf file of variants to extract")
     option("-f", "--fasta", help="path to reference fasta file")
     option("-d", "--out-dir", help="path to output directory", default=".")
-    arg("sample_file", help="single-sample CRAM/BAM file or multi/signle-sample VCF from which to extract")
+    arg("sample_file", help="single-sample CRAM/BAM/GVCF file or multi/single-sample VCF from which to extract")
 
   let opts = p.parse(argv)
   if opts.help:
