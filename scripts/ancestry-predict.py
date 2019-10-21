@@ -128,10 +128,6 @@ if __name__ == "__main__":
     bg_reduced_df = pd.DataFrame(data=bg_reduced, index=bg_sample_df[label].values, columns=labels_pc)
     bg_reduced_df.index.name = "ancestry"
     bg_reduced_df.to_csv(path_or_buf="somalier.background_pca.csv")
-    
-    # export json
-    bg_reduced_df.reset_index(level=0, inplace=True)
-    bg_reduced_df.to_json(path_or_buf="somalier.background_pca.json",)
 
     if len(test_ABs) > 0:
         test_reduced = clf.named_steps["pca"].transform(test_ABs)
