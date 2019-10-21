@@ -88,7 +88,8 @@ if __name__ == "__main__":
 
     bg_sample_df = pd.read_csv(args.labels, sep="\t", escapechar='#', index_col=0)
 
-    clf = make_pipeline(PCA(n_components=5, whiten=True, copy=True, svd_solver="randomized"),
+    n_components = 5
+    clf = make_pipeline(PCA(n_components=n_components, whiten=True, copy=True, svd_solver="randomized"),
                 svm.SVC(C=3, probability=True, gamma="auto"))
 
 
@@ -119,16 +120,29 @@ if __name__ == "__main__":
     clf.fit(bg_ABs, target)
 
     bg_reduced = clf.named_steps["pca"].transform(bg_ABs)
+
+    # generate PC labels for n components
+    labels_pc = [("PC%d" % i) for i in range(1,(n_components+1))]
+
+    # export csv
+    bg_reduced_df = pd.DataFrame(data=bg_reduced, index=bg_sample_df[label].values, columns=labels_pc)
+    bg_reduced_df.index.name = "ancestry"
+    bg_reduced_df.to_csv(path_or_buf="somalier.background_pca.csv")
+    
+    # export json
+    bg_reduced_df.reset_index(level=0, inplace=True)
+    bg_reduced_df.to_json(path_or_buf="somalier.background_pca.json",)
+
     if len(test_ABs) > 0:
         test_reduced = clf.named_steps["pca"].transform(test_ABs)
         test_pred = clf.predict(test_ABs)
         test_prob = clf.predict_proba(test_ABs)
-        np.set_printoptions(formatter={'float_kind':lambda x: "%.2f" % x})
 
+        # export prediction and PC's as csv
+        sample_df = pd.DataFrame(data=np.hstack((test_prob.round(2), test_reduced)), index=test_samples, columns=[*targetL, *labels_pc])
+        sample_df.index.name = "#sample"
+        sample_df.to_csv(path_or_buf="somalier.sample_prediction_pca.csv")
 
-        print("#sample\t" + "\t".join(targetL))
-        for i, sample in enumerate(test_samples):
-            print(sample + "\t" + "\t".join("%.2f" % x for x in test_prob[i, :]))
 
     fig, axes = plt.subplots(1) #, len(targetL) + 1, figsize=(22, 12))
     axes = (axes,)
