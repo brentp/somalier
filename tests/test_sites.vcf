@@ -1,0 +1,200 @@
+##fileformat=VCFv4.2
+##FILTER=<ID=AC0,Description="Allele count is zero after filtering out low-confidence genotypes (GQ < 20; DP < 10; and AB < 0.2 for het calls)">
+##FILTER=<ID=InbreedingCoeff,Description="InbreedingCoeff < -0.3">
+##FILTER=<ID=PASS,Description="All filters passed">
+##FILTER=<ID=RF,Description="Failed random forest filtering thresholds of 0.055272738028512555, 0.20641025579497013 (probabilities of being a true positive variant) for SNPs, indels">
+##INFO=<ID=AC,Number=A,Type=Integer,Description="Alternate allele count for samples">
+##INFO=<ID=AC_female,Number=A,Type=Integer,Description="Alternate allele count for female samples">
+##INFO=<ID=AC_male,Number=A,Type=Integer,Description="Alternate allele count for male samples">
+##INFO=<ID=AC_popmax,Number=A,Type=Integer,Description="Allele count in the population with the maximum AF">
+##INFO=<ID=AC_raw,Number=A,Type=Integer,Description="Alternate allele count for samples, before removing low-confidence genotypes">
+##INFO=<ID=AF,Number=A,Type=Float,Description="Alternate allele frequency in samples">
+##INFO=<ID=AF_female,Number=A,Type=Float,Description="Alternate allele frequency in female samples">
+##INFO=<ID=AF_male,Number=A,Type=Float,Description="Alternate allele frequency in male samples">
+##INFO=<ID=AF_raw,Number=A,Type=Float,Description="Alternate allele frequency in samples, before removing low-confidence genotypes">
+##INFO=<ID=AN,Number=1,Type=Integer,Description="Total number of alleles in called genotypes">
+##INFO=<ID=AN_female,Number=A,Type=Integer,Description="Total number of alleles in female samples">
+##INFO=<ID=AN_male,Number=A,Type=Integer,Description="Total number of alleles in male samples">
+##INFO=<ID=AN_popmax,Number=A,Type=Integer,Description="Total number of alleles in the population with the maximum AF">
+##INFO=<ID=AN_raw,Number=A,Type=Integer,Description="Total number of alleles in samples, before removing low-confidence genotypes">
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Depth of informative coverage for each sample; reads with MQ=255 or with bad mates are filtered">
+##INFO=<ID=FS,Number=1,Type=Float,Description="Phred-scaled p-value of Fisher's exact test for strand bias">
+##INFO=<ID=InbreedingCoeff,Number=1,Type=Float,Description="Inbreeding coefficient as estimated from the genotype likelihoods per-sample when compared against the Hardy-Weinberg expectation">
+##INFO=<ID=MQ,Number=1,Type=Float,Description="Root mean square of the mapping quality of reads across all samples">
+##INFO=<ID=QD,Number=1,Type=Float,Description="Variant call confidence normalized by depth of sample reads supporting a variant">
+##INFO=<ID=ReverseComplementedAlleles,Number=0,Type=Flag,Description="The REF and the ALT alleles have been reverse complemented in liftover since the mapping from the previous reference to the current one was on the negative strand.">
+##INFO=<ID=SOR,Number=1,Type=Float,Description="Strand bias estimated by the symmetric odds ratio test">
+##INFO=<ID=SwappedAlleles,Number=0,Type=Flag,Description="The REF and the ALT alleles have been swapped in liftover due to changes in the reference. It is possible that not all INFO annotations reflect this swap, and in the genotypes, only the GT, PL, and AD fields have been modified. You should check the TAGS_TO_REVERSE parameter that was used during the LiftOver to be sure.">
+##INFO=<ID=VQSLOD,Number=1,Type=Float,Description="Log-odds ratio of being a true variant versus being a false positive under the trained VQSR Gaussian mixture model">
+##INFO=<ID=VQSR_NEGATIVE_TRAIN_SITE,Number=0,Type=Flag,Description="Variant was used to build the negative training set of low-quality variants for VQSR">
+##INFO=<ID=VQSR_POSITIVE_TRAIN_SITE,Number=0,Type=Flag,Description="Variant was used to build the positive training set of high-quality variants for VQSR">
+##INFO=<ID=VQSR_culprit,Number=1,Type=String,Description="Worst-performing annotation in the VQSR Gaussian mixture model">
+##INFO=<ID=decoy,Number=0,Type=Flag,Description="Variant falls within a reference decoy region">
+##INFO=<ID=has_star,Number=0,Type=Flag,Description="Variant locus coincides with a spanning deletion (represented by a star) observed elsewhere in the callset">
+##INFO=<ID=lcr,Number=0,Type=Flag,Description="Variant falls within a low complexity region">
+##INFO=<ID=n_alt_alleles,Number=A,Type=Integer,Description="Total number of alternate alleles observed at variant locus">
+##INFO=<ID=nhomalt,Number=A,Type=Integer,Description="Count of homozygous individuals in samples">
+##INFO=<ID=nhomalt_female,Number=A,Type=Integer,Description="Count of homozygous individuals in female samples">
+##INFO=<ID=nhomalt_male,Number=A,Type=Integer,Description="Count of homozygous individuals in male samples">
+##INFO=<ID=nhomalt_popmax,Number=A,Type=Integer,Description="Count of homozygous individuals in the population with the maximum allele frequency">
+##INFO=<ID=nhomalt_raw,Number=A,Type=Integer,Description="Count of homozygous individuals in samples, before removing low-confidence genotypes">
+##INFO=<ID=nonpar,Number=0,Type=Flag,Description="Variant (on sex chromosome) falls outside a pseudoautosomal region">
+##INFO=<ID=pab_max,Number=A,Type=Float,Description="Maximum p-value over callset for binomial test of observed allele balance for a heterozygous genotype, given expectation of AB=0.5">
+##INFO=<ID=popmax,Number=A,Type=String,Description="Population with maximum AF">
+##INFO=<ID=rf_label,Number=1,Type=String,Description="Random forest training label">
+##INFO=<ID=rf_negative_label,Number=0,Type=Flag,Description="Variant was labelled as a negative example for training of random forest model">
+##INFO=<ID=rf_positive_label,Number=0,Type=Flag,Description="Variant was labelled as a positive example for training of random forest model">
+##INFO=<ID=rf_tp_probability,Number=1,Type=Float,Description="Random forest prediction probability for a site being a true variant">
+##INFO=<ID=rf_train,Number=0,Type=Flag,Description="Variant was used in training random forest model">
+##INFO=<ID=segdup,Number=0,Type=Flag,Description="Variant falls within a segmental duplication region">
+##INFO=<ID=transmitted_singleton,Number=0,Type=Flag,Description="Variant was a callset-wide doubleton that was transmitted within a family (i.e., a singleton amongst unrelated sampes in cohort)">
+##INFO=<ID=was_mixed,Number=0,Type=Flag,Description="Variant type was mixed">
+##bcftools_annotateVersion=1.6+htslib-1.6
+##bcftools_viewCommand=view --threads 3 -O b -o gnomad.exomes.r2.1.sites.bcf gnomad.exomes.r2.1.sites.vcf.bgz; Date=Sat Dec 22 23:38:59 2018
+##bcftools_viewVersion=1.6+htslib-1.6
+##contig=<ID=chr1,length=249250621>
+##contig=<ID=chr10,length=135534747>
+##contig=<ID=chr11,length=135006516>
+##contig=<ID=chr11_gl000202_random,length=40103>
+##contig=<ID=chr12,length=133851895>
+##contig=<ID=chr13,length=115169878>
+##contig=<ID=chr14,length=107349540>
+##contig=<ID=chr15,length=102531392>
+##contig=<ID=chr16,length=90354753>
+##contig=<ID=chr17,length=81195210>
+##contig=<ID=chr17_ctg5_hap1,length=1680828>
+##contig=<ID=chr17_gl000203_random,length=37498>
+##contig=<ID=chr17_gl000204_random,length=81310>
+##contig=<ID=chr17_gl000205_random,length=174588>
+##contig=<ID=chr17_gl000206_random,length=41001>
+##contig=<ID=chr18,length=78077248>
+##contig=<ID=chr18_gl000207_random,length=4262>
+##contig=<ID=chr19,length=59128983>
+##contig=<ID=chr19_gl000208_random,length=92689>
+##contig=<ID=chr19_gl000209_random,length=159169>
+##contig=<ID=chr1_gl000191_random,length=106433>
+##contig=<ID=chr1_gl000192_random,length=547496>
+##contig=<ID=chr2,length=243199373>
+##contig=<ID=chr20,length=63025520>
+##contig=<ID=chr21,length=48129895>
+##contig=<ID=chr21_gl000210_random,length=27682>
+##contig=<ID=chr22,length=51304566>
+##contig=<ID=chr3,length=198022430>
+##contig=<ID=chr4,length=191154276>
+##contig=<ID=chr4_ctg9_hap1,length=590426>
+##contig=<ID=chr4_gl000193_random,length=189789>
+##contig=<ID=chr4_gl000194_random,length=191469>
+##contig=<ID=chr5,length=180915260>
+##contig=<ID=chr6,length=171115067>
+##contig=<ID=chr6_apd_hap1,length=4622290>
+##contig=<ID=chr6_cox_hap2,length=4795371>
+##contig=<ID=chr6_dbb_hap3,length=4610396>
+##contig=<ID=chr6_mann_hap4,length=4683263>
+##contig=<ID=chr6_mcf_hap5,length=4833398>
+##contig=<ID=chr6_qbl_hap6,length=4611984>
+##contig=<ID=chr6_ssto_hap7,length=4928567>
+##contig=<ID=chr7,length=159138663>
+##contig=<ID=chr7_gl000195_random,length=182896>
+##contig=<ID=chr8,length=146364022>
+##contig=<ID=chr8_gl000196_random,length=38914>
+##contig=<ID=chr8_gl000197_random,length=37175>
+##contig=<ID=chr9,length=141213431>
+##contig=<ID=chr9_gl000198_random,length=90085>
+##contig=<ID=chr9_gl000199_random,length=169874>
+##contig=<ID=chr9_gl000200_random,length=187035>
+##contig=<ID=chr9_gl000201_random,length=36148>
+##contig=<ID=chrM,length=16571>
+##contig=<ID=chrUn_gl000211,length=166566>
+##contig=<ID=chrUn_gl000212,length=186858>
+##contig=<ID=chrUn_gl000213,length=164239>
+##contig=<ID=chrUn_gl000214,length=137718>
+##contig=<ID=chrUn_gl000215,length=172545>
+##contig=<ID=chrUn_gl000216,length=172294>
+##contig=<ID=chrUn_gl000217,length=172149>
+##contig=<ID=chrUn_gl000218,length=161147>
+##contig=<ID=chrUn_gl000219,length=179198>
+##contig=<ID=chrUn_gl000220,length=161802>
+##contig=<ID=chrUn_gl000221,length=155397>
+##contig=<ID=chrUn_gl000222,length=186861>
+##contig=<ID=chrUn_gl000223,length=180455>
+##contig=<ID=chrUn_gl000224,length=179693>
+##contig=<ID=chrUn_gl000225,length=211173>
+##contig=<ID=chrUn_gl000226,length=15008>
+##contig=<ID=chrUn_gl000227,length=128374>
+##contig=<ID=chrUn_gl000228,length=129120>
+##contig=<ID=chrUn_gl000229,length=19913>
+##contig=<ID=chrUn_gl000230,length=43691>
+##contig=<ID=chrUn_gl000231,length=27386>
+##contig=<ID=chrUn_gl000232,length=40652>
+##contig=<ID=chrUn_gl000233,length=45941>
+##contig=<ID=chrUn_gl000234,length=40531>
+##contig=<ID=chrUn_gl000235,length=34474>
+##contig=<ID=chrUn_gl000236,length=41934>
+##contig=<ID=chrUn_gl000237,length=45867>
+##contig=<ID=chrUn_gl000238,length=39939>
+##contig=<ID=chrUn_gl000239,length=33824>
+##contig=<ID=chrUn_gl000240,length=41933>
+##contig=<ID=chrUn_gl000241,length=42152>
+##contig=<ID=chrUn_gl000242,length=43523>
+##contig=<ID=chrUn_gl000243,length=43341>
+##contig=<ID=chrUn_gl000244,length=39929>
+##contig=<ID=chrUn_gl000245,length=36651>
+##contig=<ID=chrUn_gl000246,length=38154>
+##contig=<ID=chrUn_gl000247,length=36422>
+##contig=<ID=chrUn_gl000248,length=39786>
+##contig=<ID=chrUn_gl000249,length=38502>
+##contig=<ID=chrX,length=155270560>
+##contig=<ID=chrY,length=59373566>
+##hailversion=devel-4ec53fe2dcdc
+##reference=file:/data/human/hg19.fa
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+1	900505	.	G	C	.	PASS	AC=60134;AF=0.241109
+1	914940	.	T	C	.	PASS	AC=86319;AF=0.588654
+1	949608	.	G	A	.	PASS	AC=89869;AF=0.359335
+1	984302	.	T	C	.	PASS	AC=98515;AF=0.588332
+1	1007222	.	G	T	.	PASS	AC=16792;AF=0.14124
+1	1026801	.	T	A	.	PASS	AC=100100;AF=0.66736
+1	1118212	.	T	C	.	PASS	AC=58010;AF=0.466476
+1	1156131	.	T	C	.	PASS	AC=47149;AF=0.368064
+1	1220954	.	G	A	.	PASS	AC=29710;AF=0.216271
+1	1233941	.	T	C	.	PASS	AC=61619;AF=0.249536
+1	1247494	.	T	C	.	PASS	AC=112752;AF=0.55804
+1	1273278	.	A	G	.	PASS	AC=97872;AF=0.712346
+1	1330726	.	A	G	.	PASS	AC=97806;AF=0.415069
+1	1342612	.	G	C	.	PASS	AC=61065;AF=0.310123
+1	1354594	.	A	G	.	PASS	AC=22696;AF=0.150327
+1	1425700	.	T	C	.	PASS	AC=63109;AF=0.251735
+1	1479333	.	A	G	.	PASS	AC=115310;AF=0.459604
+1	1509825	.	A	G	.	PASS	AC=87123;AF=0.454073
+1	1551927	.	T	C	.	PASS	AC=133164;AF=0.585465
+1	1562536	.	G	A	.	PASS	AC=33263;AF=0.164049
+1	1635004	.	T	C	.	PASS	AC=122868;AF=0.553914
+1	1653004	.	T	C	.	PASS	AC=199298;AF=0.855393
+1	1669734	.	G	T	.	PASS	AC=101858;AF=0.419967
+1	1686943	.	T	C	.	PASS	AC=106437;AF=0.428801
+1	1846765	.	G	A	.	PASS	AC=71792;AF=0.455083
+1	1858309	.	T	C	.	PASS	AC=86448;AF=0.589292
+1	1875859	.	A	G	.	PASS	AC=62651;AF=0.46589
+1	1887245	.	G	A	.	PASS	AC=56441;AF=0.226816
+1	1900232	.	T	C	.	PASS	AC=105280;AF=0.422052
+1	1918488	.	A	G	.	PASS	AC=130882;AF=0.552189
+1	1957037	.	T	C	.	PASS	AC=147340;AF=0.588005
+1	1987993	.	T	C	.	PASS	AC=114435;AF=0.457107
+1	2005740	.	T	C	.	PASS	AC=127567;AF=0.870586
+1	2113266	.	G	A	.	PASS	AC=16163;AF=0.120273
+1	2144788	.	A	G	.	PASS	AC=40749;AF=0.318197
+1	2288852	.	G	A	.	PASS	AC=40859;AF=0.188732
+1	2340200	.	T	C	.	PASS	AC=193696;AF=0.773478
+1	2411451	.	A	G	.	PASS	AC=148666;AF=0.637909
+1	2422614	.	G	A	.	PASS	AC=177130;AF=0.743638
+1	2441358	.	T	C	.	PASS	AC=77004;AF=0.313532
+1	2452357	.	G	A	.	PASS	AC=60628;AF=0.317624
+1	2488153	.	A	G	.	PASS	AC=121076;AF=0.513617
+1	2520527	.	T	C	.	PASS	AC=100088;AF=0.419779
+1	2535758	.	A	G	.	PASS	AC=98457;AF=0.411888
+1	2560882	.	G	A	.	PASS	AC=82404;AF=0.58297
+1	2938697	.	T	G	.	PASS	AC=49340;AF=0.196732
+1	2983963	.	G	A	.	PASS	AC=36983;AF=0.271276
+1	3312914	.	T	G	.	PASS	AC=56676;AF=0.388016
+1	3342804	.	G	T	.	PASS	AC=72759;AF=0.294819
+1	3383898	.	A	G	.	PASS	AC=132864;AF=0.874059

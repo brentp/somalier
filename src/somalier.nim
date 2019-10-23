@@ -43,6 +43,27 @@ proc get_variant(ivcf:VCF, site:Site): Variant =
       (v.REF == site.B_allele and v.ALT[0] == site.A_allele)):
       return v.copy()
 
+proc ok(v:Variant): bool {.inline.} =
+  if v == nil: return false
+  if v.FILTER notin ["PASS", "", ".", "RefCall"]: return false
+  return true
+
+proc fill(AD: var seq[int32], alts: seq[int8]) =
+  for i, a in alts:
+    case a:
+      of 0:
+        AD[2 * i] = 20
+        AD[2 * i + 1] = 0
+      of 1:
+        AD[2 * i] = 10
+        AD[2 * i + 1] = 10
+      of 2:
+        AD[2 * i] = 0
+        AD[2 * i + 1] = 20
+      else:
+        AD[2 * i] = 0
+        AD[2 * i + 1] = 0
+
 proc get_ref_alt_counts(ivcf:VCF, sites:seq[Site], fai:Fai=nil): seq[counts] =
   result = newSeq[counts](ivcf.samples.len)
   var vcf_samples = ivcf.samples
@@ -50,7 +71,17 @@ proc get_ref_alt_counts(ivcf:VCF, sites:seq[Site], fai:Fai=nil): seq[counts] =
     result[j].sample_name = s
     result[j].sites = newSeqOfCap[allele_count](sites.len)
 
+  var has_AD = true
+  try:
+    discard ivcf.header.get("AD", BCF_HEADER_TYPE.BCF_HL_FMT)
+  except KeyError:
+    has_AD = false
+
+  if not has_AD:
+    stderr.write_line "[somalier] FORMAT field 'AD' not found for depth information. using genotype only"
+
   var AD = newSeq[int32](5*vcf_samples.len)
+  var x = newSeq[int32](vcf_samples.len)
   var n = 0
 
   for i, site in sites:
@@ -58,7 +89,10 @@ proc get_ref_alt_counts(ivcf:VCF, sites:seq[Site], fai:Fai=nil): seq[counts] =
     if v == nil or ($v.CHROM notin ["chrX", "X", "chrY", "Y"] and v.FILTER notin ["PASS", "", ".", "RefCall"]) or v.format.get("AD", AD) != Status.OK:
       AD.setLen(vcf_samples.len * 2)
       zeroMem(AD[0].addr, AD.len * sizeof(AD[0]))
-      if v != nil and v.looks_like_gvcf_variant:
+      if v.ok and not has_AD:
+        AD.fill(v.format.genotypes(x).alts)
+        n += 1
+      elif v.ok and v.looks_like_gvcf_variant:
         var dp:seq[int32]
         if v.format.get("MIN_DP", dp) == Status.OK or v.format.get("DP", dp) == Status.OK:
            AD[0] = dp[0]
@@ -199,13 +233,12 @@ proc main() =
     return
 
   if len(args) == 0 or args[0] in ["-h", "--help"]:
-    stderr.write_line "Commands: "
+    stdout.write_line "Commands: "
     for k, v in dispatcher:
       echo &"  {k:<13}:   {v.description}"
   else:
     echo &"unknown program '{args[0]}'"
     quit ""
-
 
 
 when isMainModule:

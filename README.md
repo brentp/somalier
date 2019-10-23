@@ -1,4 +1,4 @@
-# somalier: extract informative sites, evaluate relatedness, and perform quality-control
+# somalier: extract informative sites, evaluate relatedness, and perform quality-control on BAM/CRAM/BCF/VCF/GVCF
 
 [![Actions Status](https://github.com/brentp/somalier/workflows/Docker%20Image%20CI/badge.svg)](https://github.com/brentp/somalier/actions)
 
@@ -56,7 +56,7 @@ of the extracted files.
 
 ## VCF
 
-`somalier` can `extract` from a multi or single-sample VCF. This will be much faster, in cases where it's available,
+`somalier` can `extract` from a multi or single-sample VCF or a GVCF. This will be much faster, in cases where it's available,
 this would look like:
 
 ```
@@ -64,6 +64,10 @@ somalier extract -d extracted/ --sites sites.vcf.gz -f /data/human/g1k_v37_decoy
 ```
 
 following this, there will be a `$sample.somalier` file for each sample in the `joint.vcf.gz`
+
+Note that `somalier` uses the `AD` field to extract depth information. If that FORMAT field is not present in the
+header, then it will use the genotypes only and use a total depth of 20 (10,10 for heterozygote), etc.
+
 
 ## Install
 

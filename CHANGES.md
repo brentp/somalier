@@ -1,6 +1,8 @@
 v0.2.5 (dev)
 ============
 + handle more types of GVCF
++ handle VCFs without depth (AD) information. this enables extracting VCFs with only genotypes such as
+  files converted from array information (#31)
 
 v0.2.4
 ======
