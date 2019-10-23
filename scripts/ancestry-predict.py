@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 import sys
 import time
 
@@ -60,13 +61,10 @@ if __name__ == "__main__":
     p.add_argument("--backgrounds", nargs="+", help="path to background *.somalier files matching those specified in labels")
     p.add_argument("--samples", nargs="+", help="path to sample *.somalier for ancestry prediction")
     p.add_argument("--plot", help="path to save figure. if not specified, the plot is `show`n")
-    p.add_argument("--prefix", help="prefix to append to files. if not specified, the default prefix is appended", default="somalier-ancestry")
 
     args = p.parse_args()
 
     label = args.label_column
-
-    prefix = args.prefix
 
     bg_samples = []
     bg_ABs = []
@@ -89,7 +87,7 @@ if __name__ == "__main__":
         test_ABs.append(ab)
         test_samples.append(s["sample"])
 
-    bg_sample_df = pd.read_csv(args.labels, sep="\t", escapechar='#', index_col=0)
+    bg_df_predictions = pd.read_csv(args.labels, sep="\t", escapechar='#', index_col=0)
 
     n_components = 5
     clf = make_pipeline(PCA(n_components=n_components, whiten=True, copy=True, svd_solver="randomized"),
@@ -110,15 +108,14 @@ if __name__ == "__main__":
 
     bg_ABs = bg_ABs[:, ~rm]
 
-    np.save("{}.thousandG.npy".format(prefix), bg_ABs)
     if len(test_ABs) > 0:
         test_ABs = test_ABs[:, ~rm]
 
-    bg_sample_df = bg_sample_df.loc[bg_samples, :]
-    targetL = list(bg_sample_df[label].unique())
+    bg_df_predictions = bg_df_predictions.loc[bg_samples, :]
+    targetL = list(bg_df_predictions[label].unique())
 
 
-    target = np.array([targetL.index(p) for p in bg_sample_df[label]])
+    target = np.array([targetL.index(p) for p in bg_df_predictions[label]])
 
     clf.fit(bg_ABs, target)
 
@@ -127,31 +124,16 @@ if __name__ == "__main__":
     # generate PC labels for n components
     labels_pc = [("PC%d" % i) for i in range(1,(n_components+1))]
 
-    # export csv
-    bg_reduced_df = pd.DataFrame(
-        data=bg_reduced, 
-        index=bg_sample_df[label].values, columns=labels_pc)
-    bg_reduced_df.index.name = "ancestry"
-    bg_reduced_df.to_csv(path_or_buf="{}.background_pca.csv".format(prefix))
-
     if len(test_ABs) > 0:
         test_reduced = clf.named_steps["pca"].transform(test_ABs)
         test_pred = clf.predict(test_ABs)
         test_prob = clf.predict_proba(test_ABs)
 
-        # export prediction and PC's as csv
-        sample_df = pd.DataFrame(
-            data=np.hstack((test_prob.round(2), test_reduced)), 
-            index=test_samples, columns=[*targetL, *labels_pc])
-        sample_df.index.name = "#sample"
-        sample_df.to_csv(path_or_buf="{}.sample_prediction_pca.csv".format(prefix))
-
-
     fig, axes = plt.subplots(1) #, len(targetL) + 1, figsize=(22, 12))
     axes = (axes,)
-    for i, l in enumerate(sorted(set(bg_sample_df[label]))):
-        sel = bg_sample_df[label] == l
-        ibg_sample_df = bg_sample_df.loc[sel, :]
+    for i, l in enumerate(sorted(set(bg_df_predictions[label]))):
+        sel = bg_df_predictions[label] == l
+        ibg_df_predictions = bg_df_predictions.loc[sel, :]
         axes[0].scatter(bg_reduced[sel, 0], bg_reduced[sel, 1], label=l, s=8,
                 alpha=0.15, c=[colors[i % len(colors)]], ec='none')
 
@@ -166,7 +148,38 @@ if __name__ == "__main__":
     if args.plot in ["", None]:
         plt.show()
     else:
-        fp = Path(args.plot)
-        fp = fp if len(fp.suffix) > 0 else fp.with_suffix(".png") # add suffix
-        fp = fp.with_name("{}.{}".format(prefix,fp.name)) # add prefix
-        plt.savefig(str(fp))
+        # make path
+        fp_plot = Path(args.plot)
+        path = fp_plot.parent
+        prefix = fp_plot.stem
+        
+        os.makedirs(path, exist_ok=True) # make dir if it not exists
+        
+        # save plot
+        plt.savefig(fp_plot)
+
+        # save numpy array
+        fp_array = path.joinpath("{}.thousandG.npy".format(prefix))
+        np.save(fp_array, bg_ABs)
+
+        # export PCs as csv
+        df_pca = pd.DataFrame(
+            data=bg_reduced, 
+            index=bg_df_predictions[label].values, columns=labels_pc)
+        
+        if len(test_ABs) > 0:
+            df_pca = df_pca.append(
+                other=(pd.DataFrame(test_reduced, test_samples, labels_pc)))
+        
+        df_pca.index.name = "ancestry"
+        fp_pca = path.joinpath("{}.pcs.csv".format(prefix))
+        df_pca.to_csv(path_or_buf=fp_pca)
+
+        # export predictions as csv
+        if len(test_ABs) > 0:
+            df_predictions = pd.DataFrame(
+                data=test_prob.round(2), 
+                index=test_samples, columns=targetL)
+            df_predictions.index.name = "#sample"
+            fp_predictions = path.joinpath("{}.ancestry_prediction.csv".format(prefix))
+            df_predictions.to_csv(path_or_buf=fp_predictions)
