@@ -60,10 +60,13 @@ if __name__ == "__main__":
     p.add_argument("--backgrounds", nargs="+", help="path to background *.somalier files matching those specified in labels")
     p.add_argument("--samples", nargs="+", help="path to sample *.somalier for ancestry prediction")
     p.add_argument("--plot", help="path to save figure. if not specified, the plot is `show`n")
+    p.add_argument("--prefix", help="prefix to append to files. if not specified, the default prefix is appended", default="somalier-ancestry")
 
     args = p.parse_args()
 
     label = args.label_column
+
+    prefix = args.prefix
 
     bg_samples = []
     bg_ABs = []
@@ -107,7 +110,7 @@ if __name__ == "__main__":
 
     bg_ABs = bg_ABs[:, ~rm]
 
-    np.save("thousandG.npy", bg_ABs)
+    np.save("{}.thousandG.npy".format(prefix), bg_ABs)
     if len(test_ABs) > 0:
         test_ABs = test_ABs[:, ~rm]
 
@@ -129,7 +132,7 @@ if __name__ == "__main__":
         data=bg_reduced, 
         index=bg_sample_df[label].values, columns=labels_pc)
     bg_reduced_df.index.name = "ancestry"
-    bg_reduced_df.to_csv(path_or_buf="somalier.background_pca.csv")
+    bg_reduced_df.to_csv(path_or_buf="{}.background_pca.csv".format(prefix))
 
     if len(test_ABs) > 0:
         test_reduced = clf.named_steps["pca"].transform(test_ABs)
@@ -141,7 +144,7 @@ if __name__ == "__main__":
             data=np.hstack((test_prob.round(2), test_reduced)), 
             index=test_samples, columns=[*targetL, *labels_pc])
         sample_df.index.name = "#sample"
-        sample_df.to_csv(path_or_buf="somalier.sample_prediction_pca.csv")
+        sample_df.to_csv(path_or_buf="{}.sample_prediction_pca.csv".format(prefix))
 
 
     fig, axes = plt.subplots(1) #, len(targetL) + 1, figsize=(22, 12))
@@ -163,4 +166,7 @@ if __name__ == "__main__":
     if args.plot in ["", None]:
         plt.show()
     else:
-        plt.savefig(args.plot)
+        fp = Path(args.plot)
+        fp = fp if len(fp.suffix) > 0 else fp.with_suffix(".png") # add suffix
+        fp = fp.with_name("{}.{}".format(prefix,fp.name)) # add prefix
+        plt.savefig(str(fp))
