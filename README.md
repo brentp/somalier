@@ -118,8 +118,10 @@ You can use a background set of extracted `*.somalier` files, for example from t
 those samples to predict ancestry for a given set (or single sample). This would look like:
 
 ```
-python scripts/ancestry-predict.py --labels scripts/ancestry-labels-1kg.tsv --samples $MY_SAMPLES/*.somalier --backgrounds 1kg-somalier/*.somalier > sample-ancestries.txt
+python scripts/ancestry-predict.py --labels scripts/ancestry-labels-1kg.tsv --samples $MY_SAMPLES/*.somalier --backgrounds 1kg-somalier/*.somalier --plot plot.pdf --prefix my_sample
 ```
+
+And output: `my_sample.background_pca.csv`, `my_sample.plot.pdf`, `my_sample.sample_prediction_pca.csv` and `my_sample.thousandG.npy`
 
 The ancestry-predict.py and the `scripts/ancestry-labels-1kg.tsv` are in the somalier repository.
 The somalier files for thousand genomes can be downloaded from [here](https://zenodo.org/record/3479773/files/1kg.somalier.tar.gz?download=1)
