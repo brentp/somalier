@@ -172,7 +172,7 @@ if __name__ == "__main__":
                 other=(pd.DataFrame(test_reduced, test_samples, labels_pc)))
         
         df_pca.index.name = "ancestry"
-        fp_pca = path.joinpath("{}.pcs.csv".format(prefix))
+        fp_pca = path.joinpath("{}.ancestry_pcs.csv".format(prefix))
         df_pca.to_csv(path_or_buf=fp_pca)
 
         # export predictions as csv
