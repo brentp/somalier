@@ -1,5 +1,6 @@
 import os
 import strformat
+import random
 import bitset
 import times
 import streams
@@ -57,17 +58,6 @@ type relation_matrices = object
   genotypes: seq[genotypes]
   x_genotypes: seq[genotypes]
 
-proc `%`*(r:relation_matrices): JsonNode =
-  result = %* {
-     "ibs": r.ibs,
-     "n": r.n,
-     "hets": r.gt_counts[1],
-     "homs": r.gt_counts[2],
-     "shared_hom_alts": r.shared_hom_alts,
-     "samples": r.samples
-     }
-
-
 type relation = object
   sample_a: string
   sample_b: string
@@ -83,11 +73,53 @@ type relation = object
   x_ibs2: uint16
   n: uint16
 
+
+## structure for fast small json for plotly
+## we use a seq of these separated by the relatedness
+## as that's what plotly uses.
+type relations = object
+  # all sample-pairs with the same expected relatedness are stored together
+  # this makes plotly faster
+  expected_relatedness: float64
+  # TODO: might want to use sample indexes here...
+  text: seq[string]
+  ibs0: seq[uint16]
+  ibs2: seq[uint16]
+  shared_hets: seq[uint16]
+  shared_hom_alts: seq[uint16]
+  concordance: seq[float32]
+  relatedness: seq[float32]
+
 proc hom_alt_concordance(r: relation): float64 {.inline.} =
   return (r.shared_hom_alts.float64 - 2 * r.ibs0.float64) / min(r.hom_alts_a, r.hom_alts_b).float64
 
 proc rel(r:relation): float64 {.inline.} =
   return (r.shared_hets.float64 - 2 * r.ibs0.float64) / min(r.hets_a, r.hets_b).float64
+
+proc add*(rt:var seq[relations], rel:relation, expected_relatedness:float) =
+
+  # this keeps order so that unrelateds are first.
+  var added: bool = false
+  var i = 0
+  for r in rt.mitems:
+    if abs(r.expected_relatedness - expected_relatedness) < 0.001:
+      r.text.add(rel.sample_a & "<br>" & rel.sample_b)
+      r.ibs0.add(rel.ibs0)
+      r.ibs2.add(rel.ibs2)
+      r.shared_hets.add(rel.shared_hets)
+      r.shared_hom_alts.add(rel.shared_hom_alts)
+      r.concordance.add(rel.hom_alt_concordance)
+      r.relatedness.add(rel.rel)
+      added = true
+      break
+    if r.expected_relatedness > expected_relatedness: break
+    i += 1
+
+  if not added:
+    rt.insert(relations(expected_relatedness: expected_relatedness), i)
+    # recurse and add not that we have the correct position.
+    rt.add(rel, expected_relatedness)
+
 
 const header = "$sample_a\t$sample_b\t$relatedness\t$hom_concordance\t$hets_a\t$hets_b\t$shared_hets\t$hom_alts_a\t$hom_alts_b\t$shared_hom_alts\t$ibs0\t$ibs2\t$n\t$x_ibs0\t$x_ibs2\t$expected_relatedness"
 
@@ -455,6 +487,7 @@ proc to_sex_lookup(samples: seq[Sample]): TableRef[string, string] =
 proc rel_main*() =
   ## need to track samples names from bams first, then vcfs since
   ## thats the order for the alts array.
+  randomize()
   var argv = commandLineParams()
   if argv[0] == "relate": argv = argv[1..argv.high]
 
@@ -522,8 +555,15 @@ specified as comma-separated groups per line e.g.:
 
   t0 = cpuTime()
 
-  fh_tsv.write_line '#', header.replace("$", "")
+  var tmpls = tmpl_html.split("<INPUT_JSON>")
   var sample_sexes = samples.to_sex_lookup
+  fh_html.write(tmpls[0].replace("<SAMPLE_JSON>", toj(final.samples, final.stats, final.gt_counts, sample_sexes)))
+
+  var rels: seq[relations]
+
+  var proportion_sampled: float = 0.5
+
+  fh_tsv.write_line '#', header.replace("$", "")
   var npairs:int
   sort(groups, cmp_pair)
   for rel in final.relatedness(grouped):
@@ -531,14 +571,16 @@ specified as comma-separated groups per line e.g.:
     if idx == -1:
       idx = groups.binarySearch((rel.sample_b, rel.sample_a, -1.0), cmp_pair)
     let expected_relatedness = if idx == -1: -1'f else: groups[idx].rel
+    if (expected_relatedness != -1) or (rand(1'f32) < proportion_sampled) or rel.rel > 0.08:
+      rels.add(rel, max(0, expected_relatedness))
 
     fh_tsv.write_line rel.tsv(expected_relatedness)
     npairs.inc
   stderr.write_line &"[somalier] time to calculate all vs all relatedness for all {npairs} combinations: {cpuTime() - t0:.2f}"
 
-  var j = % final
-  j["expected-relatedness"] = %* groups
-  fh_html.write(tmpl_html.replace("<INPUT_JSON>", $j).replace("<SAMPLE_JSON>", toj(final.samples, final.stats, final.gt_counts, sample_sexes)))
+
+  fh_html.write(%* rels)
+  fh_html.write(tmpls[1])
   fh_html.close()
   stderr.write_line("[somalier] wrote interactive HTML output to: ",  opts.output_prefix & "html")
 
