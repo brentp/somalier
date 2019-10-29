@@ -127,6 +127,7 @@ python scripts/ancestry-predict.py --labels scripts/ancestry-labels-1kg.tsv --sa
 
 The ancestry-predict.py and the `scripts/ancestry-labels-1kg.tsv` are in the somalier repository.
 The somalier files for thousand genomes can be downloaded from [here](https://zenodo.org/record/3479773/files/1kg.somalier.tar.gz?download=1)
+These were created from the thousand genomes high coverage data from [here](http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/1000G_2504_high_coverage/working/20190425_NYGC_GATK/)
 Note that these will work for either GRCh37 or hg38 as long as you use the most recent sites files distributed with `somalier`.
 
  
