@@ -507,7 +507,7 @@ specified as comma-separated groups per line e.g.:
   var opts = p.parse(argv)
   if opts.help:
     quit 0
-  if opts.extracted.len == 0:
+  if opts.extracted.len == 0 or (opts.extracted.len == 1 and not existsFile(opts.extracted[0])):
     echo p.help
     quit "[somalier] specify at least 1 extracted somalier file"
   var
@@ -515,6 +515,7 @@ specified as comma-separated groups per line e.g.:
     samples: seq[Sample]
     min_depth = parseInt(opts.min_depth)
     unk2hr = opts.unknown
+
 
   if not opts.output_prefix.endswith(".") or opts.output_prefix.endswith("/"):
     opts.output_prefix &= '.'
