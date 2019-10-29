@@ -172,22 +172,24 @@ if (sample_data.length > 700) {
 }
 
 function set_xy_data_by_group(input, metric, is_x) {
-    var l = {"0.00": "unrelated", "0.50": "parent-child", "0.49": "sib-sib", "1.00": "identical"}
+    let l = {"0.00": "unrelated", "0.50": "parent-child", "0.49": "sib-sib", "1.00": "identical"}
     for(var i = 0; i < input.length; i++) {
-	    var c = input[i]
-	    if(c.expected_relatedness != undefined) {
-  	      c.name = l[c.expected_relatedness.toFixed(2)] || c.expected_relatedness.toFixed(3)
-        	}
-	    if(is_x) {
-		    c.x = c[metric]
-	    	c.showlegend = c.x.length > 0;
-	    } else {
-		    c.y = c[metric]
-	    	c.showlegend = c.y.length > 0;
-	    }
+        var c = input[i]
+        if(c.expected_relatedness != undefined) {
+                c.name = l[c.expected_relatedness.toFixed(2)] || c.expected_relatedness.toFixed(3)
+        }
+        if(is_x) {
+            c.x = c[metric]
+            c.showlegend = i < input.length - 1 && c.x.length > 0;
+        } else {
+           c.y = c[metric]
+            c.showlegend =i < input.length - 1 &&  c.y.length > 0;
+        }
         c.type = 'scattergl'
         c.mode = 'markers'
-        c.marker = {size: size, color: colors[i]}
+        if(i < input.length - 1 ){
+           c.marker = {size: size, color: colors[i]}
+        }
 
     }
 }
@@ -234,17 +236,14 @@ var layout_b = {
         orientation: "h",
         borderwidth: 1,
         bordercolor: '#eeeeee'
-	},
+    },
 }
 
+input.push({mode:"markers", type:'scattergl', hoverinfo:'text+x+y', showlegend:false, name:'hovered', x:[], y:[], hovertext:[], marker:{size:size+3, opacity: 1, color:'#000000'}})
 set_xy_data_by_group(input, jQuery('#plotax_select').val(), true)
 set_xy_data_by_group(input, jQuery('#plotay_select').val(), false)
 
-var l = {0: "unrelated", 0.5: "parent-child", 0.49: "sib-sib", 1: "identical"}
-
-var traces_a = input
 // append final trace to hold plot B hover action markers
-traces_a.push({mode:"markers", type:'scattergl', hoverinfo:'text+x+y', showlegend:false, name:'hovered', x:[], y:[], hovertext:[], marker:{size:size+3, opacity: 1, color:'#000000'}})
 
 var traces_b = [
     // gray
@@ -291,16 +290,17 @@ for (i in sample_data) {
 
 var pa = document.getElementById("plota")
 var pb = document.getElementById("plotb")
-Plotly.newPlot(pa, traces_a, layout_a)
+Plotly.newPlot(pa, input, layout_a)
 init_depth_metrics_plot()
 
 pa.on('plotly_hover', function(e) {
     var p = e.points[0]
-    var idxs = traces_a[p.curveNumber].ix[p.pointIndex]
+    var split = p.text.split("<br>", 2)
+
     Plotly.Fx.hover('plotb',
         [
-            {curveNumber: 0, pointNumber: idxs[0]},
-            {curveNumber: 0, pointNumber: idxs[1]}
+            {curveNumber: 0, pointNumber: sample_names.indexOf(split[0])},
+            {curveNumber: 0, pointNumber: sample_names.indexOf(split[1])}
         ]
     )
 })
@@ -314,27 +314,30 @@ function pa_hover(sample) {
     var xs = []
     var ys = []
     if (sample) {
-        for (var j=0; j < traces_a.length-1; j++) {
-            var otr = traces_a[j]
+        var left = sample + "<br>"
+        var right = "<br>" + sample
+        for (var j=0; j < input.length-1; j++) {
+            var otr = input[j]
+ 
             for (var k=0; k < otr.x.length; k++) {
-                if (otr.hovertext[k].startsWith(sample) || otr.hovertext[k].endsWith(sample)) {
+                if (otr.text[k].startsWith(left) || otr.text[k].endsWith(right)) {
                     xs.push(otr.x[k])
                     ys.push(otr.y[k])
-                    ht.push(otr.hovertext[k])
+                    ht.push(otr.text[k])
                 }
             }
         }
     }
 
-    traces_a[traces_a.length-1].x = xs
-    traces_a[traces_a.length-1].y = ys
-    traces_a[traces_a.length-1].hovertext = ht
-    traces_a[traces_a.length-1].marker.opacity = 1
+    input[input.length-1].x = xs
+    input[input.length-1].y = ys
+    input[input.length-1].hovertext = ht
+    input[input.length-1].marker.opacity = 1
 
     // remove all existing markers so highlights will be drawn on top
     Plotly.purge(pa)
     // redraw with existing + marker traces
-    Plotly.react(pa, traces_a, layout_a)
+    Plotly.react(pa, input, layout_a)
 }
 
 function select_and_hover() {
@@ -380,13 +383,13 @@ function init_depth_metrics_plot() {
 
     // remove the markers and fix opacity on unhover
     pb.on('plotly_unhover',  function(e) {
-        traces_a[traces_a.length-1].x = [];
-        traces_a[traces_a.length-1].y = [];
-        traces_a[traces_a.length-1].hovertext = [];
-        for(j = 0; j < traces_a.length-1; j++){
-            traces_a[j].marker.opacity = 1
+        input[input.length-1].x = [];
+        input[input.length-1].y = [];
+        input[input.length-1].hovertext = [];
+        for(j = 0; j < input.length-1; j++){
+            input[j].marker.opacity = 1
         }
-        Plotly.react(pa, traces_a, layout_a)
+        Plotly.react(pa, input, layout_a)
     })
 }
 
@@ -394,7 +397,7 @@ function init_depth_metrics_plot() {
 jQuery('#plotay_select, #plotax_select').on('change', function() {
     pa_hover(false)
     var metric = this.value
-				    console.log(metric)
+    set_xy_data_by_group(input, metric, this.id == "plotax_select")
 
     if(this.id == 'plotay_select') {
         layout_a.yaxis.title = jQuery("#plotay_select option:selected").text();
@@ -410,14 +413,8 @@ jQuery('#plotbx_select, #plotby_select').on('change', function() {
     var field = this.value
     var extracted = [[], [], []]
     for (i in sample_data) {
-        var idx = 0
-	    var sex = sample_data[i].sex
-	    if (sex == "male") {
-            idx = 1
-        }
-	    if (sex == "female") {
-            idx = 2
-        }
+        var sex = sample_data[i].sex
+        var idx = sex == "male" ? 1 : ((sex == "female")? 2: 0)
         extracted[idx].push(sample_data[i][field])
     }
     if (this.id == 'plotbx_select') {
@@ -442,6 +439,11 @@ window.onresize = function() {
     Plotly.Plots.resize('plota')
     Plotly.Plots.resize('plotb')
 };
+
+const sample_names = sample_data.map(function(x) {
+    return x.sample
+})
+
 
 // sample search
 const sample_list = sample_data.map(function(x) {
