@@ -3,6 +3,9 @@ v0.2.6 (dev)
 + for large cohorts (>1K samples) the html output is now usable.
   it randomly subsets samples that should be and are unrelated.
 + better error messages for bad input
++ inspect environment variable: `SOMALIER_ALLOWED_FILTERS` so that users can
+  give a comma-delimited list of FILTERs that should be allowed (by default only PASS and RefCall
+  variants are considered. This is useful for some GVCF formats. 
   
 v0.2.5
 ======

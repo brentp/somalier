@@ -43,26 +43,35 @@ proc get_variant(ivcf:VCF, site:Site): Variant =
       (v.REF == site.B_allele and v.ALT[0] == site.A_allele)):
       return v.copy()
 
+var allowed_filters = @["PASS", "", ".", "RefCall"]
+allowed_filters.add(getEnv("SOMALIER_ALLOWED_FILTERS").split(","))
+
 proc ok(v:Variant): bool {.inline.} =
   if v == nil: return false
-  if v.FILTER notin ["PASS", "", ".", "RefCall"]: return false
+  if v.FILTER notin allowed_filters: return false
   return true
 
-proc fill(AD: var seq[int32], alts: seq[int8]) =
+proc fill(AD: var seq[int32], alts: seq[int8]): bool =
+  ## return true if any sample had a known genotype
+  result = false
   for i, a in alts:
     case a:
       of 0:
+        result = true
         AD[2 * i] = 20
         AD[2 * i + 1] = 0
       of 1:
+        result = true
         AD[2 * i] = 10
         AD[2 * i + 1] = 10
       of 2:
+        result = true
         AD[2 * i] = 0
         AD[2 * i + 1] = 20
       else:
         AD[2 * i] = 0
         AD[2 * i + 1] = 0
+
 
 proc get_ref_alt_counts(ivcf:VCF, sites:seq[Site], fai:Fai=nil): seq[counts] =
   result = newSeq[counts](ivcf.samples.len)
@@ -86,12 +95,12 @@ proc get_ref_alt_counts(ivcf:VCF, sites:seq[Site], fai:Fai=nil): seq[counts] =
 
   for i, site in sites:
     var v = ivcf.get_variant(site)
-    if v == nil or ($v.CHROM notin ["chrX", "X", "chrY", "Y"] and v.FILTER notin ["PASS", "", ".", "RefCall"]) or v.format.get("AD", AD) != Status.OK:
+    if v == nil or ($v.CHROM notin ["chrX", "X", "chrY", "Y"] and v.FILTER notin allowed_filters) or v.format.get("AD", AD) != Status.OK:
       AD.setLen(vcf_samples.len * 2)
       zeroMem(AD[0].addr, AD.len * sizeof(AD[0]))
       if v.ok and not has_AD:
-        AD.fill(v.format.genotypes(x).alts)
-        n += 1
+        if AD.fill(v.format.genotypes(x).alts):
+          n += 1
       elif v.ok and v.looks_like_gvcf_variant:
         var dp:seq[int32]
         if v.format.get("MIN_DP", dp) == Status.OK or v.format.get("DP", dp) == Status.OK:

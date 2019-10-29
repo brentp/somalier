@@ -130,6 +130,14 @@ The somalier files for thousand genomes can be downloaded from [here](https://ze
 These were created from the thousand genomes high coverage data from [here](http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/1000G_2504_high_coverage/working/20190425_NYGC_GATK/)
 Note that these will work for either GRCh37 or hg38 as long as you use the most recent sites files distributed with `somalier`.
 
+
+## Usage
+
+Usage is intentionally very simple and running `somalier extract` or `somalier relate` will give sufficient help for nearly
+all cases.
+
+By default `somalier` will only consider variants that have a "PASS" or "RefCall" FILTER. To extend this list, set
+the environment variable `SOMALIER_ALLOWED_FILTERS` to a comma-delimited list of additional filters to allow.
  
 ## License
 
