@@ -528,10 +528,6 @@ specified as comma-separated groups per line e.g.:
 
   if opts.ped != "":
     samples = parse_ped(opts.ped)
-  if samples.len > 30_000:
-    stderr.write_line "[somalier] WARNING!! somalier will work fine for even 100K samples, but it is not optimal for such scenarios."
-    stderr.write_line "[somalier] ......... please open an issue at: https://github.com/brentp/somalier/issues as larger cohorts"
-    stderr.write_line "[somalier] ......... can be supported."
 
   groups.add_ped_samples(samples, final.samples)
   # send in groups so we can adjust baed on self-self samples
