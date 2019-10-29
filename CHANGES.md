@@ -1,5 +1,5 @@
-v0.2.6 (dev)
-============
+v0.2.6
+======
 + for large cohorts (>1K samples) the html output is now usable.
   it randomly subsets samples that should be and are unrelated.
 + better error messages for bad input
