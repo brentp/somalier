@@ -24,7 +24,7 @@ somalier relate --ped $pedigree extracted/*.somalier
 This will create text and interactive HTML output (similar to [peddy](https://github.com/brentp/peddy))
 that makes it fast and easy to detect mismatched samples and sample-swaps.
 
-Note that the `somalier relate` command runs extremely quickly (< 2 seconds for 600 samples) so it's possible
+Note that the `somalier relate` command runs extremely quickly (< 2 seconds for 600 samples and ~1 minute for 4,500 samples) so it's possible
 to add/remove samples or adjust a pedigree file and re-run iteratively.
 
 For example to add the **n + 1th** samples, just run `somalier extract` on the new sample and then re-use

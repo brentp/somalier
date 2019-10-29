@@ -291,19 +291,24 @@ for (i in sample_data) {
 var pa = document.getElementById("plota")
 var pb = document.getElementById("plotb")
 Plotly.newPlot(pa, input, layout_a)
-init_depth_metrics_plot()
 
 pa.on('plotly_hover', function(e) {
     var p = e.points[0]
     var split = p.text.split("<br>", 2)
 
-    Plotly.Fx.hover('plotb',
+    Plotly.Fx.hover(pb,
         [
-            {curveNumber: 0, pointNumber: sample_names.indexOf(split[0])},
-            {curveNumber: 0, pointNumber: sample_names.indexOf(split[1])}
+            {curveNumber: 0, pointNumber: unknown_sample_names.indexOf(split[0])},
+            {curveNumber: 0, pointNumber: unknown_sample_names.indexOf(split[1])},
+            {curveNumber: 1, pointNumber: male_sample_names.indexOf(split[0])},
+            {curveNumber: 1, pointNumber: male_sample_names.indexOf(split[1])},
+            {curveNumber: 2, pointNumber: female_sample_names.indexOf(split[0])},
+            {curveNumber: 2, pointNumber: female_sample_names.indexOf(split[1])},
         ]
     )
 })
+
+init_depth_metrics_plot()
 
 pa.on('plotly_unhover', function(e) {
     Plotly.Fx.unhover(pb)
@@ -316,8 +321,9 @@ function pa_hover(sample) {
     if (sample) {
         var left = sample + "<br>"
         var right = "<br>" + sample
+        var otr
         for (var j=0; j < input.length-1; j++) {
-            var otr = input[j]
+            otr = input[j]
  
             for (var k=0; k < otr.x.length; k++) {
                 if (otr.text[k].startsWith(left) || otr.text[k].endsWith(right)) {
@@ -335,7 +341,7 @@ function pa_hover(sample) {
     input[input.length-1].marker.opacity = 1
 
     // remove all existing markers so highlights will be drawn on top
-    Plotly.purge(pa)
+    //Plotly.purge(pa)
     // redraw with existing + marker traces
     Plotly.react(pa, input, layout_a)
 }
@@ -343,6 +349,8 @@ function pa_hover(sample) {
 function select_and_hover() {
     // get selection
     var sample = sample_search_obj.items[0]
+    console.log("in select and hover with", sample)
+    
     if (sample) {
         // get curve and sample index
         for (let curve_idx=0; curve_idx < pb.data.length; curve_idx++) {
@@ -443,7 +451,9 @@ window.onresize = function() {
 const sample_names = sample_data.map(function(x) {
     return x.sample
 })
-
+const male_sample_names = sample_data.filter(function(x) { return x.sex == "male"}).map(function(x) { return x.sample })
+const female_sample_names = sample_data.filter(function(x) { return x.sex == "female"}).map(function(x) { return x.sample })
+const unknown_sample_names = sample_data.filter(function(x) { return x.sex != "male" && x.sex != "female"}).map(function(x) { return x.sample })
 
 // sample search
 const sample_list = sample_data.map(function(x) {
