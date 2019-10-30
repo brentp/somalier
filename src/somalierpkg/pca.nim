@@ -59,6 +59,7 @@ proc pca_main*() =
 
 
   var cnt : counts
+  randomize()
   shuffle(opts.extracted)
   for i, f in opts.extracted:
 
@@ -77,17 +78,16 @@ proc pca_main*() =
   let Y = ys.toTensor() #.astype(float32)#.unsqueeze(0).transpose
   echo T.shape, " ", Y.shape
   var t0 = cpuTime()
-  var res = T.pca(64)
+  var res = T.pca(8)
   echo "time for pca:", cpuTime() - t0
   echo "components shape:", res.components.shape
   echo "results shape:", res.projected.shape
   res.components.write_npy("comps.npy")
   var R = res.projected
 
-
   let
     ctx = newContext Tensor[float32]
-    nHidden = 128
+    nHidden = 32
     nOut = ys.toHashSet.len
     X = ctx.variable R
 
@@ -102,13 +102,13 @@ proc pca_main*() =
 
   let
     model = ctx.init(AncestryNet)
-    optim = model.optimizerSGD(learning_rate = 0.001'f32)
-    batch_size = 256
+    optim = model.optimizerSGD(learning_rate = 0.005'f32)
+    batch_size = 32
     t00 = cpuTime()
 
-  for epoch in 0..<50:
+  for epoch in 0..<10000:
 
-    for batch_id in 0..<X.value.shape[0] div batch_size:
+    for batch_id in 0..<(X.value.shape[0] - 100) div batch_size:
       let offset = batch_id * batch_size
       let x = X[offset ..< offset + batch_size, _]
       let y = Y[offset ..< offset + batch_size]
@@ -118,17 +118,24 @@ proc pca_main*() =
         #loss = mse_loss(y_pred, y)
         loss = clf.sparse_softmax_cross_entropy(y)
 
-      ctx.no_grad_mode:
-        let ypred = model.forward(X[0..200, _]).value.softmax.argmax(axis=1).squeeze
 
-      echo "true:", ys[0..200]
-      echo "pred:", y_pred.toSeq
-      echo "Epoch is: " & $epoch, " batch is:", batch_id
-      echo "Loss is:  " & $loss.value.data
-      echo "total time:", cpuTime() - t00
+      if batch_id == 0 and epoch mod 100 == 0:
+        ctx.no_grad_mode:
+          let ypred = model.forward(X[2332..<2504, _]).value.softmax.argmax(axis=1).squeeze
+        echo "accuracy on unseen data:", accuracy_score(Y[2332..<2504], y_pred)
+        #echo "true:", ys[0..200]
+        #echo "pred:", y_pred.toSeq
+        echo "Epoch is: " & $epoch, " batch is:", batch_id
+        echo "Loss is:  " & $loss.value.data
+        echo "total time:", cpuTime() - t00
 
       loss.backprop()
       optim.update()
+
+
+  ctx.no_grad_mode:
+    let ypred = model.forward(X[2432..<2504, _]).value.softmax.argmax(axis=1).squeeze
+    echo "accuracy on unseen data:", accuracy_score(Y[2432..<2504], y_pred)
 
 
   t0 = cpuTime()
