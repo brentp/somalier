@@ -76,17 +76,25 @@ proc pca_main*() =
   var T = mat.toTensor()
   let Y = ys.toTensor() #.astype(float32)#.unsqueeze(0).transpose
   echo T.shape, " ", Y.shape
+  var t0 = cpuTime()
+  var res = T.pca(64)
+  echo "time for pca:", cpuTime() - t0
+  echo "components shape:", res.components.shape
+  echo "results shape:", res.projected.shape
+  res.components.write_npy("comps.npy")
+  var R = res.projected
+
 
   let
     ctx = newContext Tensor[float32]
     nHidden = 128
     nOut = ys.toHashSet.len
-    X = ctx.variable T
+    X = ctx.variable R
 
   network ctx, AncestryNet:
     layers:
-      x: Input([1, T.shape[1]])
-      fc1: Linear(T.shape[1], nHidden)
+      x: Input([1, R.shape[1]])
+      fc1: Linear(R.shape[1], nHidden)
       classifier: Linear(nHidden, nOut)
 
     forward x:
@@ -122,15 +130,6 @@ proc pca_main*() =
       loss.backprop()
       optim.update()
 
-
-
-  echo "T shape:", T.shape
-  var t0 = cpuTime()
-  var res = T.pca(5)
-  echo "time for pca:", cpuTime() - t0
-  echo "components shape:", res.components.shape
-  echo "results shape:", res.projected.shape
-  res.components.write_npy("comps.npy")
 
   t0 = cpuTime()
   var proj = T * res.components
