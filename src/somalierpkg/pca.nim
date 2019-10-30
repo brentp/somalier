@@ -1,5 +1,7 @@
 import os
 import times
+import sequtils
+import random
 import strformat
 import strutils
 import arraymancer
@@ -54,7 +56,9 @@ proc pca_main*() =
   var orders = getLabelOrders(labels)
   var ys = newSeq[int]()
 
+
   var cnt : counts
+  shuffle(opts.extracted)
   for i, f in opts.extracted:
 
 
@@ -67,21 +71,21 @@ proc pca_main*() =
       vec[j] = ac.ab(5).alts.float32
     mat[i] = vec
 
-  var T = mat.toTensor#.transpose
-  echo "y:", ys[0..20]
-  let y = ys.toTensor #.astype(float32)#.unsqueeze(0).transpose
+
+  var T = mat.toTensor()
+  echo "y:", ys[0..200]
+  let y = ys.toTensor() #.astype(float32)#.unsqueeze(0).transpose
   echo T.shape, " ", y.shape
-
-
 
   let
     ctx = newContext Tensor[float32]
-    nHidden = 60
+    nHidden = 500
     nOut = ys.toHashSet.len
     x = ctx.variable T
 
   network ctx, AncestryNet:
     layers:
+      x: Input([1, T.shape[1]])
       fc1: Linear(T.shape[1], nHidden)
       classifier: Linear(nHidden, nOut)
 
@@ -96,11 +100,14 @@ proc pca_main*() =
   for epoch in 0..<100:
 
     let
-      y_pred = model.forward(x)
+      clf = model.forward(x)
       #loss = mse_loss(y_pred, y)
-      loss = y_pred.sparse_softmax_cross_entropy(y)
+      loss = clf.sparse_softmax_cross_entropy(y)
 
-    echo y_pred.value.data[0..20]
+    ctx.no_grad_mode:
+      let ypred = model.forward(x[0..200, _]).value.softmax.argmax(axis=1).squeeze
+
+    echo "pred:", y_pred.toSeq
     echo "Epoch is: " & $epoch
     echo "Loss is:  " & $loss.value.data
 
