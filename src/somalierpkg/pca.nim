@@ -34,6 +34,7 @@ proc pca_main*() =
   var argv = commandLineParams()
   if argv.len == 0: argv = @["-h"]
   if argv[0] == "pca": argv = argv[1..argv.high]
+  #randomize()
 
   var p = newParser("somalier pca"):
     help("dimensionality reduction")
@@ -73,15 +74,14 @@ proc pca_main*() =
 
 
   var T = mat.toTensor()
-  echo "y:", ys[0..200]
-  let y = ys.toTensor() #.astype(float32)#.unsqueeze(0).transpose
-  echo T.shape, " ", y.shape
+  let Y = ys.toTensor() #.astype(float32)#.unsqueeze(0).transpose
+  echo T.shape, " ", Y.shape
 
   let
     ctx = newContext Tensor[float32]
-    nHidden = 500
+    nHidden = 128
     nOut = ys.toHashSet.len
-    x = ctx.variable T
+    X = ctx.variable T
 
   network ctx, AncestryNet:
     layers:
@@ -94,25 +94,33 @@ proc pca_main*() =
 
   let
     model = ctx.init(AncestryNet)
-    optim = model.optimizerSGD(learning_rate = 0.01'f32)
+    optim = model.optimizerSGD(learning_rate = 0.001'f32)
+    batch_size = 256
+    t00 = cpuTime()
 
+  for epoch in 0..<50:
 
-  for epoch in 0..<100:
+    for batch_id in 0..<X.value.shape[0] div batch_size:
+      let offset = batch_id * batch_size
+      let x = X[offset ..< offset + batch_size, _]
+      let y = Y[offset ..< offset + batch_size]
 
-    let
-      clf = model.forward(x)
-      #loss = mse_loss(y_pred, y)
-      loss = clf.sparse_softmax_cross_entropy(y)
+      let
+        clf = model.forward(x)
+        #loss = mse_loss(y_pred, y)
+        loss = clf.sparse_softmax_cross_entropy(y)
 
-    ctx.no_grad_mode:
-      let ypred = model.forward(x[0..200, _]).value.softmax.argmax(axis=1).squeeze
+      ctx.no_grad_mode:
+        let ypred = model.forward(X[0..200, _]).value.softmax.argmax(axis=1).squeeze
 
-    echo "pred:", y_pred.toSeq
-    echo "Epoch is: " & $epoch
-    echo "Loss is:  " & $loss.value.data
+      echo "true:", ys[0..200]
+      echo "pred:", y_pred.toSeq
+      echo "Epoch is: " & $epoch, " batch is:", batch_id
+      echo "Loss is:  " & $loss.value.data
+      echo "total time:", cpuTime() - t00
 
-    loss.backprop()
-    optim.update()
+      loss.backprop()
+      optim.update()
 
 
 
