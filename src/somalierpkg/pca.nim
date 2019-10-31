@@ -29,6 +29,18 @@ proc getLabelOrders(l:TableRef[string, string]): TableRef[string, int] =
       idx = ancs.high
     result[ancestry] = idx
 
+proc split_labeled_samples(paths: seq[string]): tuple[labeled: seq[string], test:seq[string]] =
+  var after = false
+  for p in paths:
+    if p == "++":
+      after = true
+      continue
+
+    if after:
+      result.test.add(p)
+    else:
+      result.labeled.add(p)
+
 proc pca_main*() =
 
   var argv = commandLineParams()
@@ -39,7 +51,11 @@ proc pca_main*() =
   var p = newParser("somalier pca"):
     help("dimensionality reduction")
     option("--labels", help="file with ancestry labels")
-    arg("extracted", nargs= -1, help="$sample.somalier files for each sample.")
+    option("--n-pcs", help="number of principal components to use in the reduced dataset", default="8")
+    option("--nn-hidden-size", help="shape of hidden layer in neural network", default="16")
+    option("--nn-batch-size", help="batch size fo training neural network", default="32")
+    option("--nn-test-samples", help="number of labeled samples to test for NN convergence", default="101")
+    arg("extracted", nargs= -1, help="$sample.somalier files for each sample. place labelled samples first followed by '++' then *.somalier for query samples")
 
   var opts = p.parse(argv)
   if opts.help:
@@ -51,45 +67,51 @@ proc pca_main*() =
     echo p.help
     quit "send argument for extracted files"
 
-  var n_samples = opts.extracted.len
-  var mat = newSeq[seq[float32]](n_samples)
+  var (labeled_samples, query_samples) = opts.extracted.split_labeled_samples
+
+  var train_mat = newSeq[seq[float32]](labeled_samples.len)
+  var query_mat = newSeq[seq[float32]](query_samples.len)
 
   var orders = getLabelOrders(labels)
-  var ys = newSeq[int]()
-
+  var int_labels = newSeq[int]()
 
   var cnt : counts
   randomize()
-  shuffle(opts.extracted)
-  for i, f in opts.extracted:
-
+  shuffle(labeled_samples)
+  for i, f in labeled_samples:
 
     read_extracted(f, cnt)
-    ys.add(orders[labels[cnt.sample_name]])
+    int_labels.add(orders[labels[cnt.sample_name]])
 
-    if i > 0: doAssert cnt.sites.len == mat[0].len, &"bad number of sites {cnt.sites.len} in {f}"
+    if i > 0: doAssert cnt.sites.len == train_mat[0].len, &"bad number of sites {cnt.sites.len} in {f}"
     var vec = newSeq[float32](cnt.sites.len)
     for j, ac in cnt.sites:
       vec[j] = ac.ab(5).alts.float32
-    mat[i] = vec
+    train_mat[i] = vec
 
+  for i, f in query_samples:
+    read_extracted(f, cnt)
+    doAssert cnt.sites.len == train_mat[0].len, &"bad number of sites {cnt.sites.len} in {f}"
+    var vec = newSeq[float32](cnt.sites.len)
+    for j, ac in cnt.sites:
+      vec[j] = ac.ab(5).alts.float32
+    query_mat[i] = vec
 
-  var T = mat.toTensor()
-  let Y = ys.toTensor() #.astype(float32)#.unsqueeze(0).transpose
-  echo T.shape, " ", Y.shape
-  var t0 = cpuTime()
-  var res = T.pca(8)
-  echo "time for pca:", cpuTime() - t0
-  echo "components shape:", res.components.shape
-  echo "results shape:", res.projected.shape
-  res.components.write_npy("comps.npy")
-  var R = res.projected
+  var
+    nPCs = parseInt(opts.n_pcs)
+    T = train_mat.toTensor()
+    Y = int_labels.toTensor() #.astype(float32)#.unsqueeze(0).transpose
+    t0 = cpuTime()
+    res = T.pca(nPCs)
+    R = res.projected
+  stderr.write_line &"[somalier] time for dimensionality reduction to shape {res.projected.shape}: {cpuTime() - t0:.2f} seconds"
 
   let
     ctx = newContext Tensor[float32]
-    nHidden = 32
-    nOut = ys.toHashSet.len
+    nHidden = parseInt(opts.nn_hidden_size)
+    nOut = int_labels.toHashSet.len
     X = ctx.variable R
+    nn_test_samples = parseInt(opts.nn_test_samples)
 
   network ctx, AncestryNet:
     layers:
@@ -103,40 +125,59 @@ proc pca_main*() =
   let
     model = ctx.init(AncestryNet)
     optim = model.optimizerSGD(learning_rate = 0.005'f32)
-    batch_size = 32
-    t00 = cpuTime()
+    batch_size = parseInt(opts.nn_batch_size)
+  t0 = cpuTime()
 
-  for epoch in 0..<10000:
+  # train the model
+  for epoch in 0..<1000:
 
-    for batch_id in 0..<(X.value.shape[0] - 100) div batch_size:
+    for batch_id in 0..< X.value.shape[0] div batch_size:
+
       let offset = batch_id * batch_size
-      let x = X[offset ..< offset + batch_size, _]
-      let y = Y[offset ..< offset + batch_size]
+      if offset > X.value.shape[0] - nn_test_samples:
+        break
+
+      let offset_stop = min(offset + batch_size,  X.value.shape[0] - nn_test_samples)
+      let x = X[offset ..< offset_stop, _]
+      let y = Y[offset ..< offset_stop]
 
       let
         clf = model.forward(x)
-        #loss = mse_loss(y_pred, y)
         loss = clf.sparse_softmax_cross_entropy(y)
-
-
-      if batch_id == 0 and epoch mod 100 == 0:
-        ctx.no_grad_mode:
-          let ypred = model.forward(X[2332..<2504, _]).value.softmax.argmax(axis=1).squeeze
-        echo "accuracy on unseen data:", accuracy_score(Y[2332..<2504], y_pred)
-        #echo "true:", ys[0..200]
-        #echo "pred:", y_pred.toSeq
-        echo "Epoch is: " & $epoch, " batch is:", batch_id
-        echo "Loss is:  " & $loss.value.data
-        echo "total time:", cpuTime() - t00
 
       loss.backprop()
       optim.update()
 
+    if epoch mod 100 == 0:
+      ctx.no_grad_mode:
+        let
+          clf = model.forward(X[X.value.shape[0] - nn_test_samples..<X.value.shape[0], _])
+          y_pred = clf.value.softmax.argmax(axis=1).squeeze
+          y = Y[X.value.shape[0] - nn_test_samples..<X.value.shape[0]]
+          loss = clf.sparse_softmax_cross_entropy(y).value.data[0]
+          accuracy = accuracy_score(y, y_pred)
+      stderr.write_line &"[somalier] Epoch:{epoch}. loss: {loss:.5f}. accuracy on unseen data: {accuracy:.3f}.  total-time: {cpuTime() - t0:.2f}"
+      if epoch >= 200 and ((loss < 0.005 and accuracy > 0.986) or (accuracy >= 0.999 and loss < 0.025)):
+        stderr.write_line &"[somalier] breaking with trained model at this accuracy and loss"
+        break
+
 
   ctx.no_grad_mode:
-    let ypred = model.forward(X[2432..<2504, _]).value.softmax.argmax(axis=1).squeeze
-    echo "accuracy on unseen data:", accuracy_score(Y[2432..<2504], y_pred)
+    let ypred = model.forward(X).value.softmax #.argmax(axis=1).squeeze
+    #echo ypred
+    #echo ypred.shape
+    #echo ypred.argmax(axis=1).squeeze
 
+  let
+    Q = query_mat.toTensor()
+    q_proj = Q * res.components
+    q_var = ctx.variable q_proj
+    q_pred = model.forward(q_var).value.softmax
+
+  echo &"reduced query set to: {q_proj.shape}"
+  echo "predictions:"
+  echo q_pred.argmax(axis=1).squeeze
+  echo orders
 
   t0 = cpuTime()
   var proj = T * res.components
