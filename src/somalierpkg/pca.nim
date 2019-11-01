@@ -1,9 +1,10 @@
+import strutils
 import os
+import json
 import times
 import sequtils
 import random
 import strformat
-import strutils
 import arraymancer
 import ./relate
 import ./depthview
@@ -11,6 +12,8 @@ import argparse
 import sets
 import arraymancer
 import tables
+
+const tmpl_html = staticRead("ancestry.html")
 
 proc read_labels(path: string): TableRef[string, string] =
   result = newTable[string, string]()
@@ -41,6 +44,13 @@ proc split_labeled_samples(paths: seq[string]): tuple[labeled: seq[string], test
       result.test.add(p)
     else:
       result.labeled.add(p)
+
+type ForHtml = ref object
+  sample_names*: seq[string]
+  nPCs*: int
+  pcs: seq[seq[float32]]
+  probs: seq[float32] # probability of maximum prediction
+  ancestry_label: string
 
 proc pca_main*() =
 
@@ -209,20 +219,49 @@ proc pca_main*() =
 
   ancestry_fh.write_line(join(header, "\t"))
 
+  var lhtmls = initTable[string, ForHtml]()
+  var qhtmls = initTable[string, ForHtml]()
+  #[
+type ForHtml = object
+  sample_names*: seq[string]
+  nPCs*: int
+  pcs: seq[seq[float32]]
+  probs: seq[float32] # probability of maximum prediction
+  ancestry_label: string
+  ]#
+
   for i, s in labeled_sample_names:
-    var line = @[s, inv_orders[t_pred[i]], inv_orders[int_labels[i]]]
+    # note that ancestry label is the given label for labelled samples
+    # and the predicted label for the query samples.
+    let ancestry_label = inv_orders[int_labels[i]]
+    var line = @[s, inv_orders[t_pred[i]], ancestry_label]
     for j in 0..<orders.len:
       line.add(formatFloat(t_probs[i, j], ffDecimal, precision=4))
+
+    var lhtml = lhtmls.mgetOrPut(ancestry_label, ForHtml(ancestry_label: ancestry_label, nPCs: nPCs, pcs: newSeq[seq[float32]](nPCs)))
+    lhtml.probs.add(t_probs[i, _].max)
+    lhtml.sample_names.add(s)
+
     for j in 0..<nPcs:
       line.add(formatFloat(R[i, j], ffDecimal, precision=4))
+      lhtml.pcs[j].add(R[i, j])
     ancestry_fh.write_line(join(line, "\t"))
 
+
   for i, s in query_sample_names:
+    let ancestry_label = inv_orders[q_pred[i]]
     var line = @[s, inv_orders[q_pred[i]], ""]
     for j in 0..<orders.len:
       line.add(formatFloat(q_probs[i, j], ffDecimal, precision=4))
+
+    var qhtml = qhtmls.mgetOrPut(ancestry_label, ForHtml(ancestry_label: ancestry_label, nPCs: nPCs, pcs: newSeq[seq[float32]](nPCs)))
+
+    qhtml.probs.add(q_probs[i, _].max)
+    qhtml.sample_names.add(s)
+
     for j in 0..<nPcs:
       line.add(formatFloat(q_proj[i, j], ffDecimal, precision=4))
+      qhtml.pcs[j].add(q_proj[i, j])
     ancestry_fh.write_line(join(line, "\t"))
 
   #t0 = cpuTime()
@@ -233,6 +272,20 @@ proc pca_main*() =
   #for i in 0..<proj.shape[0]:
   #  echo proj[i, _]
   ancestry_fh.close
+  stderr.write_line &"[somalier] wrote text file to {opts.output_prefix}tsv"
+
+  var fh_html: File
+  if not fh_html.open(opts.output_prefix & "html", fmWrite):
+    quit "couldn't open:" & opts.output_prefix & "html"
+  var htmls = tmpl_html.split("<BACKGROUND_JSON>")
+  fh_html.write(htmls[0])
+  fh_html.write_line(%* lhtmls)
+  htmls = htmls[1].split("<QUERY_JSON>")
+  fh_html.write(htmls[0])
+  fh_html.write_line(%* qhtmls)
+  fh_html.write(htmls[1])
+  fh_html.close()
+  stderr.write_line &"[somalier] wrote html file to {opts.output_prefix}html"
 
 when isMainModule:
   pca_main()
