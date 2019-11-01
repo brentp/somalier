@@ -16,6 +16,7 @@ proc read_labels(path: string): TableRef[string, string] =
   result = newTable[string, string]()
   if path == "": return
   for line in path.lines:
+    if line[0] == '#': continue
     var toks = line.strip().split("\t")
     result[toks[0]] = toks[1]
 
@@ -51,7 +52,8 @@ proc pca_main*() =
   var p = newParser("somalier pca"):
     help("dimensionality reduction")
     option("--labels", help="file with ancestry labels")
-    option("--n-pcs", help="number of principal components to use in the reduced dataset", default="8")
+    option("-o", "--output-prefix", help="prefix for output files", default="somalier-ancestry")
+    option("--n-pcs", help="number of principal components to use in the reduced dataset", default="12")
     option("--nn-hidden-size", help="shape of hidden layer in neural network", default="16")
     option("--nn-batch-size", help="batch size fo training neural network", default="32")
     option("--nn-test-samples", help="number of labeled samples to test for NN convergence", default="101")
@@ -62,6 +64,11 @@ proc pca_main*() =
     quit 0
 
   var labels = read_labels(opts.labels)
+
+  if opts.output_prefix.endswith("/"):
+    opts.output_prefix &= "/somalier"
+  if not opts.output_prefix.endswith("."):
+    opts.output_prefix &= "."
 
   if opts.extracted.len == 0:
     echo p.help
@@ -74,6 +81,8 @@ proc pca_main*() =
 
   var orders = getLabelOrders(labels)
   var int_labels = newSeq[int]()
+  var labeled_sample_names: seq[string]
+  var query_sample_names: seq[string]
 
   var cnt : counts
   randomize()
@@ -82,6 +91,7 @@ proc pca_main*() =
 
     read_extracted(f, cnt)
     int_labels.add(orders[labels[cnt.sample_name]])
+    labeled_sample_names.add(cnt.sample_name)
 
     if i > 0: doAssert cnt.sites.len == train_mat[0].len, &"bad number of sites {cnt.sites.len} in {f}"
     var vec = newSeq[float32](cnt.sites.len)
@@ -91,6 +101,7 @@ proc pca_main*() =
 
   for i, f in query_samples:
     read_extracted(f, cnt)
+    query_sample_names.add(cnt.sample_name)
     doAssert cnt.sites.len == train_mat[0].len, &"bad number of sites {cnt.sites.len} in {f}"
     var vec = newSeq[float32](cnt.sites.len)
     for j, ac in cnt.sites:
@@ -131,7 +142,7 @@ proc pca_main*() =
   # train the model
   for epoch in 0..<1000:
 
-    for batch_id in 0..< X.value.shape[0] div batch_size:
+    for batch_id in 0..<X.value.shape[0] div batch_size:
 
       let offset = batch_id * batch_size
       if offset > X.value.shape[0] - nn_test_samples:
@@ -163,7 +174,7 @@ proc pca_main*() =
 
 
   ctx.no_grad_mode:
-    let ypred = model.forward(X).value.softmax #.argmax(axis=1).squeeze
+    let t_probs = model.forward(X).value.softmax #.argmax(axis=1).squeeze
     #echo ypred
     #echo ypred.shape
     #echo ypred.argmax(axis=1).squeeze
@@ -172,20 +183,56 @@ proc pca_main*() =
     Q = query_mat.toTensor()
     q_proj = Q * res.components
     q_var = ctx.variable q_proj
-    q_pred = model.forward(q_var).value.softmax
+    q_probs = model.forward(q_var).value.softmax
+    q_pred = q_probs.argmax(axis=1).squeeze
+    t_pred = t_probs.argmax(axis=1).squeeze
+
 
   echo &"reduced query set to: {q_proj.shape}"
   echo "predictions:"
-  echo q_pred.argmax(axis=1).squeeze
-  echo orders
+  echo q_pred
+  echo "ordered:", orders
 
-  t0 = cpuTime()
-  var proj = T * res.components
-  echo "time to project:", cpuTime() - t0
-  proj.write_npy("proj.npy")
-  echo "proj shape:", proj.shape
+  var ancestry_fh: File
+  if not open(ancestry_fh, opts.output_prefix & "tsv", fmWrite):
+    quit "couldn't open output file {opts.output_prefix & \"tsv\"}"
+
+  var header = @["#sample_id", "predicted_ancestry", "given_ancestry"]
+  var inv_orders = newSeq[string](orders.len)
+  # maintain order of ancestries
+  header.setLen(header.len + orders.len)
+  for k, v in orders:
+    inv_orders[v] = k
+    header[2 + v] = k & "_prob"
+  for ip in 0..<nPCs:
+    header.add("PC" & $(ip + 1))
+
+  ancestry_fh.write_line(join(header, "\t"))
+
+  for i, s in labeled_sample_names:
+    var line = @[s, inv_orders[t_pred[i]], inv_orders[int_labels[i]]]
+    for j in 0..<orders.len:
+      line.add(formatFloat(t_probs[i, j], ffDecimal, precision=4))
+    for j in 0..<nPcs:
+      line.add(formatFloat(R[i, j], ffDecimal, precision=4))
+    ancestry_fh.write_line(join(line, "\t"))
+
+  for i, s in query_sample_names:
+    var line = @[s, inv_orders[q_pred[i]], ""]
+    for j in 0..<orders.len:
+      line.add(formatFloat(q_probs[i, j], ffDecimal, precision=4))
+    for j in 0..<nPcs:
+      line.add(formatFloat(q_proj[i, j], ffDecimal, precision=4))
+    ancestry_fh.write_line(join(line, "\t"))
+
+  #t0 = cpuTime()
+  #var proj = T * res.components
+  #echo "time to project:", cpuTime() - t0
+  #proj.write_npy("proj.npy")
+  #echo "proj shape:", proj.shape
   #for i in 0..<proj.shape[0]:
   #  echo proj[i, _]
+  ancestry_fh.close
 
 when isMainModule:
   pca_main()
