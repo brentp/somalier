@@ -1,3 +1,8 @@
+v0.2.7 (dev)
+======
++ new subcommand `ancestry` to predict ancestry using a simple neural network on the somalier
+  sketches. creates an interactive html output and a text file
+
 v0.2.6
 ======
 + for large cohorts (>1K samples) the html output is now usable.

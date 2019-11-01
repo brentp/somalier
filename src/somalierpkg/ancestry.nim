@@ -52,11 +52,11 @@ type ForHtml = ref object
   probs: seq[float32] # probability of maximum prediction
   ancestry_label: string
 
-proc pca_main*() =
+proc ancestry_main*() =
 
   var argv = commandLineParams()
+  if argv[0] == "ancestry": argv = argv[1..argv.high]
   if argv.len == 0: argv = @["-h"]
-  if argv[0] == "pca": argv = argv[1..argv.high]
 
   var p = newParser("somalier pca"):
     help("dimensionality reduction")
@@ -274,5 +274,5 @@ type ForHtml = object
   stderr.write_line &"[somalier] wrote html file to {opts.output_prefix}html"
 
 when isMainModule:
-  pca_main()
+  ancestry_main()
 
