@@ -84,7 +84,44 @@ var background_data = <BACKGROUND_JSON>
 var query_data = <QUERY_JSON>
 
 var colors = ['rgba(55,126,184,0.7)', 'rgba(228,26,28,0.7)', 'rgba(77,175,74,0.7)', 'rgba(152,78,163,0.7)', 'rgba(255,127,0,0.7)', 'rgba(166,86,40,0.7)', 'rgba(247,129,191,0.7)']
-var size = 10
+var size = 9
+
+var traces = []
+var labels = []
+var nPCs = 0
+for(k in background_data) {
+	labels.push(k)
+}
+labels.sort()
+
+for (var j=0;j< labels.length;j++){
+    var label = labels[j];
+    var color = colors[j]
+    nPCs = background_data[label].nPCs;
+	traces.push({x:background_data[label].pcs[0], y: background_data[label].pcs[1], mode: 'markers', type: 'scattergl', showlegend: false, 
+		marker: {opacity: 0.3, color:color, size: 4}, name: label, hoverinfo: 'none', background: true})
+	if(!(label in query_data)) { continue }
+
+	traces.push({text: query_data[label].text, x:query_data[label].pcs[0], y: query_data[label].pcs[1], mode: 'markers', type: 'scattergl', showlegend: true, 
+		marker: {opacity: 0.8, color:color, symbol: "square", size:size}, name: label})
+}
+
+
+;(function() {
+	var sx = jQuery('#plotax_select')
+	var sy = jQuery('#plotay_select')
+	for(i = 0; i < nPCs; i++){
+	        var sel = i == 0? "selected": ""
+	        var txt = `<option value=${i} ${sel}>PC ${i+1}</option>`
+		sx.append(txt)
+	}
+	for(i = 0; i < nPCs; i++){
+	        var sel = i == 1 ? "selected": ""
+	        var txt = `<option value=${i} ${sel}>PC ${i+1}</option>`
+		sy.append(txt)
+	}
+
+})()
 
 var layout_a = {
     autosize: true,
@@ -106,30 +143,32 @@ var layout_a = {
         borderwidth: 1,
         bordercolor: '#eeeeee'
     },
-}
-
-(function() {
-	var sx = jQuery('#plotax_select')
-	var sy = jQuery('#plotay_select')
-	for(i = 0; i < query_data.nPCs; i++){
-	        var sel = i == 0? "selected": ""
-	        var txt = `<option value=${i} ${sel}>PC ${i+1}</option>`
-		sx.append(txt)
-	}
-	for(i = 0; i < query_data.nPCs; i++){
-	        var sel = i == 1 ? "selected": ""
-	        var txt = `<option value=${i} ${sel}>PC ${i+1}</option>`
-		sy.append(txt)
-	}
-
-})()
+};
 
 var pa = document.getElementById("plota")
-//Plotly.newPlot(pa, input, layout_a)
+Plotly.newPlot(pa, traces, layout_a)
 
 // select listeners for plot A
 jQuery('#plotay_select, #plotax_select').on('change', function() {
-	console.log("TODO")
+
+    var xi = parseInt(jQuery('#plotax_select').val())
+    var yi = parseInt(jQuery('#plotay_select').val())
+
+    for(var i = 0; i < traces.length; i++) {
+      if(traces[i].background) {
+          traces[i].x = background_data[traces[i].name].pcs[xi]
+          traces[i].y = background_data[traces[i].name].pcs[yi]
+      } else {
+          traces[i].x = query_data[traces[i].name].pcs[xi]
+          traces[i].y = query_data[traces[i].name].pcs[yi]
+      }
+    }	
+    layout_a.xaxis.title = jQuery("#plotax_select option:selected").text();
+    layout_a.yaxis.title = jQuery("#plotay_select option:selected").text();
+    Plotly.react(pa, traces, layout_a)
+
+
+
 })
 
 // responsive plots

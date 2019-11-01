@@ -46,7 +46,7 @@ proc split_labeled_samples(paths: seq[string]): tuple[labeled: seq[string], test
       result.labeled.add(p)
 
 type ForHtml = ref object
-  sample_names*: seq[string]
+  text*: seq[string]
   nPCs*: int
   pcs: seq[seq[float32]]
   probs: seq[float32] # probability of maximum prediction
@@ -57,13 +57,12 @@ proc pca_main*() =
   var argv = commandLineParams()
   if argv.len == 0: argv = @["-h"]
   if argv[0] == "pca": argv = argv[1..argv.high]
-  #randomize()
 
   var p = newParser("somalier pca"):
     help("dimensionality reduction")
     option("--labels", help="file with ancestry labels")
     option("-o", "--output-prefix", help="prefix for output files", default="somalier-ancestry")
-    option("--n-pcs", help="number of principal components to use in the reduced dataset", default="12")
+    option("--n-pcs", help="number of principal components to use in the reduced dataset", default="5")
     option("--nn-hidden-size", help="shape of hidden layer in neural network", default="16")
     option("--nn-batch-size", help="batch size fo training neural network", default="32")
     option("--nn-test-samples", help="number of labeled samples to test for NN convergence", default="101")
@@ -123,21 +122,22 @@ proc pca_main*() =
     T = train_mat.toTensor()
     Y = int_labels.toTensor() #.astype(float32)#.unsqueeze(0).transpose
     t0 = cpuTime()
-    res = T.pca(nPCs)
-    R = res.projected
+    res = T.pca(nPCs, center=true, n_power_iters=4)
+
   stderr.write_line &"[somalier] time for dimensionality reduction to shape {res.projected.shape}: {cpuTime() - t0:.2f} seconds"
 
   let
     ctx = newContext Tensor[float32]
     nHidden = parseInt(opts.nn_hidden_size)
     nOut = int_labels.toHashSet.len
-    X = ctx.variable R
+    t_proj = T * res.components
+    X = ctx.variable t_proj
     nn_test_samples = parseInt(opts.nn_test_samples)
 
   network ctx, AncestryNet:
     layers:
-      x: Input([1, R.shape[1]])
-      fc1: Linear(R.shape[1], nHidden)
+      x: Input([1, t_proj.shape[1]])
+      fc1: Linear(t_proj.shape[1], nHidden)
       classifier: Linear(nHidden, nOut)
 
     forward x:
@@ -150,7 +150,7 @@ proc pca_main*() =
   t0 = cpuTime()
 
   # train the model
-  for epoch in 0..<1000:
+  for epoch in 0..<500:
 
     for batch_id in 0..<X.value.shape[0] div batch_size:
 
@@ -178,30 +178,22 @@ proc pca_main*() =
           loss = clf.sparse_softmax_cross_entropy(y).value.data[0]
           accuracy = accuracy_score(y, y_pred)
       stderr.write_line &"[somalier] Epoch:{epoch}. loss: {loss:.5f}. accuracy on unseen data: {accuracy:.3f}.  total-time: {cpuTime() - t0:.2f}"
-      if epoch >= 200 and ((loss < 0.005 and accuracy > 0.986) or (accuracy >= 0.999 and loss < 0.025)):
+      if epoch >= 100 and ((loss < 0.005 and accuracy > 0.98) or (accuracy >= 0.995 and loss < 0.025)):
         stderr.write_line &"[somalier] breaking with trained model at this accuracy and loss"
         break
 
 
   ctx.no_grad_mode:
     let t_probs = model.forward(X).value.softmax #.argmax(axis=1).squeeze
-    #echo ypred
-    #echo ypred.shape
-    #echo ypred.argmax(axis=1).squeeze
 
   let
     Q = query_mat.toTensor()
     q_proj = Q * res.components
-    q_var = ctx.variable q_proj
-    q_probs = model.forward(q_var).value.softmax
+    q_probs = model.forward(ctx.variable q_proj).value.softmax
     q_pred = q_probs.argmax(axis=1).squeeze
     t_pred = t_probs.argmax(axis=1).squeeze
 
-
-  echo &"reduced query set to: {q_proj.shape}"
-  echo "predictions:"
-  echo q_pred
-  echo "ordered:", orders
+  stderr.write_line &"[somalier] reduced query set to: {q_proj.shape}"
 
   var ancestry_fh: File
   if not open(ancestry_fh, opts.output_prefix & "tsv", fmWrite):
@@ -223,7 +215,7 @@ proc pca_main*() =
   var qhtmls = initTable[string, ForHtml]()
   #[
 type ForHtml = object
-  sample_names*: seq[string]
+  text*: seq[string]
   nPCs*: int
   pcs: seq[seq[float32]]
   probs: seq[float32] # probability of maximum prediction
@@ -239,12 +231,12 @@ type ForHtml = object
       line.add(formatFloat(t_probs[i, j], ffDecimal, precision=4))
 
     var lhtml = lhtmls.mgetOrPut(ancestry_label, ForHtml(ancestry_label: ancestry_label, nPCs: nPCs, pcs: newSeq[seq[float32]](nPCs)))
-    lhtml.probs.add(t_probs[i, _].max)
-    lhtml.sample_names.add(s)
+    #lhtml.probs.add(t_probs[i, _].max)
+    lhtml.text.add(&"sample:{s} ancestry-probability: {t_probs[i, _].max}")
 
     for j in 0..<nPcs:
-      line.add(formatFloat(R[i, j], ffDecimal, precision=4))
-      lhtml.pcs[j].add(R[i, j])
+      line.add(formatFloat(t_proj[i, j], ffDecimal, precision=4))
+      lhtml.pcs[j].add(t_proj[i, j])
     ancestry_fh.write_line(join(line, "\t"))
 
 
@@ -256,21 +248,15 @@ type ForHtml = object
 
     var qhtml = qhtmls.mgetOrPut(ancestry_label, ForHtml(ancestry_label: ancestry_label, nPCs: nPCs, pcs: newSeq[seq[float32]](nPCs)))
 
-    qhtml.probs.add(q_probs[i, _].max)
-    qhtml.sample_names.add(s)
+    #qhtml.probs.add(q_probs[i, _].max)
+    qhtml.text.add(&"sample:{s} ancestry-probability: {q_probs[i, _].max:.4f}")
+    #lhtml.probs.add(t_probs[i, _].max)
 
     for j in 0..<nPcs:
       line.add(formatFloat(q_proj[i, j], ffDecimal, precision=4))
       qhtml.pcs[j].add(q_proj[i, j])
     ancestry_fh.write_line(join(line, "\t"))
 
-  #t0 = cpuTime()
-  #var proj = T * res.components
-  #echo "time to project:", cpuTime() - t0
-  #proj.write_npy("proj.npy")
-  #echo "proj shape:", proj.shape
-  #for i in 0..<proj.shape[0]:
-  #  echo proj[i, _]
   ancestry_fh.close
   stderr.write_line &"[somalier] wrote text file to {opts.output_prefix}tsv"
 
