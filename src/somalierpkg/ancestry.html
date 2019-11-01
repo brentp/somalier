@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="author" content="Brent Pedersen" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/selectize.js/0.12.6/css/selectize.bootstrap3.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.3.1/css/bootstrap.min.css">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/selectize.js/0.12.6/js/standalone/selectize.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+    <style>
+    html,body { height: 100%; margin: 0px; padding: 0px; }
+    .form-control.selectize-control {
+        padding: 5px 6px 0px;
+        height: unset !important;
+    }
+    .remove-single {
+        color: gray !important;
+        top: -1px !important;
+        font-size: 20px !important;
+    }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark p-0" style="background-color:#4b636e !important">
+  <a class="navbar-brand ml-2" href="https://github.com/brentp/somalier">somalier</a>
+  <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#toggler" aria-controls="toggler" aria-expanded="false" aria-label="Toggle navigation">
+    <span class="navbar-toggler-icon"></span>
+  </button>
+
+  <div class="collapse navbar-collapse" id="toggler">
+    <div class="navbar-nav mr-auto">
+    </div>
+    <div>
+        <div class="input-group" style="width:300px">
+            <input type="text" class="form-control" id="sample-search" aria-label="sample-search">
+        </div>
+    </div>
+  </div>
+</nav>
+<div class="container-fluid h-100">
+    <div class="row h-100">
+        <div class="col-12 h-100 bg-light pt-2 border-right">
+            <div class="row">
+                <div class="col">
+                    <h5>Ancestry Prediction</h5>
+                </div>
+            </div>
+            <div class="row pb-2">
+                <div class="col-6">
+                    <div class="input-group">
+                        <div class="input-group-prepend">
+                            <div class="input-group-text">X Axis</div>
+                        </div>
+                        <select class="custom-select" id="plotax_select">
+                        </select>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="input-group">
+                        <div class="input-group-prepend">
+                            <div class="input-group-text">Y Axis</div>
+                        </div>
+                        <select class="custom-select" id="plotay_select">
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="row h-100">
+                <div class="col h-100">
+                    <div id="plota" style="height: 90%"></div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+var nan = NaN; // hack to support json dumped with NaN values.
+var background_data = <BACKGROUND_JSON>
+var query_data = <QUERY_JSON>
+
+var colors = ['rgba(55,126,184,0.7)', 'rgba(228,26,28,0.7)', 'rgba(77,175,74,0.7)', 'rgba(152,78,163,0.7)', 'rgba(255,127,0,0.7)', 'rgba(166,86,40,0.7)', 'rgba(247,129,191,0.7)']
+var size = 9
+
+var traces = []
+var labels = []
+var nPCs = 0
+for(k in background_data) {
+	labels.push(k)
+}
+labels.sort()
+
+for (var j=0;j< labels.length;j++){
+    var label = labels[j];
+    var color = colors[j]
+    nPCs = background_data[label].nPCs;
+	traces.push({x:background_data[label].pcs[0], y: background_data[label].pcs[1], mode: 'markers', type: 'scattergl', showlegend: false, 
+		marker: {opacity: 0.3, color:color, size: 4}, name: label, hoverinfo: 'none', background: true})
+	if(!(label in query_data)) { continue }
+
+	traces.push({text: query_data[label].text, x:query_data[label].pcs[0], y: query_data[label].pcs[1], mode: 'markers', type: 'scattergl', showlegend: true, 
+		marker: {opacity: 0.8, color:color, symbol: "square", size:size}, name: label})
+}
+
+
+;(function() {
+	var sx = jQuery('#plotax_select')
+	var sy = jQuery('#plotay_select')
+	for(i = 0; i < nPCs; i++){
+	        var sel = i == 0? "selected": ""
+	        var txt = `<option value=${i} ${sel}>PC ${i+1}</option>`
+		sx.append(txt)
+	}
+	for(i = 0; i < nPCs; i++){
+	        var sel = i == 1 ? "selected": ""
+	        var txt = `<option value=${i} ${sel}>PC ${i+1}</option>`
+		sy.append(txt)
+	}
+
+})()
+
+var layout_a = {
+    autosize: true,
+    margin: {t: 30, pad: 0},
+    xaxis: {
+        title: jQuery("#plotax_select option:selected").text(),
+    },
+    yaxis: {
+        title: jQuery("#plotay_select option:selected").text(),
+    },
+    hovermode: 'closest',
+    showlegend: true,
+    legend: {
+        xanchor: "right",
+        yanchor: "top",
+        y: 1,
+        x: 1,
+        orientation: "h",
+        borderwidth: 1,
+        bordercolor: '#eeeeee'
+    },
+};
+
+var pa = document.getElementById("plota")
+Plotly.newPlot(pa, traces, layout_a)
+
+// select listeners for plot A
+jQuery('#plotay_select, #plotax_select').on('change', function() {
+
+    var xi = parseInt(jQuery('#plotax_select').val())
+    var yi = parseInt(jQuery('#plotay_select').val())
+
+    for(var i = 0; i < traces.length; i++) {
+      if(traces[i].background) {
+          traces[i].x = background_data[traces[i].name].pcs[xi]
+          traces[i].y = background_data[traces[i].name].pcs[yi]
+      } else {
+          traces[i].x = query_data[traces[i].name].pcs[xi]
+          traces[i].y = query_data[traces[i].name].pcs[yi]
+      }
+    }	
+    layout_a.xaxis.title = jQuery("#plotax_select option:selected").text();
+    layout_a.yaxis.title = jQuery("#plotay_select option:selected").text();
+    Plotly.react(pa, traces, layout_a)
+
+
+
+})
+
+// responsive plots
+window.onresize = function() {
+    Plotly.Plots.resize('plota')
+};
+
+
+</script>
+
+</body>
+</html>
