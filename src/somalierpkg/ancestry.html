@@ -99,7 +99,7 @@ for (var j=0;j< labels.length;j++){
     var color = colors[j]
     nPCs = background_data[label].nPCs;
 	traces.push({x:background_data[label].pcs[0], y: background_data[label].pcs[1], mode: 'markers', type: 'scattergl', showlegend: false, 
-		marker: {opacity: 0.3, color:color, size: 4}, name: label, hoverinfo: 'none', background: true})
+		marker: {opacity: 0.3, color:color, size: 6}, name: label, hoverinfo: 'none', background: true})
 	if(!(label in query_data)) { continue }
 
 	traces.push({text: query_data[label].text, x:query_data[label].pcs[0], y: query_data[label].pcs[1], mode: 'markers', type: 'scattergl', showlegend: true, 
