@@ -142,6 +142,8 @@ proc drop(by_chrom: var TableRef[string, seq[Trace]], rscs: var seq[RunningStat]
 proc read_extracted*(path: string, cnt: var counts) =
   # read a single sample, used by versus
   var f = newFileStream(path, fmRead)
+  if f == nil:
+    raise newException(IOError, "couldn't open sketch file:" & path)
   var sl: uint8 = 0
   discard f.readData(sl.addr, sizeof(sl))
   doAssert sl == formatVersion, &"expected matching versions got {sl}, expected {formatVersion}"
