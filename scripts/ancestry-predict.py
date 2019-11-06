@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 import sys
 import time
 
@@ -86,9 +87,10 @@ if __name__ == "__main__":
         test_ABs.append(ab)
         test_samples.append(s["sample"])
 
-    bg_sample_df = pd.read_csv(args.labels, sep="\t", escapechar='#', index_col=0)
+    bg_df_predictions = pd.read_csv(args.labels, sep="\t", escapechar='#', index_col=0)
 
-    clf = make_pipeline(PCA(n_components=5, whiten=True, copy=True, svd_solver="randomized"),
+    n_components = 5
+    clf = make_pipeline(PCA(n_components=n_components, whiten=True, copy=True, svd_solver="randomized"),
                 svm.SVC(C=3, probability=True, gamma="auto"))
 
 
@@ -106,35 +108,32 @@ if __name__ == "__main__":
 
     bg_ABs = bg_ABs[:, ~rm]
 
-    np.save("thousandG.npy", bg_ABs)
     if len(test_ABs) > 0:
         test_ABs = test_ABs[:, ~rm]
 
-    bg_sample_df = bg_sample_df.loc[bg_samples, :]
-    targetL = list(bg_sample_df[label].unique())
+    bg_df_predictions = bg_df_predictions.loc[bg_samples, :]
+    targetL = list(bg_df_predictions[label].unique())
 
 
-    target = np.array([targetL.index(p) for p in bg_sample_df[label]])
+    target = np.array([targetL.index(p) for p in bg_df_predictions[label]])
 
     clf.fit(bg_ABs, target)
 
     bg_reduced = clf.named_steps["pca"].transform(bg_ABs)
+
+    # generate PC labels for n components
+    labels_pc = [("PC%d" % i) for i in range(1,(n_components+1))]
+
     if len(test_ABs) > 0:
         test_reduced = clf.named_steps["pca"].transform(test_ABs)
         test_pred = clf.predict(test_ABs)
         test_prob = clf.predict_proba(test_ABs)
-        np.set_printoptions(formatter={'float_kind':lambda x: "%.2f" % x})
-
-
-        print("#sample\t" + "\t".join(targetL))
-        for i, sample in enumerate(test_samples):
-            print(sample + "\t" + "\t".join("%.2f" % x for x in test_prob[i, :]))
 
     fig, axes = plt.subplots(1) #, len(targetL) + 1, figsize=(22, 12))
     axes = (axes,)
-    for i, l in enumerate(sorted(set(bg_sample_df[label]))):
-        sel = bg_sample_df[label] == l
-        ibg_sample_df = bg_sample_df.loc[sel, :]
+    for i, l in enumerate(sorted(set(bg_df_predictions[label]))):
+        sel = bg_df_predictions[label] == l
+        ibg_df_predictions = bg_df_predictions.loc[sel, :]
         axes[0].scatter(bg_reduced[sel, 0], bg_reduced[sel, 1], label=l, s=8,
                 alpha=0.15, c=[colors[i % len(colors)]], ec='none')
 
@@ -149,4 +148,38 @@ if __name__ == "__main__":
     if args.plot in ["", None]:
         plt.show()
     else:
-        plt.savefig(args.plot)
+        # make path
+        fp_plot = Path(args.plot)
+        path = fp_plot.parent
+        prefix = fp_plot.stem
+        
+        os.makedirs(path, exist_ok=True) # make dir if it not exists
+        
+        # save plot
+        plt.savefig(fp_plot)
+
+        # save numpy array
+        fp_array = path.joinpath("{}.thousandG.npy".format(prefix))
+        np.save(fp_array, bg_ABs)
+
+        # export PCs as csv
+        df_pca = pd.DataFrame(
+            data=bg_reduced, 
+            index=bg_df_predictions[label].values, columns=labels_pc)
+        
+        if len(test_ABs) > 0:
+            df_pca = df_pca.append(
+                other=(pd.DataFrame(test_reduced, test_samples, labels_pc)))
+        
+        df_pca.index.name = "ancestry"
+        fp_pca = path.joinpath("{}.ancestry_pcs.csv".format(prefix))
+        df_pca.to_csv(path_or_buf=fp_pca)
+
+        # export predictions as csv
+        if len(test_ABs) > 0:
+            df_predictions = pd.DataFrame(
+                data=test_prob.round(2), 
+                index=test_samples, columns=targetL)
+            df_predictions.index.name = "#sample"
+            fp_predictions = path.joinpath("{}.ancestry_prediction.csv".format(prefix))
+            df_predictions.to_csv(path_or_buf=fp_predictions)
