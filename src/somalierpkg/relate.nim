@@ -401,6 +401,8 @@ proc read_extracted*(paths: seq[string], min_depth:int, unk2hr:bool): relation_m
 
   for i, p in paths:
     var f = newFileStream(p, fmRead)
+    if f == nil:
+      raise newException(IOError, "could not open file:" & p)
     var sl: uint8 = 0
     discard f.readData(sl.addr, sizeof(sl))
     doAssert sl == formatVersion, &"expected matching versions got {sl}, expected {formatVersion}"
@@ -484,6 +486,17 @@ proc to_sex_lookup(samples: seq[Sample]): TableRef[string, string] =
   for s in samples:
     result[s.id] = if s.sex == 1: "male" elif s.sex == 2: "female" else: "unknown"
 
+proc update_with_glob(files: var seq[string]) =
+  var toadd = newSeqOfCap[string](256)
+  for i in 0..<min(files.len, 10):
+    for w in files[i].walkFiles:
+      toadd.add(w)
+
+  if files.len > 10:
+    files = toadd & files[10..files.high]
+  else:
+    files = toadd
+
 proc rel_main*() =
   ## need to track samples names from bams first, then vcfs since
   ## thats the order for the alts array.
@@ -501,12 +514,16 @@ specified as comma-separated groups per line e.g.:
     option("-d", "--min-depth", default="7", help="only genotype sites with at least this depth.")
     flag("-u", "--unknown", help="set unknown genotypes to hom-ref. it is often preferable to use this with VCF samples that were not jointly called")
     option("-o", "--output-prefix", help="output prefix for results.", default="somalier")
-    arg("extracted", nargs= -1, help="$sample.somalier files for each sample.")
+    arg("extracted", nargs= -1, help="$sample.somalier files for each sample. the first 10 are tested as a glob patterns")
 
 
   var opts = p.parse(argv)
   if opts.help:
     quit 0
+  # first given 10 "files" could be a glob.
+  opts.extracted.update_with_glob
+
+  stderr.write_line &"[somalier] starting read of {opts.extracted.len} samples"
   if opts.extracted.len == 0 or (opts.extracted.len == 1 and not existsFile(opts.extracted[0])):
     echo p.help
     quit "[somalier] specify at least 1 extracted somalier file"
@@ -515,7 +532,6 @@ specified as comma-separated groups per line e.g.:
     samples: seq[Sample]
     min_depth = parseInt(opts.min_depth)
     unk2hr = opts.unknown
-
 
   if not opts.output_prefix.endswith(".") or opts.output_prefix.endswith("/"):
     opts.output_prefix &= '.'
