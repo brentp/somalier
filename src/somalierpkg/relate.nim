@@ -576,7 +576,7 @@ specified as comma-separated groups per line e.g.:
 
   var proportion_sampled = 400_000'f64 / float64(final.samples.len * max(1, final.samples.len - 1))
   if proportion_sampled < 1:
-    stderr.write_line &"[somalier] html output will have unrelated sample-pairs subset to {100 * proportion_sampled:.2f}% of points"
+    stderr.write_line &"[somalier] html and text output will have unrelated sample-pairs subset to {100 * proportion_sampled:.2f}% of points"
 
   fh_tsv.write_line '#', header.replace("$", "")
   var npairs:int
@@ -587,7 +587,11 @@ specified as comma-separated groups per line e.g.:
     if idx == -1:
       idx = groups.binarySearch((rel.sample_b, rel.sample_a, -1.0), cmp_pair)
     let expected_relatedness = if idx == -1: -1'f else: groups[idx].rel
-    if (expected_relatedness != -1) or (rand(1'f32) < proportion_sampled) or rel.rel > 0.08:
+    let rr = rel.rel
+    let interesting = expected_relatedness != -1 or rr > 0.04
+    if (rand(1'f32) > proportion_sampled) and not interesting:
+      continue
+    if rr >= 0.08:
       rels.add(rel, max(0, expected_relatedness))
       nrels.inc
 

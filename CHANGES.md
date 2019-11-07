@@ -3,6 +3,7 @@ v0.2.7 (dev)
 + new subcommand `ancestry` to predict ancestry using a simple neural network on the somalier
   sketches. creates an interactive html output and a text file
 + fix for "Argument list too long" on huge cohorts (#37)
++ sub-sample .pairs.tsv output for huge cohorts -- only for unrelated samples.
 
 v0.2.6
 ======
