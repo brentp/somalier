@@ -122,7 +122,7 @@ proc ancestry_main*() =
     T = train_mat.toTensor()
     Y = int_labels.toTensor() #.astype(float32)#.unsqueeze(0).transpose
     t0 = cpuTime()
-    res = T.pca(nPCs, center=true) #, n_power_iters=4)
+    res = T.pca(nPCs) #, center=true) #, n_power_iters=4)
 
   stderr.write_line &"[somalier] time for dimensionality reduction to shape {res.projected.shape}: {cpuTime() - t0:.2f} seconds"
 
