@@ -574,7 +574,7 @@ specified as comma-separated groups per line e.g.:
 
   var rels: seq[relations]
 
-  var proportion_sampled = 400_000'f64 / float64(final.samples.len * max(1, final.samples.len - 1))
+  var proportion_sampled = 200_000'f64 / float64(final.samples.len * final.samples.len)
   if proportion_sampled < 1:
     stderr.write_line &"[somalier] html and text output will have unrelated sample-pairs subset to {100 * proportion_sampled:.2f}% of points"
 
@@ -583,20 +583,20 @@ specified as comma-separated groups per line e.g.:
   var nrels:int
   sort(groups, cmp_pair)
   for rel in final.relatedness(grouped):
+    npairs.inc
     var idx = groups.binarySearch((rel.sample_a, rel.sample_b, -1.0), cmp_pair)
     if idx == -1:
       idx = groups.binarySearch((rel.sample_b, rel.sample_a, -1.0), cmp_pair)
     let expected_relatedness = if idx == -1: -1'f else: groups[idx].rel
     let rr = rel.rel
-    let interesting = expected_relatedness != -1 or rr > 0.04
-    if (rand(1'f32) > proportion_sampled) and not interesting:
+    let ra = random(1'f32)
+    let interesting = expected_relatedness != -1 or rr > 0.05
+    if (ra > proportion_sampled) and not interesting:
       continue
-    if rr >= 0.08:
-      rels.add(rel, max(0, expected_relatedness))
-      nrels.inc
+    rels.add(rel, max(0, expected_relatedness))
+    nrels.inc
 
     fh_tsv.write_line rel.tsv(expected_relatedness)
-    npairs.inc
   stderr.write_line &"[somalier] time to calculate all vs all relatedness for all {npairs} combinations: {cpuTime() - t0:.2f}"
 
   fh_html.write(%* rels)
