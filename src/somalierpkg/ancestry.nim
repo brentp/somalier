@@ -205,7 +205,7 @@ proc ancestry_main*() =
   header.setLen(header.len + orders.len)
   for k, v in orders:
     inv_orders[v] = k
-    header[2 + v] = k & "_prob"
+    header[3 + v] = k & "_prob"
   for ip in 0..<nPCs:
     header.add("PC" & $(ip + 1))
 
