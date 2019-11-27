@@ -30,6 +30,9 @@ to add/remove samples or adjust a pedigree file and re-run iteratively.
 For example to add the **n + 1th** samples, just run `somalier extract` on the new sample and then re-use
 the already extracted data from the `n` original samples.
 
+For *huge* sample-sets, if you run into a bash error for *argument list too long*, you can pass the somalier files as quoted
+glob strings like:  `"/path/to/set-a/*.somalier" "/path/to/set-b/*.somalier"`.
+
 ## Usage
 
 The usage is also described above. Briefly, run:

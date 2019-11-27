@@ -232,7 +232,7 @@ proc main() =
     "extract": pair(f:extract_main, description: "extract genotype-like information for a single sample from VCF/BAM/CRAM."),
     "relate": pair(f:rel_main, description: "aggregate `extract`ed information and calculate relatedness among samples."),
     "ancestry": pair(f:ancestry_main, description: "perform ancestry prediction on a set of samples, given a set of labeled samples"),
-    "depthview": pair(f:depth_main, description: "plot per-chromosome depth for each sample for quick quality-control"),
+    #"depthview": pair(f:depth_main, description: "plot per-chromosome depth for each sample for quick quality-control"),
     "find-sites": pair(f:findsites_main, description: "create a new sites.vcf.gz file from a population VCF (this is rarely needed)."),
   }.toOrderedTable
 

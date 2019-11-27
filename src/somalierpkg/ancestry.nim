@@ -52,6 +52,11 @@ type ForHtml = ref object
   probs: seq[float32] # probability of maximum prediction
   ancestry_label: string
 
+proc subset(T: var Tensor[float32], Q: var Tensor[float32], labels: var Tensor[int]) =
+  echo T.shape
+  echo Q.shape
+  echo labels.shape
+
 proc ancestry_main*() =
 
   var argv = commandLineParams()
@@ -117,12 +122,16 @@ proc ancestry_main*() =
       vec[j] = ac.ab(5).alts.float32
     query_mat[i] = vec
 
+
   var
     nPCs = parseInt(opts.n_pcs)
     T = train_mat.toTensor()
+    Q = query_mat.toTensor()
     Y = int_labels.toTensor() #.astype(float32)#.unsqueeze(0).transpose
     t0 = cpuTime()
     res = T.pca(nPCs) #, center=true) #, n_power_iters=4)
+
+  #subset(T, Q, Y)
 
   stderr.write_line &"[somalier] time for dimensionality reduction to shape {res.projected.shape}: {cpuTime() - t0:.2f} seconds"
 
@@ -187,7 +196,6 @@ proc ancestry_main*() =
     let t_probs = model.forward(X).value.softmax #.argmax(axis=1).squeeze
 
   let
-    Q = query_mat.toTensor()
     q_proj = Q * res.components
     q_probs = model.forward(ctx.variable q_proj).value.softmax
     q_pred = q_probs.argmax(axis=1).squeeze

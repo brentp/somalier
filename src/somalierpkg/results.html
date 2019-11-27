@@ -157,18 +157,18 @@ var nan = NaN; // hack to support json dumped with NaN values.
 var sample_data = <SAMPLE_JSON>
 var input = <INPUT_JSON>
 
-var colors = ['rgba(55,126,184,0.7)', 'rgba(228,26,28,0.7)', 'rgba(77,175,74,0.7)', 'rgba(152,78,163,0.7)', 'rgba(255,127,0,0.7)', 'rgba(166,86,40,0.7)', 'rgba(247,129,191,0.7)']
+var colors = ['rgba(55,126,184,0.7)', 'rgba(228,26,28,0.7)', 'rgba(152,78,163,0.7)', 'rgba(255,127,0,0.7)', 'rgba(166,86,40,0.7)', 'rgba(247,129,191,0.7)', 'rgba(77,175,74,0.7)',]
 var size
 if (sample_data.length > 700) {
-    size = 6
-} else if (sample_data.length > 200) {
-    size = 7
-} else if (sample_data.length > 50) {
     size = 8
-} else if (sample_data.length > 20) {
+} else if (sample_data.length > 200) {
+    size = 9
+} else if (sample_data.length > 50) {
     size = 10
-} else {
+} else if (sample_data.length > 20) {
     size = 12
+} else {
+    size = 15
 }
 
 function set_xy_data_by_group(input, metric, is_x) {
