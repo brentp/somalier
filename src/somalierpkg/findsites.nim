@@ -134,13 +134,13 @@ proc findsites_main*() =
     if v.REF.len > 1 or v.ALT.len > 1 or v.ALT[0].len > 1:
       if afs[0] > 0.02:
         discard indels.hasKeyOrPut($v.CHROM, newSeq[region]())
-        var r = region(chrom: $v.CHROM, start: max(v.start - 7, 0), stop: v.stop + 7)
+        var r = region(chrom: $v.CHROM, start: max(v.start.int - 7, 0), stop: v.stop.int + 7)
         indels[$v.CHROM].add(r)
 
       continue
 
     if afs[0] > 0.02:
-      var r = region(chrom: $v.CHROM, start: max(v.start - 1, 0), stop: v.stop + 1)
+      var r = region(chrom: $v.CHROM, start: max(v.start.int - 1, 0), stop: v.stop.int + 1)
       discard snps.hasKeyOrPut($v.CHROM, newSeq[region]())
       snps[$v.CHROM].add(r)
 
@@ -174,7 +174,7 @@ proc findsites_main*() =
         break
     if skip: continue
 
-    if lap.find(v.start, v.stop, empty_regions):
+    if lap.find(v.start.int, v.stop.int, empty_regions):
       continue
 
     #discard wtr.write_variant(v)
@@ -206,9 +206,9 @@ proc findsites_main*() =
   var empty: seq[region]
 
   for v in saved:
-    if indel_lappers[$v.v.CHROM].find(v.v.start, v.v.stop, empty):
+    if indel_lappers[$v.v.CHROM].find(v.v.start.int, v.v.stop.int, empty):
       continue
-    if snp_lappers[$v.v.CHROM].find(v.v.start, v.v.stop, empty) and empty.len > 1:
+    if snp_lappers[$v.v.CHROM].find(v.v.start.int, v.v.stop.int, empty) and empty.len > 1:
       echo "skipping with nearby snp"
       continue
     discard added.hasKeyOrPut(v.v.CHROM, newSeq[Variant]())
