@@ -1,10 +1,8 @@
 import os
 import math
-import times
 import tables
 import stats
 import strformat
-import arraymancer
 import ./common
 import json
 import ./relate
