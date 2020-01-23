@@ -121,10 +121,16 @@ proc add*(rt:var seq[relations], rel:relation, expected_relatedness:float) =
     rt.add(rel, expected_relatedness)
 
 
-const header = "$sample_a\t$sample_b\t$relatedness\t$hom_concordance\t$hets_a\t$hets_b\t$shared_hets\t$hom_alts_a\t$hom_alts_b\t$shared_hom_alts\t$ibs0\t$ibs2\t$n\t$x_ibs0\t$x_ibs2\t$expected_relatedness"
+const header = "$sample_a\t$sample_b\t$relatedness\t$ibs0\t$hom_concordance\t$hets_a\t$hets_b\t$shared_hets\t$hom_alts_a\t$hom_alts_b\t$shared_hom_alts\t$ibs2\t$n\t$x_ibs0\t$x_ibs2\t$expected_relatedness"
 
 proc tsv(r:relation, expected_relatedness:float= -1.0): string =
-  result = &"{r.sample_a}\t{r.sample_b}\t{r.rel:.3f}\t{r.hom_alt_concordance:.3f}\t{r.hets_a}\t{r.hets_b}\t{r.shared_hets}\t{r.hom_alts_a}\t{r.hom_alts_b}\t{r.shared_hom_alts}\t{r.ibs0}\t{r.ibs2}\t{r.n}\t{r.x_ibs0}\t{r.xibs2}\t{expected_relatedness}"
+  result = &"{r.sample_a}\t{r.sample_b}\t{r.rel:.3f}\t{r.ibs0}\t{r.hom_alt_concordance:.3f}\t{r.hets_a}\t{r.hets_b}\t{r.shared_hets}\t{r.hom_alts_a}\t{r.hom_alts_b}\t{r.shared_hom_alts}\t{r.ibs2}\t{r.n}\t{r.x_ibs0}\t{r.xibs2}\t{expected_relatedness}"
+
+
+proc to_sex_lookup(samples: seq[Sample]): TableRef[string, string] =
+  result = newTable[string, string]()
+  for s in samples:
+    result[s.id] = if s.sex == 1: "male" elif s.sex == 2: "female" else: "unknown"
 
 
 proc `%`*(v:uint16): JsonNode =
@@ -434,19 +440,173 @@ proc read_extracted*(paths: seq[string], min_depth:int, unk2hr:bool): relation_m
 
     result.fill_sample_info(i, min_depth, unk2hr)
 
+const missing = [".", "0", "-9", ""]
 
-proc write(fh:File, sample_names: seq[string], stats: seq[Stat4], gt_counts: array[5, seq[uint16]], sample_sex: TableRef[string, string]) =
-  fh.write("#sample\tpedigree_sex\tgt_depth_mean\tgt_depth_sd\tdepth_mean\tdepth_sd\tab_mean\tab_std\tn_hom_ref\tn_het\tn_hom_alt\tn_unknown\tp_middling_ab\t")
-  fh.write("X_depth_mean\tX_n\tX_hom_ref\tX_het\tX_hom_alt\t")
-  fh.write("Y_depth_mean\tY_n\n")
-  for i, sample in sample_names:
-    fh.write(&"{sample}\t{sample_sex.getOrDefault(sample)}\t")
+proc high_quality(gt_counts: array[5, seq[uint16]], i:int): bool {.inline.} =
+  # less than 3% of sites with allele balance outside of 0.2 .. 0.8
+  return gt_counts[4][i].float / (gt_counts[0][i] + gt_counts[1][i] + gt_counts[2][i] + gt_counts[3][i] + gt_counts[4][i]).float < 0.04
+
+proc samples_have_y_depth(stats: seq[Stat4]): bool =
+  var n = 0
+  for s in stats:
+    n += int(s.y_dp.n > 0)
+  return n > 5 or n.float / stats.len.float > 0.1
+
+type SampleLooker = object
+  sample_names: seq[string]
+  sample_to_index: TableRef[string, int]
+  sample_sex: TableRef[string, string]
+  sample_table: TableRef[string, Sample]
+  pairs: TableRef[string, seq[string]]
+  has_y: bool
+  changed_samples: HashSet[string]
+
+proc unrelated(final: relation_matrices, L: SampleLooker, possible_parents: var seq[string], stats: seq[Stat4]): bool =
+  doAssert possible_parents.len == 2, "[somalier] ERROR expected only 2 parents in call to 'unrelated'"
+
+  var
+    i = L.sample_to_index[possible_parents[0]]
+    j = L.sample_to_index[possible_parents[1]]
+    flipped = false
+
+  if i > j:
+    let tmp = i
+    i = j
+    j = tmp
+    flipped = true
+
+  let ibs0 = final.ibs[i * final.n_samples + j]
+  let shared_hets = final.ibs[j * final.n_samples + i]
+
+  let hets_i = final.gt_counts[1][i]
+  let hets_j = final.gt_counts[1][j]
+
+  let bottom = max(hets_i, hets_j).float
+
+  let grel = (shared_hets.float64 - 2 * ibs0.float64) / bottom
+  if grel > 0.06: return false
+
+  # now order possible_parents so that father is first.
+  var imale = stats[i].x_het / stats[i].x_hom_alt < 0.05
+  var jmale = stats[j].x_het / stats[j].x_hom_alt < 0.05
+  if imale == jmale: return false
+
+  if (imale and flipped) or (jmale and not flipped):
+      let tmp = possible_parents[0]
+      possible_parents[0] = possible_parents[1]
+      possible_parents[1] = tmp
+
+  return true
+
+proc update_sample(final:relation_matrices, stats: seq[Stat4], gt_counts: array[5, seq[uint16]], i:int, L:var SampleLooker) =
+  # first pass here updates sample parents as needed.
+  if not gt_counts.high_quality(i): return
+  let sample_name = L.sample_names[i]
+  var sample = L.sample_table.getOrDefault(sample_name, Sample(id: sample_name, family_id: sample_name, sex: -9, phenotype:"-9", maternal_id:"-9", paternal_id:"-9"))
+  ## can re-set values for high quality samples based on info in VCF
+  if stats[i].x_het / stats[i].x_hom_alt < 0.05:
+    if sample.sex != 1:
+      if sample.sex == 2:
+        stderr.write_line &"[somalier] setting sex to male for {sample.id}"
+      sample.sex = 1
+  elif stats[i].x_het / stats[i].x_hom_alt > 0.4:
+    if sample.sex != 2:
+      if sample.sex == 1:
+        stderr.write_line &"[somalier] setting sex to female for {sample.id}"
+      sample.sex = 2
+  if L.has_y and sample.sex == 1 and 2 * stats[i].y_dp.mean / stats[i].gtdp.mean < 0.4:
+    stderr.write_line &"[somalier] NOTE: apparent loss of Y for {sample.id} with low het-ratio on X chromosome"
+  if L.has_y and sample.sex == 2 and 2 * stats[i].y_dp.mean / stats[i].gtdp.mean > 0.4:
+    stderr.write_line &"[somalier] NOTE: apparent Y for {sample.id} with high het-ratio on X chromosome"
+    sample.sex = -2
+  # now look up in parent child pairs. if there are 2 samples, we check
+  # that those 2 samples are unrelated. if so, they are mom and dad.
+  var possible_parents = L.pairs.getOrDefault(sample.id, @[])
+  # call to unrelated also orders parents so that order is dad, mom as in
+  # pedigree file.
+  if possible_parents.len == 2 and final.unrelated(L, possible_parents, stats):
+    #echo "kid:", sample.id, " has parents:", possible_parents
+    if sample.paternal_id != possible_parents[0]:
+      stderr.write_line &"[somalier] NOTE: updating paternal_id for {sample.id} to {possible_parents[0]}"
+      sample.paternal_id = possible_parents[0]
+    if sample.maternal_id != possible_parents[1]:
+      stderr.write_line &"[somalier] NOTE: updating maternal_id for {sample.id} to {possible_parents[1]}"
+      sample.maternal_id = possible_parents[1]
+  L.sample_table[sample.id] = sample
+
+proc update_family_ids(final:relation_matrices, stats: seq[Stat4], gt_counts: array[5, seq[uint16]], i:int, L:var SampleLooker) =
+  # 2nd pass here updates family ids
+  let sample_name = L.sample_names[i]
+  var sample = L.sample_table.getOrDefault(sample_name, Sample(id: sample_name, family_id: sample_name, sex: -9, phenotype:"-9", maternal_id:"-9", paternal_id:"-9"))
+  if not gt_counts.high_quality(i): return
+
+  let pids = [sample.paternal_id, sample.maternal_id]
+  for pid in pids:
+    if pid in L.sample_table:
+      var p = L.sample_table[pid]
+      # if p was already changed we have to use that id for the fam
+      if sample.id in L.changed_samples:
+        stderr.write_line &"[somalier] updating family_id for {p.id} to {sample.family_id}"
+        p.family_id = sample.family_id
+        L.changed_samples.incl(p.id)
+        L.sample_table[p.id] = p
+      elif p.id in L.changed_samples:
+        sample.family_id = p.family_id
+        stderr.write_line &"[somalier] updating family_id for {sample.id} to {sample.family_id}"
+        L.sample_table[sample.id] = sample
+        L.changed_samples.incl(sample.id)
+
+      if p.family_id != sample.family_id:
+        if L.sample_to_index[p.id] < L.sample_to_index[sample.id]:
+          sample.family_id = p.family_id
+          stderr.write_line &"[somalier] updating family_id for {sample.id} to {sample.family_id}"
+          L.changed_samples.incl(sample.id)
+          L.changed_samples.incl(sample.id)
+        else:
+          p.family_id = sample.family_id
+          L.sample_table[p.id] = p
+          stderr.write_line &"[somalier] updating family_id for {p.id} to {sample.family_id}"
+          L.changed_samples.incl(p.id)
+
+
+proc write_sample(fh:File, stats: seq[Stat4], gt_counts: array[5, seq[uint16]], i:int, L:SampleLooker) =
+    let sample_name = L.sample_names[i]
+    var sample = L.sample_table.getOrDefault(sample_name, Sample(id: sample_name, family_id: sample_name, sex: -9, phenotype:"-9", maternal_id:"-9", paternal_id:"-9"))
+    fh.write(&"{sample.family_id}\t{sample.id}\t{sample.paternal_id}\t{sample.maternal_id}\t{sample.sex}\t{sample.phenotype}\t")
+    fh.write(&"{L.sample_sex.getOrDefault(sample.id, \"-9\")}\t")
     fh.write(&"{stats[i].gtdp.mean:.1f}\t{stats[i].gtdp.standard_deviation():.1f}\t")
     fh.write(&"{stats[i].dp.mean:.1f}\t{stats[i].dp.standard_deviation():.1f}\t")
     fh.write(&"{stats[i].ab.mean:.2f}\t{stats[i].ab.standard_deviation():.2f}\t{gt_counts[0][i]}\t{gt_counts[1][i]}\t{gt_counts[2][i]}\t{gt_counts[3][i]}\t")
     fh.write(&"{gt_counts[4][i].float / (gt_counts[0][i] + gt_counts[1][i] + gt_counts[2][i] + gt_counts[3][i] + gt_counts[4][i]).float:.3f}\t")
     fh.write(&"{stats[i].x_dp.mean:.2f}\t{stats[i].x_dp.n}\t{stats[i].x_hom_ref}\t{stats[i].x_het}\t{stats[i].x_hom_alt}\t")
     fh.write(&"{stats[i].y_dp.mean:.2f}\t{stats[i].y_dp.n}\n")
+
+proc look(final:relation_matrices, samples: seq[Sample], stats: seq[Stat4], pairs: TableRef[string, seq[string]]): SampleLooker =
+  result.sample_names = final.samples
+  result.sample_to_index = newTable[string, int]()
+  for i, s in result.sample_names:
+    result.sample_to_index[s] = i
+
+  result.sample_sex = samples.to_sex_lookup
+  result.changed_samples = initHashSet[string](128)
+  result.sample_table = newTable[string, Sample]()
+  result.has_y = stats.samples_have_y_depth
+  result.pairs = pairs
+  for s in samples: result.sample_table[s.id] = s
+
+proc write_ped(fh:File, final: relation_matrices, stats: seq[Stat4], gt_counts: array[5, seq[uint16]], samples: seq[Sample], parent_child_pairs: TableRef[string, seq[string]]) =
+  var L = final.look(samples, stats, parent_child_pairs)
+  fh.write("#family_id\tsample_id\tpaternal_id\tmaternal_id\tsex\tphenotype\t")
+  fh.write("original_pedigree_sex\tgt_depth_mean\tgt_depth_sd\tdepth_mean\tdepth_sd\tab_mean\tab_std\tn_hom_ref\tn_het\tn_hom_alt\tn_unknown\tp_middling_ab\t")
+  fh.write("X_depth_mean\tX_n\tX_hom_ref\tX_het\tX_hom_alt\t")
+  fh.write("Y_depth_mean\tY_n\n")
+  for i, sample_name in L.sample_names:
+    update_sample(final, stats, gt_counts, i, L)
+  for i, sample_name in L.sample_names:
+    update_family_ids(final, stats, gt_counts, i, L)
+
+  for i, sample_name in L.sample_names:
+    fh.write_sample(stats, gt_counts, i, L)
   fh.close()
 
 proc toj(sample_names: seq[string], stats: seq[Stat4], gt_counts: array[5, seq[uint16]], sample_sex: TableRef[string, string]): string =
@@ -480,11 +640,6 @@ proc toj(sample_names: seq[string], stats: seq[Stat4], gt_counts: array[5, seq[u
     }
     ))
   result.add("]")
-
-proc to_sex_lookup(samples: seq[Sample]): TableRef[string, string] =
-  result = newTable[string, string]()
-  for s in samples:
-    result[s.id] = if s.sex == 1: "male" elif s.sex == 2: "female" else: "unknown"
 
 proc update_with_glob(files: var seq[string]) =
   var toadd = newSeqOfCap[string](256)
@@ -569,8 +724,7 @@ specified as comma-separated groups per line e.g.:
   t0 = cpuTime()
 
   var tmpls = tmpl_html.split("<INPUT_JSON>")
-  var sample_sexes = samples.to_sex_lookup
-  fh_html.write(tmpls[0].replace("<SAMPLE_JSON>", toj(final.samples, final.stats, final.gt_counts, sample_sexes)))
+  fh_html.write(tmpls[0].replace("<SAMPLE_JSON>", toj(final.samples, final.stats, final.gt_counts, samples.to_sex_lookup)))
 
   var rels: seq[relations]
 
@@ -580,6 +734,7 @@ specified as comma-separated groups per line e.g.:
 
   fh_tsv.write_line '#', header.replace("$", "")
   var npairs:int
+  var parent_child_pair = newTable[string, seq[string]]()
   var nrels:int
   sort(groups, cmp_pair)
   for rel in final.relatedness(grouped):
@@ -589,6 +744,10 @@ specified as comma-separated groups per line e.g.:
       idx = groups.binarySearch((rel.sample_b, rel.sample_a, -1.0), cmp_pair)
     let expected_relatedness = if idx == -1: -1'f else: groups[idx].rel
     let rr = rel.rel
+    if rr > 0.4 and rr < 0.6 and rel.ibs0.float / rel.ibs2.float < 0.005:
+      parent_child_pair.mgetOrPut(rel.sample_a, @[]).add(rel.sample_b)
+      parent_child_pair.mgetOrPut(rel.sample_b, @[]).add(rel.sample_a)
+
     let ra = random(1'f32)
     let interesting = expected_relatedness != -1 or rr > 0.05
     if (ra > proportion_sampled) and not interesting:
@@ -604,7 +763,7 @@ specified as comma-separated groups per line e.g.:
   fh_html.close()
   stderr.write_line(&"[somalier] wrote interactive HTML output for {nrels} pairs to: ",  opts.output_prefix & "html")
 
-  fh_samples.write(final.samples, final.stats, final.gt_counts, sample_sexes)
+  fh_samples.write_ped(final, final.stats, final.gt_counts, samples, parent_child_pair)
 
   fh_tsv.close()
   grouped.write(opts.output_prefix)
