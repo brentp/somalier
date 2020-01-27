@@ -121,10 +121,10 @@ proc add*(rt:var seq[relations], rel:relation, expected_relatedness:float) =
     rt.add(rel, expected_relatedness)
 
 
-const header = "$sample_a\t$sample_b\t$relatedness\t$ibs0\t$hom_concordance\t$hets_a\t$hets_b\t$shared_hets\t$hom_alts_a\t$hom_alts_b\t$shared_hom_alts\t$ibs2\t$n\t$x_ibs0\t$x_ibs2\t$expected_relatedness"
+const header = "$sample_a\t$sample_b\t$relatedness\t$ibs0\t$ibs2\t$hom_concordance\t$hets_a\t$hets_b\t$shared_hets\t$hom_alts_a\t$hom_alts_b\t$shared_hom_alts\t$ibs2\t$n\t$x_ibs0\t$x_ibs2\t$expected_relatedness"
 
 proc tsv(r:relation, expected_relatedness:float= -1.0): string =
-  result = &"{r.sample_a}\t{r.sample_b}\t{r.rel:.3f}\t{r.ibs0}\t{r.hom_alt_concordance:.3f}\t{r.hets_a}\t{r.hets_b}\t{r.shared_hets}\t{r.hom_alts_a}\t{r.hom_alts_b}\t{r.shared_hom_alts}\t{r.ibs2}\t{r.n}\t{r.x_ibs0}\t{r.xibs2}\t{expected_relatedness}"
+  result = &"{r.sample_a}\t{r.sample_b}\t{r.rel:.3f}\t{r.ibs0}\t{r.ibs2}\t{r.hom_alt_concordance:.3f}\t{r.hets_a}\t{r.hets_b}\t{r.shared_hets}\t{r.hom_alts_a}\t{r.hom_alts_b}\t{r.shared_hom_alts}\t{r.n}\t{r.x_ibs0}\t{r.xibs2}\t{expected_relatedness}"
 
 
 proc to_sex_lookup(samples: seq[Sample]): TableRef[string, string] =
@@ -162,6 +162,7 @@ proc add_ped_samples(grouped: var seq[pair], samples:seq[Sample], sample_names:s
     if sampleA.id notin ss: continue
     for j, sampleB in samples[i + 1..samples.high]:
       if sampleB.id notin ss: continue
+      #echo sampleA, " ", sampleB
       var rel = sampleA.relatedness(sampleB)
       if rel <= 0: continue
       if sampleA.id < sampleB.id:
@@ -444,7 +445,7 @@ const missing = [".", "0", "-9", ""]
 
 proc high_quality(gt_counts: array[5, seq[uint16]], i:int): bool {.inline.} =
   # less than 3% of sites with allele balance outside of 0.2 .. 0.8
-  return gt_counts[4][i].float / (gt_counts[0][i] + gt_counts[1][i] + gt_counts[2][i] + gt_counts[3][i] + gt_counts[4][i]).float < 0.03
+  result = gt_counts[4][i].float / (gt_counts[0][i] + gt_counts[1][i] + gt_counts[2][i] + gt_counts[3][i] + gt_counts[4][i]).float < 0.03
 
 proc samples_have_y_depth(stats: seq[Stat4]): bool =
   var n = 0
@@ -454,7 +455,6 @@ proc samples_have_y_depth(stats: seq[Stat4]): bool =
 
 type SampleLooker = object
   sample_names: seq[string]
-  sample_to_index: TableRef[string, int]
   sample_sex: TableRef[string, string]
   sample_table: TableRef[string, Sample]
   pairs: TableRef[string, seq[string]]
@@ -467,15 +467,18 @@ proc unrelated(final: relation_matrices, L: SampleLooker, possible_parents: var 
   doAssert possible_parents.len == 2, "[somalier] ERROR expected only 2 parents in call to 'unrelated'"
 
   var
-    i = L.sample_to_index[possible_parents[0]]
-    j = L.sample_to_index[possible_parents[1]]
+    i = L.sample_table[possible_parents[0]].i
+    j = L.sample_table[possible_parents[1]].i
     flipped = false
+
+  if i < 0 or j < 0: return false
 
   if i > j:
     let tmp = i
     i = j
     j = tmp
     flipped = true
+
 
   let ibs0 = final.ibs[i * final.n_samples + j]
   let shared_hets = final.ibs[j * final.n_samples + i]
@@ -541,23 +544,72 @@ proc add_parents_and_check_sex(final:relation_matrices, stats: seq[Stat4], gt_co
       sample.maternal_id = possible_parents[1]
   L.sample_table[sample.id] = sample
 
-proc add_siblings(final:relation_matrices, stats: seq[Stat4], gt_counts: array[5, seq[uint16]], L:var SampleLooker) =
+proc add_parent_to_sibs(final:relation_matrices, stats: seq[Stat4], gt_counts: array[5, seq[uint16]], L:var SampleLooker) =
+  # now, if we have multiple siblings that all have low IBS0 to an additional
+  # $sample, we can assume $sample is the (single) parent
+  var byParent = newTable[string, seq[string]]()
 
+  for sid, sample in L.sample_table:
+    if sample.paternal_id notin missing:
+      byParent.mgetOrPut(sample.paternal_id, @[]).add(sample.id)
+    if sample.maternal_id notin missing:
+      byParent.mgetOrPut(sample.maternal_id, @[]).add(sample.id)
+
+  for parent_id, kid_ids in byParent:
+    if kid_ids.len < 2: continue
+    var parent_ids = initCountTable[string]()
+    for i, k in kid_ids:
+      if k notin L.pairs:
+        break
+      for p in L.pairs[k]:
+        parent_ids.inc(p)
+    # now, there there should be 1 entry in parent_ids with count == kid_ids.len
+    for parent_id, c in parent_ids:
+      if c == kid_ids.len:
+        let parent = L.sample_table.getOrDefault(parent_id, Sample())
+        if parent.id == "": continue
+        for kid_id in kid_ids:
+          let kid = L.sample_table[kid_id]
+          if parent.sex == 1 and kid.paternal_id != parent.id:
+              if not kid.paternal_id.endswith("-somalier"):
+                stderr.write_line &"[somalier] WARNING: updating paternal id for sample {kid.id} from {kid.paternal_id} to {parent.id}"
+              kid.paternal_id = parent.id
+          elif parent.sex == 2 and kid.maternal_id != parent.id:
+              if not kid.maternal_id.endswith("-somalier"):
+                stderr.write_line &"[somalier] WARNING: updating maternal id for sample {kid.id} from {kid.maternal_id} to {parent.id}"
+              kid.maternal_id = parent.id
+
+proc remove_spurious_parent_ids(final:relation_matrices, L:SampleLooker, stats: seq[Stat4]) =
+  for id, sample in L.sample_table.mpairs:
+    if sample.id in L.sample_table and sample.paternal_id in L.sample_table and not sample.paternal_id.endswith("-somalier"):
+      var pair = @[sample.id, sample.paternal_id]
+      if not final.related(L, pair, stats, false, 0.33):
+        stderr.write_line &"[somalier] removing assigned father from {sample.id} and setting to unknown"
+        sample.paternal_id = "-9"
+    if sample.id in L.sample_table and sample.maternal_id in L.sample_table and not sample.maternal_id.endswith("-somalier"):
+      var pair = @[sample.id, sample.maternal_id]
+      if not final.related(L, pair, stats, false, 0.33):
+        stderr.write_line &"[somalier] removing assigned mother from {sample.id} and setting to unknown"
+        sample.maternal_id = "-9"
+    L.sample_table[id] = sample
+
+
+proc add_siblings(final:relation_matrices, stats: seq[Stat4], gt_counts: array[5, seq[uint16]], L:var SampleLooker) =
   for sample_name, sib_names in L.sib_pairs:
-    let i = L.sample_to_index[sample_name]
-    if i < gt_counts[0].len and not gt_counts.high_quality(i): continue
     let isample = L.sample_table[sample_name]
+    let i = isample.i
+    if i >= 0 and not gt_counts.high_quality(i): continue
     var ipids = [isample.paternal_id, isample.maternal_id]
     let parent_order = ["dad", "mom"]
     for sn in sib_names:
       var j: int
       var jsample:Sample
       try:
-        j = L.sample_to_index[sn]
         jsample = L.sample_table[sn]
+        j = jsample.i
       except KeyError:
         continue
-      if j < gt_counts[0].len and not gt_counts.high_quality(i): continue
+      if j >= 0 and not gt_counts.high_quality(j): continue
       var jpids = [jsample.paternal_id, jsample.maternal_id]
 
       for k, ipid in ipids.mpairs:
@@ -578,7 +630,7 @@ proc add_siblings(final:relation_matrices, stats: seq[Stat4], gt_counts: array[5
 
         elif ipid in missing and jpid in missing:
           # make a fake dad
-          ipid = &"""{parent_order[k]}-{i}-{isample.family_id}"""
+          ipid = &"""{parent_order[k]}-{isample.family_id}-somalier"""
           jpid = ipid
           ipids[k] = ipid
           jpids[k] = ipid
@@ -598,8 +650,7 @@ proc add_siblings(final:relation_matrices, stats: seq[Stat4], gt_counts: array[5
       if jpids[0] != jsample.id:
         if jpids[0] != jsample.paternal_id:
           var pair = @[jpids[0], jsample.id]
-          if pair[0] notin L.sample_to_index or pair[1] notin L.sample_to_index or final.related(L, pair, stats, false, level=0.4):
-            echo &"setting paternal_id for sample {jsample} to {jpids[0]}"
+          if pair[0] notin L.sample_table or pair[1] notin L.sample_table or final.related(L, pair, stats, false, level=0.4):
             jsample.paternal_id = jpids[0]
 
       if jpids[1] != jsample.id:
@@ -607,23 +658,20 @@ proc add_siblings(final:relation_matrices, stats: seq[Stat4], gt_counts: array[5
           # make sure we don't accidently set wife as mother just because they
           # share an offspring.
           var pair = @[jpids[1], jsample.id]
-          if pair[0] notin L.sample_to_index or pair[1] notin L.sample_to_index or final.related(L, pair, stats, false, level=0.4):
-            echo &"A:setting maternal_id for sample {jsample} to {jpids[1]}"
+          if pair[0] notin L.sample_table or pair[1] notin L.sample_table or final.related(L, pair, stats, false, level=0.4):
             jsample.maternal_id = jpids[1]
       L.sample_table[sn] = jsample
 
       if ipids[0] != isample.id:
         if ipids[0] != isample.paternal_id:
           var pair = @[ipids[0], isample.id]
-          if pair[0] notin L.sample_to_index or pair[1] notin L.sample_to_index or final.related(L, pair, stats, false, level=0.4):
-            echo &"setting paternal_id for sample {isample} to {ipids[0]}"
+          if pair[0] notin L.sample_table or pair[1] notin L.sample_table or final.related(L, pair, stats, false, level=0.4):
             isample.paternal_id = ipids[0]
 
       if ipids[1] != isample.id:
         if ipids[1] != isample.maternal_id:
           var pair = @[ipids[1], isample.id]
-          if pair[0] notin L.sample_to_index or pair[1] notin L.sample_to_index or final.related(L, pair, stats, false, level=0.4):
-            echo &"B:setting maternal_id for sample {isample} to {ipids[1]}"
+          if pair[0] notin L.sample_table or pair[1] notin L.sample_table or final.related(L, pair, stats, false, level=0.4):
             isample.maternal_id = ipids[1]
 
       L.sample_table[sample_name] = isample
@@ -634,8 +682,6 @@ proc update_family_ids(final:relation_matrices, stats: seq[Stat4], gt_counts: ar
   let sample_name = L.sample_names[i]
   if sample_name notin L.sample_table:
     let s = Sample(id: sample_name, family_id: sample_name, sex: -9, phenotype:"-9", maternal_id:"-9", paternal_id:"-9")
-    L.sample_table[sample_name] = s
-    L.sample_to_index[s.id] = L.sample_to_index.len
   var sample = L.sample_table[sample_name]
   if not gt_counts.high_quality(i): return
 
@@ -643,6 +689,7 @@ proc update_family_ids(final:relation_matrices, stats: seq[Stat4], gt_counts: ar
   for pid in pids:
     if pid in L.sample_table:
       var p = L.sample_table[pid]
+      if p.family_id == sample.family_id: continue
       # if p was already changed we have to use that id for the fam
       if sample.id in L.changed_samples:
         stderr.write_line &"[somalier] updating family_id for {p.id} to {sample.family_id}"
@@ -656,8 +703,7 @@ proc update_family_ids(final:relation_matrices, stats: seq[Stat4], gt_counts: ar
         L.changed_samples.incl(sample.id)
 
       if p.family_id != sample.family_id:
-        echo p.id, " ", pid, p
-        if L.sample_to_index[p.id] < L.sample_to_index[sample.id]:
+        if L.sample_table[p.id].i < L.sample_table[sample.id].i:
           sample.family_id = p.family_id
           stderr.write_line &"[somalier] updating family_id for {sample.id} to {sample.family_id}"
           L.changed_samples.incl(sample.id)
@@ -681,34 +727,75 @@ proc write_sample(fh:File, stats: seq[Stat4], gt_counts: array[5, seq[uint16]], 
     fh.write(&"{stats[i].x_dp.mean:.2f}\t{stats[i].x_dp.n}\t{stats[i].x_hom_ref}\t{stats[i].x_het}\t{stats[i].x_hom_alt}\t")
     fh.write(&"{stats[i].y_dp.mean:.2f}\t{stats[i].y_dp.n}\n")
 
-proc look(final:relation_matrices, samples: seq[Sample], stats: seq[Stat4], pairs: TableRef[string, seq[string]], sib_pairs: TableRef[string, seq[string]]): SampleLooker =
+proc look(final:relation_matrices, samples: var seq[Sample], stats: seq[Stat4], pairs: TableRef[string, seq[string]], sib_pairs: TableRef[string, seq[string]]): SampleLooker =
   result.sample_names = final.samples
-  result.sample_to_index = newTable[string, int]()
+  result.sample_table = newTable[string, Sample]()
+  var tmp_sample_i = newTable[string, int]()
   for i, s in result.sample_names:
-    result.sample_to_index[s] = i
+    tmp_sample_i[s] = i
+
+  for s in samples.mitems:
+    doAssert s.id notin result.sample_table, "error repeated sample id:" & s.id
+    s.i = tmp_sample_i.getOrDefault(s.id, -1)
+    result.sample_table[s.id] = s
+
+
+  var byFam = newTable[string, seq[Sample]]()
+  for i, s in samples.mpairs:
+    byFam.mgetOrPut(s.family_id, @[]).add(s)
+
+  for s in result.sample_names:
+    if s notin result.sample_table:
+      result.sample_table[s] = Sample(family_id: s, id: s, sex: -9, phenotype:"-9", maternal_id:"-9", paternal_id:"-9", i: -1)
+      byFam.mgetOrPut(s, @[]).add(result.sample_table[s])
+
+  # make sure sibs can join a family
+  for a, bs in sib_pairs:
+    var akid = result.sample_table[a]
+    for b in bs:
+      var bkid = result.sample_table[b]
+      if akid.family_id != bkid.family_id:
+        var bsamples: seq[Sample]
+        doAssert byFam.take(bkid.family_id, bsamples)
+        for bsample in bsamples:
+          bsample.family_id = akid.family_id
+          byFam[akid.family_id].add(bsample)
+          result.sample_table[bsample.id].family_id = akid.family_id
+
+  for a, bs in pairs:
+    var asample = result.sample_table[a]
+    for b in bs:
+      var bsamp = result.sample_table[b]
+      if asample.family_id != bsamp.family_id:
+        var bsamples: seq[Sample]
+        doAssert byFam.take(bsamp.family_id, bsamples)
+        for bsample in bsamples:
+          bsample.family_id = asample.family_id
+          byFam[asample.family_id].add(bsample)
+          result.sample_table[bsample.id].family_id = asample.family_id
 
   result.sample_sex = samples.to_sex_lookup
-  result.changed_samples = initHashSet[string](128)
-  result.sample_table = newTable[string, Sample]()
   result.has_y = stats.samples_have_y_depth
   result.pairs = pairs
   result.sib_pairs = sib_pairs
-  for s in samples:
-    result.sample_table[s.id] = s
-    if s.id notin result.sample_to_index:
-      result.sample_to_index[s.id] = result.sample_to_index.len
 
-proc write_ped(fh:File, final: relation_matrices, stats: seq[Stat4], gt_counts: array[5, seq[uint16]], samples: seq[Sample], parent_child_pairs: TableRef[string, seq[string]], sib_pairs: TableRef[string, seq[string]]) =
+
+proc write_ped(fh:File, final: relation_matrices, stats: seq[Stat4], gt_counts: array[5, seq[uint16]], samples: var seq[Sample], parent_child_pairs: TableRef[string, seq[string]], sib_pairs: TableRef[string, seq[string]]) =
   var L = final.look(samples, stats, parent_child_pairs, sib_pairs)
   fh.write("#family_id\tsample_id\tpaternal_id\tmaternal_id\tsex\tphenotype\t")
   fh.write("original_pedigree_sex\tgt_depth_mean\tgt_depth_sd\tdepth_mean\tdepth_sd\tab_mean\tab_std\tn_hom_ref\tn_het\tn_hom_alt\tn_unknown\tp_middling_ab\t")
   fh.write("X_depth_mean\tX_n\tX_hom_ref\tX_het\tX_hom_alt\t")
   fh.write("Y_depth_mean\tY_n\n")
+  final.remove_spurious_parent_ids(L, stats)
   for i, sample_name in L.sample_names:
     add_parents_and_check_sex(final, stats, gt_counts, i, L)
   add_siblings(final, stats, gt_counts, L)
+
+  add_parent_to_sibs(final, stats, gt_counts, L)
+
   for i, sample_name in L.sample_names:
     update_family_ids(final, stats, gt_counts, i, L)
+  final.remove_spurious_parent_ids(L, stats)
 
   for i, sample_name in L.sample_names:
     fh.write_sample(stats, gt_counts, i, L)
@@ -855,6 +942,11 @@ specified as comma-separated groups per line e.g.:
       parent_child_pair.mgetOrPut(rel.sample_b, @[]).add(rel.sample_a)
 
     elif rr > 0.38 and rr < 0.62 and rel.ibs0.float / rel.ibs2.float > 0.015 and rel.ibs0.float / rel.ibs2.float < 0.052:
+      sib_pairs.mgetOrPut(rel.sample_a, @[]).add(rel.sample_b)
+      sib_pairs.mgetOrPut(rel.sample_b, @[]).add(rel.sample_a)
+
+    elif rr > 0.95 and rel.ibs0.float / rel.ibs2.float < 0.005:
+      stderr.write_line &"[somalier] apparent identical twins or sample duplicate found with {rel.sample_a} and {rel.sample_b} assuming siblings"
       sib_pairs.mgetOrPut(rel.sample_a, @[]).add(rel.sample_b)
       sib_pairs.mgetOrPut(rel.sample_b, @[]).add(rel.sample_a)
 
