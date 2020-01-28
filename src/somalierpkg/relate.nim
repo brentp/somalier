@@ -445,6 +445,8 @@ const missing = [".", "0", "-9", ""]
 proc high_quality(gt_counts: array[5, seq[uint16]], i:int): bool {.inline.} =
   # less than 3% of sites with allele balance outside of 0.2 .. 0.8
   result = gt_counts[4][i].float / (gt_counts[0][i] + gt_counts[1][i] + gt_counts[2][i] + gt_counts[3][i] + gt_counts[4][i]).float < 0.03
+  if not result: return false
+  result = gt_counts[2][i].float / gt_counts[1][i].float > 0.7
 
 proc samples_have_y_depth(stats: seq[Stat4]): bool =
   var n = 0
@@ -533,7 +535,6 @@ proc add_parents_and_check_sex(final:relation_matrices, stats: seq[Stat4], gt_co
   # call to unrelated also orders parents so that order is dad, mom as in
   # pedigree file.
   if possible_parents.len == 2 and final.unrelated(L, possible_parents, stats):
-    #echo "kid:", sample.id, " has parents:", possible_parents
     if sample.paternal_id != possible_parents[0]:
       stderr.write_line &"[somalier] NOTE: updating paternal_id for {sample.id} to {possible_parents[0]}"
       sample.paternal_id = possible_parents[0]
