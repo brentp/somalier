@@ -162,7 +162,6 @@ proc add_ped_samples(grouped: var seq[pair], samples:seq[Sample], sample_names:s
     if sampleA.id notin ss: continue
     for j, sampleB in samples[i + 1..samples.high]:
       if sampleB.id notin ss: continue
-      #echo sampleA, " ", sampleB
       var rel = sampleA.relatedness(sampleB)
       if rel <= 0: continue
       if sampleA.id < sampleB.id:
@@ -469,19 +468,16 @@ proc unrelated(final: relation_matrices, L: SampleLooker, possible_parents: var 
   var
     i = L.sample_table[possible_parents[0]].i
     j = L.sample_table[possible_parents[1]].i
-    flipped = false
 
   if i < 0 or j < 0: return false
 
+
+  var ibs0 = final.ibs[i * final.n_samples + j]
+  var shared_hets = final.ibs[j * final.n_samples + i]
   if i > j:
-    let tmp = i
-    i = j
-    j = tmp
-    flipped = true
-
-
-  let ibs0 = final.ibs[i * final.n_samples + j]
-  let shared_hets = final.ibs[j * final.n_samples + i]
+    let tmp = ibs0
+    ibs0 = shared_hets
+    shared_hets = tmp
 
   let hets_i = final.gt_counts[1][i]
   let hets_j = final.gt_counts[1][j]
@@ -497,10 +493,10 @@ proc unrelated(final: relation_matrices, L: SampleLooker, possible_parents: var 
     var jmale = stats[j].x_het / stats[j].x_hom_alt < 0.05
     if imale == jmale: return false
 
-    if (imale and flipped) or (jmale and not flipped):
-        let tmp = possible_parents[0]
-        possible_parents[0] = possible_parents[1]
-        possible_parents[1] = tmp
+    if jmale:
+      let tmp = possible_parents[0]
+      possible_parents[0] = possible_parents[1]
+      possible_parents[1] = tmp
 
   return true
 
@@ -532,6 +528,8 @@ proc add_parents_and_check_sex(final:relation_matrices, stats: seq[Stat4], gt_co
   # now look up in parent child pairs. if there are 2 samples, we check
   # that those 2 samples are unrelated. if so, they are mom and dad.
   var possible_parents = L.pairs.getOrDefault(sample.id, @[])
+  # TODO: for 3 gens, often won't have exactly 2. need to find exactly 2 that
+  # are unrelated...
   # call to unrelated also orders parents so that order is dad, mom as in
   # pedigree file.
   if possible_parents.len == 2 and final.unrelated(L, possible_parents, stats):
