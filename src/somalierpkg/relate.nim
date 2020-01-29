@@ -570,22 +570,22 @@ proc add_parent_to_sibs(final:relation_matrices, stats: seq[Stat4], gt_counts: a
         for kid_id in kid_ids:
           let kid = L.sample_table[kid_id]
           if parent.sex == 1 and kid.paternal_id != parent.id:
-              if not kid.paternal_id.endswith("-somalier"):
+              if not kid.paternal_id.endswith("_somalier"):
                 stderr.write_line &"[somalier] WARNING: updating paternal id for sample {kid.id} from {kid.paternal_id} to {parent.id}"
               kid.paternal_id = parent.id
           elif parent.sex == 2 and kid.maternal_id != parent.id:
-              if not kid.maternal_id.endswith("-somalier"):
+              if not kid.maternal_id.endswith("_somalier"):
                 stderr.write_line &"[somalier] WARNING: updating maternal id for sample {kid.id} from {kid.maternal_id} to {parent.id}"
               kid.maternal_id = parent.id
 
 proc remove_spurious_parent_ids(final:relation_matrices, L:SampleLooker, stats: seq[Stat4]) =
   for id, sample in L.sample_table.mpairs:
-    if sample.id in L.sample_table and sample.paternal_id in L.sample_table and not sample.paternal_id.endswith("-somalier"):
+    if sample.id in L.sample_table and sample.paternal_id in L.sample_table and not sample.paternal_id.endswith("_somalier"):
       var pair = @[sample.id, sample.paternal_id]
       if not final.related(L, pair, stats, false, 0.33):
         stderr.write_line &"[somalier] removing assigned father from {sample.id} and setting to unknown"
         sample.paternal_id = "-9"
-    if sample.id in L.sample_table and sample.maternal_id in L.sample_table and not sample.maternal_id.endswith("-somalier"):
+    if sample.id in L.sample_table and sample.maternal_id in L.sample_table and not sample.maternal_id.endswith("_somalier"):
       var pair = @[sample.id, sample.maternal_id]
       if not final.related(L, pair, stats, false, 0.33):
         stderr.write_line &"[somalier] removing assigned mother from {sample.id} and setting to unknown"
@@ -629,7 +629,7 @@ proc add_siblings(final:relation_matrices, stats: seq[Stat4], gt_counts: array[5
 
         elif ipid in missing and jpid in missing:
           # make a fake dad
-          ipid = &"""{parent_order[k]}-{isample.family_id}-somalier"""
+          ipid = &"""{parent_order[k]}_{isample.family_id}_somalier"""
           jpid = ipid
           ipids[k] = ipid
           jpids[k] = ipid
