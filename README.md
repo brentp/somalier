@@ -121,22 +121,20 @@ the red. In the somalier output, the user can **hover to see which sample-pairs 
 
 ## Ancestry Estimate
 
-You can use a background set of extracted `*.somalier` files, for example from thousand genomes along with labels for
-those samples to predict ancestry for a given set (or single sample). This would look like:
+`somalier` can predict ancestry on a set of query samples given a set of labelled samples, for example from thousand genomes along with labels for.
+This would look like:
 
 ```
-python scripts/ancestry-predict.py --labels scripts/ancestry-labels-1kg.tsv --samples $MY_SAMPLES/*.somalier --backgrounds 1kg-somalier/*.somalier --plot my_folder/my_sample.pdf
+somalier ancestry --labels ancestry-labels-1kg.tsv 1kg-somalier/*.somalier ++ query-samples-somalier/*.somalier
 ```
+Where the `++` separates the labeled samples from the query samples. This command will create an html output along
+with a text file of the predictions.
 
-And output: 
-* `my_folder/my_sample.pcs.csv`
-* `my_folder/my_sample.pdf`
-* `my_folder/my_sample.ancestry_prediction.csv`
-* `my_folder/my_sample.thousandG.npy`
+`ancestry-labels-1kg.tsv` is [here](https://raw.githubusercontent.com/brentp/somalier/master/scripts/ancestry-labels-1kg.tsv)
 
-The ancestry-predict.py and the `scripts/ancestry-labels-1kg.tsv` are in the somalier repository.
-The somalier files for thousand genomes can be downloaded from [here](https://zenodo.org/record/3479773/files/1kg.somalier.tar.gz?download=1)
+and the somalier files for thousand genomes can be downloaded from [here](https://zenodo.org/record/3479773/files/1kg.somalier.tar.gz?download=1)
 These were created from the thousand genomes high coverage data from [here](http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/1000G_2504_high_coverage/working/20190425_NYGC_GATK/)
+
 Note that these will work for either GRCh37 or hg38 as long as you use the most recent sites files distributed with `somalier`.
 
 
