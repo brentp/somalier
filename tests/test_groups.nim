@@ -1,5 +1,5 @@
 include somalierpkg/relate
-import slivarpkg/pedfile
+import pedfile
 
 import unittest
 

@@ -12,7 +12,7 @@ import sets
 import json
 import ./litestats
 import math
-import slivarpkg/pedfile
+import pedfile
 import ./results_html
 import ./estimate_contamination
 
@@ -444,7 +444,7 @@ const missing = [".", "0", "-9", ""]
 
 proc high_quality(gt_counts: array[5, seq[uint16]], i:int): bool {.inline.} =
   # less than 3% of sites with allele balance outside of 0.2 .. 0.8
-  result = gt_counts[4][i].float / (gt_counts[0][i] + gt_counts[1][i] + gt_counts[2][i] + gt_counts[3][i] + gt_counts[4][i]).float < 0.03
+  result = gt_counts[4][i].float / (gt_counts[0][i] + gt_counts[1][i] + gt_counts[2][i] + gt_counts[3][i] + gt_counts[4][i]).float < 0.05
   if not result: return false
   result = gt_counts[2][i].float / gt_counts[1][i].float > 0.7
 
