@@ -150,7 +150,10 @@ proc write(grouped: seq[pair], output_prefix:string) =
     if not open(fh_groups,  output_prefix & "groups.tsv", fmWrite):
       quit "couldn't open groups file."
     for grp in grouped:
-      fh_groups.write(&"{grp.a},{grp.b}\t{grp.rel}\n")
+      if grp.rel > 0.98:
+        fh_groups.write(&"{grp.a},{grp.b}\t1\n")
+      else:
+        fh_groups.write(&"{grp.a},{grp.b}\t{grp.rel:.2f}\n")
     fh_groups.close()
 
 proc add_ped_samples(grouped: var seq[pair], samples:seq[Sample], sample_names:seq[string]) =
@@ -191,7 +194,7 @@ proc readGroups(path:string, existing_groups: var seq[pair]): seq[pair] =
       var tmp = row[row.high].split('\t')
       doAssert tmp.len == 2
       row[row.high] = tmp[0]
-      rel = parseFloat(tmp[1])
+      rel = round(parseFloat(tmp[1]), 2)
     for i, x in row[0..<row.high]:
       for j, y in row[(i+1)..row.high]:
         if x < y:
@@ -270,7 +273,7 @@ proc relatedness(r: var relation_matrices, j: int, k:int): relation {.inline.} =
                  x_ibs2: xir.IBS2.uint16,
                  )
 
-iterator relatedness(r: var relation_matrices, grouped: var seq[pair]): relation =
+iterator relatedness(r: var relation_matrices, grouped: var seq[pair]): tuple[r:relation, i:int, j:int] =
 
   let sample_names = r.samples
   for j in 0..<r.genotypes.high:
@@ -281,7 +284,7 @@ iterator relatedness(r: var relation_matrices, grouped: var seq[pair]): relation
       r.sample_b = sample_names[k]
       if r.rel > 0.125:
         grouped.add((r.sample_a, r.sample_b, r.rel))
-      yield r
+      yield (r, j, k)
 
 
 template proportion_other(c:allele_count): float =
@@ -747,7 +750,7 @@ proc write_sample(fh:File, stats: seq[Stat4], gt_counts: array[5, seq[uint16]], 
     fh.write(&"{stats[i].x_dp.mean:.2f}\t{stats[i].x_dp.n}\t{stats[i].x_hom_ref}\t{stats[i].x_het}\t{stats[i].x_hom_alt}\t")
     fh.write(&"{stats[i].y_dp.mean:.2f}\t{stats[i].y_dp.n}\n")
 
-proc look(final:relation_matrices, samples: var seq[Sample], stats: seq[Stat4], pairs: TableRef[string, seq[string]], sib_pairs: TableRef[string, seq[string]]): SampleLooker =
+proc look(final:relation_matrices, samples: var seq[Sample], stats: seq[Stat4], pairs: TableRef[string, seq[string]], sib_pairs: TableRef[string, seq[string]], relGt0p2: TableRef[string, seq[string]]): SampleLooker =
   result.sample_names = final.samples
   result.sample_table = newTable[string, Sample]()
   var tmp_sample_i = newTable[string, int]()
@@ -781,7 +784,7 @@ proc look(final:relation_matrices, samples: var seq[Sample], stats: seq[Stat4], 
           bsample.family_id = akid.family_id
           byFam[akid.family_id].add(bsample)
           result.sample_table[bsample.id].family_id = akid.family_id
-
+  # join families on parent-child pairs
   for a, bs in pairs:
     var asample = result.sample_table[a]
     for b in bs:
@@ -794,14 +797,33 @@ proc look(final:relation_matrices, samples: var seq[Sample], stats: seq[Stat4], 
           byFam[asample.family_id].add(bsample)
           result.sample_table[bsample.id].family_id = asample.family_id
 
+  # now reset family table with potentially updated ids
+  byFam = newTable[string, seq[Sample]]()
+  for s in result.sample_table.values:
+    byFam.mgetOrPut(s.family_id, @[]).add(s)
+
+  # join families with rel > 0.2 between any pair of samples
+  for a, bs in relGt0p2:
+    var asample = result.sample_table[a]
+    for b in bs:
+      var bsample = result.sample_table[b]
+      if asample.family_id != bsample.family_id:
+        stderr.write_line &"[somalier] joining families {asample.family_id} and {bsample.family_id} because of relatedness > 0.2"
+        var bsamples: seq[Sample]
+        doAssert byFam.take(bsample.family_id, bsamples)
+        for bsample in bsamples:
+          bsample.family_id = asample.family_id
+          byFam[asample.family_id].add(bsample)
+          result.sample_table[bsample.id].family_id = asample.family_id
+
   result.sample_sex = samples.to_sex_lookup
   result.has_y = stats.samples_have_y_depth
   result.pairs = pairs
   result.sib_pairs = sib_pairs
 
 
-proc write_ped(fh:File, final: var relation_matrices, stats: seq[Stat4], gt_counts: array[5, seq[uint16]], samples: var seq[Sample], parent_child_pairs: TableRef[string, seq[string]], sib_pairs: TableRef[string, seq[string]]) =
-  var L = final.look(samples, stats, parent_child_pairs, sib_pairs)
+proc write_ped(fh:File, final: var relation_matrices, stats: seq[Stat4], gt_counts: array[5, seq[uint16]], L:var SampleLooker) =
+  #var L = final.look(samples, stats, parent_child_pairs, sib_pairs)
   fh.write("#family_id\tsample_id\tpaternal_id\tmaternal_id\tsex\tphenotype\t")
   fh.write("original_pedigree_sex\tgt_depth_mean\tgt_depth_sd\tdepth_mean\tdepth_sd\tab_mean\tab_std\tn_hom_ref\tn_het\tn_hom_alt\tn_unknown\tp_middling_ab\t")
   fh.write("X_depth_mean\tX_n\tX_hom_ref\tX_het\tX_hom_alt\t")
@@ -948,15 +970,19 @@ specified as comma-separated groups per line e.g.:
   var npairs:int
   var parent_child_pair = newTable[string, seq[string]]()
   var sib_pairs = newTable[string, seq[string]]()
+  # we merge familys where the relatedness is > 0.2
+  var relGt0p2 = newTable[string, seq[string]]()
   var nrels:int
   sort(groups, cmp_pair)
-  for rel in final.relatedness(grouped):
+  for T in final.relatedness(grouped):
+    let rel = T.r
     npairs.inc
     var idx = groups.binarySearch((rel.sample_a, rel.sample_b, -1.0), cmp_pair)
     if idx == -1:
       idx = groups.binarySearch((rel.sample_b, rel.sample_a, -1.0), cmp_pair)
     let expected_relatedness = if idx == -1: -1'f else: groups[idx].rel
     let rr = rel.rel
+
     if rr > 0.4 and rr < 0.6 and rel.ibs0.float / rel.ibs2.float < 0.005:
       parent_child_pair.mgetOrPut(rel.sample_a, @[]).add(rel.sample_b)
       parent_child_pair.mgetOrPut(rel.sample_b, @[]).add(rel.sample_a)
@@ -965,10 +991,23 @@ specified as comma-separated groups per line e.g.:
       sib_pairs.mgetOrPut(rel.sample_a, @[]).add(rel.sample_b)
       sib_pairs.mgetOrPut(rel.sample_b, @[]).add(rel.sample_a)
 
-    elif rr > 0.95 and rel.ibs0.float / rel.ibs2.float < 0.005:
-      stderr.write_line &"[somalier] apparent identical twins or sample duplicate found with {rel.sample_a} and {rel.sample_b} assuming siblings"
-      sib_pairs.mgetOrPut(rel.sample_a, @[]).add(rel.sample_b)
-      sib_pairs.mgetOrPut(rel.sample_b, @[]).add(rel.sample_a)
+    elif rr > 0.96 and rel.ibs0.float / rel.ibs2.float < 0.005:
+      # this should be rare so we do a linear search
+      var sibs = false;
+      for pair in groups:
+        if (pair.a == rel.sample_a and pair.b == rel.sample_b) or (pair.b == rel.sample_a and pair.a == rel.sample_b):
+          if pair.rel > 0.4:
+            sibs = true
+          break
+      if not sibs:
+        stderr.write_line &"[somalier] apparent identical twins or sample duplicate found with {rel.sample_a} and {rel.sample_b} NOT assuming siblings"
+      else:
+        stderr.write_line &"[somalier] apparent identical twins or sample duplicate found with {rel.sample_a} and {rel.sample_b} assuming siblings as these were specified as such in the pedigree file"
+        sib_pairs.mgetOrPut(rel.sample_a, @[]).add(rel.sample_b)
+        sib_pairs.mgetOrPut(rel.sample_b, @[]).add(rel.sample_a)
+    elif rr > 0.2 and final.gt_counts.high_quality(T.i) and final.gt_counts.high_quality(T.j):
+      relGt0p2.mgetOrPut(rel.sample_a, @[]).add(rel.sample_b)
+      relGt0p2.mgetOrPut(rel.sample_b, @[]).add(rel.sample_a)
 
     let ra = random(1'f32)
     let interesting = expected_relatedness != -1 or rr > 0.05
@@ -985,11 +1024,12 @@ specified as comma-separated groups per line e.g.:
   fh_html.close()
   stderr.write_line(&"[somalier] wrote interactive HTML output for {nrels} pairs to: ",  opts.output_prefix & "html")
 
-  fh_samples.write_ped(final, final.stats, final.gt_counts, samples, parent_child_pair, sib_pairs)
+  var L = final.look(samples, final.stats, parent_child_pair, sib_pairs, relGt0p2)
+  fh_samples.write_ped(final, final.stats, final.gt_counts, L)
 
   fh_tsv.close()
   grouped.write(opts.output_prefix)
 
-  stderr.write_line("[somalier] wrote groups to: ",  opts.output_prefix & "groups.tsv")
+  stderr.write_line("[somalier] wrote groups to: ",  opts.output_prefix & "groups.tsv (look at this for cancer samples)")
   stderr.write_line("[somalier] wrote samples to: ",  opts.output_prefix & "samples.tsv")
   stderr.write_line("[somalier] wrote pair-wise relatedness metrics to: ",  opts.output_prefix & "pairs.tsv")
