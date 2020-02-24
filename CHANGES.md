@@ -5,6 +5,7 @@ v0.2.7
 + fix for "Argument list too long" on huge cohorts (#37)
 + sub-sample .pairs.tsv output for huge cohorts -- only for unrelated samples.
 + better sub-sampling of html output
++ html output has a list of pre-sets to auto-select informative X, Y axes for the sample plot
 
 v0.2.6
 ======
