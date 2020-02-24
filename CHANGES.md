@@ -6,10 +6,14 @@ v0.2.8
 + add --sample-prefix option to extract and corresponding (multi-)option to relate. So, given
   a cohort with DNA and RNA where samples have identical IDs (SM tags) in the DNA and RNA, can use
   somalier as:
-  somalier extract --sample-prefix DNA- ...
-  somalier extract --sample-prefix RNA- ...
+  ```
+  somalier extract -d DNA --sample-prefix DNA- ...
+  somalier extract -d RNA --sample-prefix RNA- ...
 
-  somalier relate --sample-prefix DNA- --sample-prefix RNA- and it will show the samples that have
+  somalier relate --sample-prefix DNA- --sample-prefix RNA- DNA/*.somalier RNA/*.somalier ...
+  ```
+
+  and it will show the samples that have
   matching IDs after stripping the prefixes as "identical".
 
 
