@@ -1,3 +1,18 @@
+v0.2.8
+======
++ html output has a list of pre-sets to auto-select informative X, Y axes for the sample plot
++ add --infer flag to somalier relate to allow inferring relatedness.
+  this accompanies a change in the .samples.tsv output so that it can be used as a pedigree file
++ add --sample-prefix option to extract and corresponding (multi-)option to relate. So, given
+  a cohort with DNA and RNA where samples have identical IDs (SM tags) in the DNA and RNA, can use
+  somalier as:
+  somalier extract --sample-prefix DNA- ...
+  somalier extract --sample-prefix RNA- ...
+
+  somalier relate --sample-prefix DNA- --sample-prefix RNA- and it will show the samples that have
+  matching IDs after stripping the prefixes as "identical".
+
+
 v0.2.7
 ======
 + new subcommand `ancestry` to predict ancestry using a simple neural network on the somalier
@@ -5,7 +20,6 @@ v0.2.7
 + fix for "Argument list too long" on huge cohorts (#37)
 + sub-sample .pairs.tsv output for huge cohorts -- only for unrelated samples.
 + better sub-sampling of html output
-+ html output has a list of pre-sets to auto-select informative X, Y axes for the sample plot
 
 v0.2.6
 ======

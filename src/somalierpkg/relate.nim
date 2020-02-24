@@ -6,6 +6,7 @@ import times
 import streams
 import algorithm
 import argparse
+import sequtils
 import strutils
 import tables
 import sets
@@ -91,7 +92,7 @@ type relations = object
   relatedness: seq[float32]
 
 proc hom_alt_concordance(r: relation): float64 {.inline.} =
-  return (r.shared_hom_alts.float64 - 2 * r.ibs0.float64) / min(r.hom_alts_a, r.hom_alts_b).float64
+  return (r.shared_hom_alts.float64 - 2 * r.ibs0.float64) / max(1'u16, min(r.hom_alts_a, r.hom_alts_b)).float64
 
 proc rel(r:relation): float64 {.inline.} =
   return (r.shared_hets.float64 - 2 * r.ibs0.float64) / min(r.hets_a, r.hets_b).float64
@@ -888,6 +889,31 @@ proc update_with_glob(files: var seq[string]) =
   else:
     files = toadd
 
+proc add_prefixed_samples(groups: var seq[pair], samples: seq[string], prefixes: seq[string]) =
+  # update groups so that sample == ${prefix}sample
+  #if len(prefixes) == 0: return
+  let stripped = newTable[string, HashSet[string]]()
+
+  for sample in samples:
+    var s = sample
+    for p in prefixes:
+      if s.startsWith(p):
+        s = s[p.len..s.high]
+        break
+    stripped.mgetOrPut(s, initHashSet[string](2)).incl(sample)
+
+  for k, names in stripped:
+    var names = names.toSeq
+    if names.len < 2: continue
+    for i in 0..<names.high:
+      let A = names[i]
+      for j in 1..names.high:
+        let B = names[j]
+        if A < B:
+          groups.add((A, B, 1.0))
+        else:
+          groups.add((B, A, 1.0))
+
 proc rel_main*() =
   ## need to track samples names from bams first, then vcfs since
   ## thats the order for the alts array.
@@ -901,6 +927,7 @@ proc rel_main*() =
 specified as comma-separated groups per line e.g.:
     normal1,tumor1a,tumor1b
     normal2,tumor2a""")
+    option("--sample-prefix", multiple=true, help="optional sample prefixes that can be removed to find identical samples. e.g. batch1-sampleA batch2-sampleA")
     option("-p", "--ped", help="optional path to a ped/fam file indicating the expected relationships among samples.")
     option("-d", "--min-depth", default="7", help="only genotype sites with at least this depth.")
     flag("-u", "--unknown", help="set unknown genotypes to hom-ref. it is often preferable to use this with VCF samples that were not jointly called")
@@ -938,6 +965,8 @@ specified as comma-separated groups per line e.g.:
     samples = parse_ped(opts.ped)
 
   groups.add_ped_samples(samples, final.samples)
+
+  groups.add_prefixed_samples(final.samples, opts.sample_prefix)
   # send in groups so we can adjust baed on self-self samples
   groups.add(readGroups(opts.groups, groups))
   stderr.write_line &"[somalier] time to get expected relatedness from pedigree graph: {cpuTime() - t0:.2f}"

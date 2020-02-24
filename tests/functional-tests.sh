@@ -30,3 +30,19 @@ assert_in_stderr "[somalier] found 49 sites"
 
 rm -rf test_gt_only
 #rm -f tests/gt_only.vcf.gz
+
+prefix_fn() {
+	pre
+    $exe extract --sample-prefix AA -s tests/test_sites.vcf -f tests/test.fa -d test_prefix_A tests/gt_only.vcf.gz
+    $exe extract --sample-prefix BB -s tests/test_sites.vcf -f tests/test.fa -d test_prefix_B tests/gt_only.vcf.gz
+    $exe relate -o test_prefix_A/out --sample-prefix BB --sample-prefix AA test_prefix_B/*.somalier test_prefix_A/*.somalier
+}
+
+export -f prefix_fn
+
+run check_prefix prefix_fn
+assert_exit_code 0
+
+# checks that final column, expected relatedness is 1.
+assert_equal "1" $(awk 'NR == 1 && NR == 1.0' test_prefix_A/out.pairs.tsv | wc -l) 
+rm -rf test_prefix_A test_prefix_B
