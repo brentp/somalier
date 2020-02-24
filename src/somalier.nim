@@ -171,6 +171,7 @@ proc extract_main() =
     option("-s", "--sites", help="sites vcf file of variants to extract")
     option("-f", "--fasta", help="path to reference fasta file")
     option("-d", "--out-dir", help="path to output directory", default=".")
+    option("--sample-prefix", help="prefix for the sample name stored inside the digest", default="")
     arg("sample_file", help="single-sample CRAM/BAM/GVCF file or multi/single-sample VCF from which to extract")
 
   let opts = p.parse(argv)
@@ -207,10 +208,12 @@ proc extract_main() =
     sample_counts = @[cnts]
 
   for cnts in sample_counts:
+    var stored_sample_name : string = opts.sample_prefix & cnts.sample_name
+
     var s = newFileStream(opts.outdir & "/" & cnts.sample_name & ".somalier", fmWrite)
     s.write(formatVersion.uint8)
-    s.write(cnts.sample_name.len.uint8)
-    s.write(cnts.sample_name)
+    s.write(stored_sample_name.len.uint8)
+    s.write(stored_sample_name)
     s.write(cnts.sites.len.uint16)
     s.write(cnts.x_sites.len.uint16)
     s.write(cnts.y_sites.len.uint16)

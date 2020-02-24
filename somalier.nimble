@@ -17,12 +17,12 @@ license       = "academic only"
 
 # Dependencies
 
-requires "nim >= 0.19.0", "hts >= 0.3.0", "https://github.com/brentp/slivar#head", "https://github.com/brentp/hileup", "argparse", "lapper", "arraymancer#head"
+requires "nim >= 0.19.0", "hts >= 0.3.0", "https://github.com/brentp/slivar", "https://github.com/brentp/hileup", "argparse", "lapper", "arraymancer#head"
 srcDir = "src"
 
-#bin = @["./somalier.nim"]
+bin = @["./somalier.bin"]
+#bin = "src/somalier"
 
 task test, "run the tests":
   exec "nim c  -d:useSysAssert -d:useGcAssert --lineDir:on --debuginfo -r tests/test_groups"
   exec "bash tests/functional-tests.sh"
-
