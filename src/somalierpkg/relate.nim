@@ -234,7 +234,7 @@ proc relatedness(r: var relation_matrices, j: int, k:int): relation {.inline.} =
   let hets_k = r.gt_counts[1][k]
   let hets_j = r.gt_counts[1][j]
 
-  if r.n[j * r.n_samples + k] > 0: # used previously calculated data
+  if r.n[j * r.n_samples + k] > 0'u16: # used previously calculated data
     return relation(#sample_a: sample_names[j],
                  #sample_b: sample_names[k],
                  hets_a: hets_j, hets_b: hets_k,
@@ -822,22 +822,24 @@ proc look(final:relation_matrices, samples: var seq[Sample], stats: seq[Stat4], 
   result.sib_pairs = sib_pairs
 
 
-proc write_ped(fh:File, final: var relation_matrices, stats: seq[Stat4], gt_counts: array[5, seq[uint16]], L:var SampleLooker) =
+proc write_ped(fh:File, final: var relation_matrices, stats: seq[Stat4], gt_counts: array[5, seq[uint16]], L:var SampleLooker, infer:bool) =
   #var L = final.look(samples, stats, parent_child_pairs, sib_pairs)
   fh.write("#family_id\tsample_id\tpaternal_id\tmaternal_id\tsex\tphenotype\t")
   fh.write("original_pedigree_sex\tgt_depth_mean\tgt_depth_sd\tdepth_mean\tdepth_sd\tab_mean\tab_std\tn_hom_ref\tn_het\tn_hom_alt\tn_unknown\tp_middling_ab\t")
   fh.write("X_depth_mean\tX_n\tX_hom_ref\tX_het\tX_hom_alt\t")
   fh.write("Y_depth_mean\tY_n\n")
-  final.remove_spurious_parent_ids(L, stats)
-  for i, sample_name in L.sample_names:
-    add_parents_and_check_sex(final, stats, gt_counts, i, L)
-  add_siblings(final, stats, gt_counts, L)
 
-  add_parent_to_sibs(final, stats, gt_counts, L)
+  if infer:
+    final.remove_spurious_parent_ids(L, stats)
+    for i, sample_name in L.sample_names:
+      add_parents_and_check_sex(final, stats, gt_counts, i, L)
+    add_siblings(final, stats, gt_counts, L)
 
-  for i, sample_name in L.sample_names:
-    update_family_ids(final, stats, gt_counts, i, L)
-  final.remove_spurious_parent_ids(L, stats)
+    add_parent_to_sibs(final, stats, gt_counts, L)
+
+    for i, sample_name in L.sample_names:
+      update_family_ids(final, stats, gt_counts, i, L)
+    final.remove_spurious_parent_ids(L, stats)
 
   for i, sample_name in L.sample_names:
     fh.write_sample(stats, gt_counts, i, L)
@@ -902,6 +904,7 @@ specified as comma-separated groups per line e.g.:
     option("-p", "--ped", help="optional path to a ped/fam file indicating the expected relationships among samples.")
     option("-d", "--min-depth", default="7", help="only genotype sites with at least this depth.")
     flag("-u", "--unknown", help="set unknown genotypes to hom-ref. it is often preferable to use this with VCF samples that were not jointly called")
+    flag("-i", "--infer", help="infer relationships (https://github.com/brentp/somalier/wiki/pedigree-inference)")
     option("-o", "--output-prefix", help="output prefix for results.", default="somalier")
     arg("extracted", nargs= -1, help="$sample.somalier files for each sample. the first 10 are tested as a glob patterns")
 
@@ -1025,7 +1028,7 @@ specified as comma-separated groups per line e.g.:
   stderr.write_line(&"[somalier] wrote interactive HTML output for {nrels} pairs to: ",  opts.output_prefix & "html")
 
   var L = final.look(samples, final.stats, parent_child_pair, sib_pairs, relGt0p2)
-  fh_samples.write_ped(final, final.stats, final.gt_counts, L)
+  fh_samples.write_ped(final, final.stats, final.gt_counts, L, opts.infer)
 
   fh_tsv.close()
   grouped.write(opts.output_prefix)

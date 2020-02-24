@@ -41,7 +41,7 @@
   </div>
 </nav>
 <div class="container-fluid h-100">
-    <div class="row h-100">
+    <div class="row h-75">
         <div class="col-6 h-100 bg-light pt-2 border-right">
             <div class="row">
                 <div class="col">
@@ -150,6 +150,18 @@
             </div>
         </div>
     </div>
+    <div class="row h-25">
+        <div class="col-12 h-100 bg-light pt-2 border-right">
+            Choose pre-set selection for sample plot:
+            <ul>
+            <li><a href="javascript:set_plotb('x_hom_alt', 'x_depth_mean')">Sex QC: Scaled mean depth on chrX vs. Number of 1/1 sites on X</a></li>
+
+            <li><a href="javascript:set_plotb('x_depth_mean', 'y_depth_mean')">Sex ploidy QC: Scaled mean depth on chrX vs. chrY</a></li>
+            <li><a href="javascript:set_plotb('n_unknown', 'p_middling_ab')">General QC: number of sites with unknown genotype vs. proportion of hets with allele balance outside of 0.2 - 0.8</a></li>
+            <li><a href="javascript:set_plotb('gt_depth_mean', 'ab_mean')">Depth and allele QC: mean depth vs. mean het allele-balance</a></li>
+            </ul>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -169,6 +181,12 @@ if (sample_data.length > 700) {
     size = 12
 } else {
     size = 15
+}
+
+function set_plotb(x, y) {
+    jQuery('#plotbx_select').val(x)
+    jQuery('#plotby_select').val(y)
+    jQuery('#plotby_select, #plotbx_select').trigger('change')
 }
 
 function set_xy_data_by_group(input, metric, is_x) {
