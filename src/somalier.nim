@@ -35,20 +35,17 @@ proc looks_like_gvcf_variant(v:Variant): bool {.inline.} =
       return true
 
 proc get_variant(ivcf:VCF, site:Site): Variant =
-  var matches: seq[Variant]
   var gvcfs: seq[Variant]
   for v in ivcf.query(&"{site.chrom}:{site.position+1}-{site.position+2}"):
     if v.start == site.position and (
       (v.REF == site.A_allele and v.ALT[0] == site.B_allele) or
       (v.REF == site.B_allele and v.ALT[0] == site.A_allele)):
-      matches.add(v.copy())
+      return(v.copy())
 
     if v.looks_like_gvcf_variant:
       gvcfs.add(v.copy())
 
-  if matches.len > 0:
-    return matches[0]
-  elif gvcfs.len > 0:
+  if gvcfs.len > 0:
     return gvcfs[0]
 
 var allowed_filters = @["PASS", "", ".", "RefCall"]
