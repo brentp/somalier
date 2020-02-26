@@ -35,14 +35,21 @@ proc looks_like_gvcf_variant(v:Variant): bool {.inline.} =
       return true
 
 proc get_variant(ivcf:VCF, site:Site): Variant =
+  var matches: seq[Variant]
+  var gvcfs: seq[Variant]
   for v in ivcf.query(&"{site.chrom}:{site.position+1}-{site.position+2}"):
-    if v.looks_like_gvcf_variant:
-      return v.copy()
-
     if v.start == site.position and (
       (v.REF == site.A_allele and v.ALT[0] == site.B_allele) or
       (v.REF == site.B_allele and v.ALT[0] == site.A_allele)):
-      return v.copy()
+      matches.add(v.copy())
+
+    if v.looks_like_gvcf_variant:
+      gvcfs.add(v.copy())
+
+  if matches.len > 0:
+    return matches[0]
+  elif gvcfs.len > 0:
+    return gvcfs[0]
 
 var allowed_filters = @["PASS", "", ".", "RefCall"]
 allowed_filters.add(getEnv("SOMALIER_ALLOWED_FILTERS").split(","))
@@ -105,10 +112,19 @@ proc get_ref_alt_counts(ivcf:VCF, sites:seq[Site], fai:Fai=nil): seq[counts] =
       elif v.ok and v.looks_like_gvcf_variant:
         var dp:seq[int32]
         if v.format.get("MIN_DP", dp) == Status.OK or v.format.get("DP", dp) == Status.OK:
-           AD[0] = dp[0]
-           n += 1
+          AD[0] = dp[0]
+          n += 1
+    elif v.ok and vcf_samples.len > 1 and v.looks_like_gvcf_variant:
+      var dp:seq[int32]
+      if v.format.get("MIN_DP", dp) == Status.OK or v.format.get("DP", dp) == Status.OK:
+        # iterate over samples and use MIN_DP/DP as the reference count
+        for j in 0..<vcf_samples.len:
+          if AD[j*3] < 0:
+            AD[j*3] = dp[j]
+      n += 1
     else:
       n += 1
+
     var mult = int(AD.len / vcf_samples.len)
     for j, s in vcf_samples:
       var ac = allele_count(nref: max(0, AD[mult * j]).uint32, nalt: max(0, AD[mult * j + 1]).uint32, nother: 0)
