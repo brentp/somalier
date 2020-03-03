@@ -1,3 +1,7 @@
+v0.2.9 (dev)
+======
++ support multi-sample GVCF and fix some GVCF cases (thanks @ameynert for implementing)
+
 v0.2.8
 ======
 + html output has a list of pre-sets to auto-select informative X, Y axes for the sample plot
