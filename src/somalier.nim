@@ -35,18 +35,15 @@ proc looks_like_gvcf_variant(v:Variant): bool {.inline.} =
       return true
 
 proc get_variant(ivcf:VCF, site:Site): Variant =
-  var gvcfs: seq[Variant]
   for v in ivcf.query(&"{site.chrom}:{site.position+1}-{site.position+2}"):
     if v.start == site.position and (
       (v.REF == site.A_allele and v.ALT[0] == site.B_allele) or
       (v.REF == site.B_allele and v.ALT[0] == site.A_allele)):
       return(v.copy())
 
-    if v.looks_like_gvcf_variant:
-      gvcfs.add(v.copy())
-
-  if gvcfs.len > 0:
-    return gvcfs[0]
+    # we keep a gvcf variant in case we dont find an exact match.
+    if v.looks_like_gvcf_variant and result == nil:
+      result = v.copy()
 
 var allowed_filters = @["PASS", "", ".", "RefCall"]
 allowed_filters.add(getEnv("SOMALIER_ALLOWED_FILTERS").split(","))
@@ -97,12 +94,14 @@ proc get_ref_alt_counts(ivcf:VCF, sites:seq[Site], fai:Fai=nil): seq[counts] =
   var AD = newSeq[int32](5*vcf_samples.len)
   var x = newSeq[int32](vcf_samples.len)
   var n = 0
+  var dp:seq[int32]
 
   for i, site in sites:
+    zeroMem(AD[0].addr, AD.len * sizeof(AD[0]))
     var v = ivcf.get_variant(site)
+    # NOTE that if Status is OK, then we just fill AD
     if v == nil or ($v.CHROM notin ["chrX", "X", "chrY", "Y"] and v.FILTER notin allowed_filters) or v.format.get("AD", AD) != Status.OK:
       AD.setLen(vcf_samples.len * 2)
-      zeroMem(AD[0].addr, AD.len * sizeof(AD[0]))
       if v.ok and not has_AD:
         if AD.fill(v.format.genotypes(x).alts):
           n += 1
@@ -112,12 +111,15 @@ proc get_ref_alt_counts(ivcf:VCF, sites:seq[Site], fai:Fai=nil): seq[counts] =
           AD[0] = dp[0]
           n += 1
     elif v.ok and vcf_samples.len > 1 and v.looks_like_gvcf_variant:
-      var dp:seq[int32]
+      # we can get here with AD filled, but some samples have unknown/empty
+      # values, but we can fill reference values with MIN_DP or DP depending on
+      # which is available.
+      var mult = v.ALT.len + 1
       if v.format.get("MIN_DP", dp) == Status.OK or v.format.get("DP", dp) == Status.OK:
         # iterate over samples and use MIN_DP/DP as the reference count
         for j in 0..<vcf_samples.len:
-          if AD[j*3] < 0:
-            AD[j*3] = dp[j]
+          if AD[j*mult] < 0:
+            AD[j*mult] = max(0, dp[j])
       n += 1
     else:
       n += 1
