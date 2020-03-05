@@ -1,6 +1,7 @@
-v0.2.9 (dev)
+v0.2.9
 ======
 + support multi-sample GVCF and fix some GVCF cases (thanks @ameynert for implementing)
++ also fixes some edge-cases with GVCFs
 
 v0.2.8
 ======
