@@ -1,4 +1,4 @@
-FROM brentp/musl-hts-nim:latest
+FROM brentp/musl-hts-nim:v0.3.2
 
 # for nextflow
 RUN apk add bash procps
