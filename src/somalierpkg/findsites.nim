@@ -70,6 +70,7 @@ proc closest(v:Variant, vs: seq[Variant]): Variant =
 proc findsites_main*() =
   var p = newParser("somalier find-sites"):
     option("-x", "--exclude", multiple=true, help="optional exclude files")
+    option("-i", "--include", help="optional include file. only consider variants that fall in ranges within this file")
     option("--snp-dist", help="minimum distance between autosomal SNPs to avoid linkage", default="10000")
     option("--min-AN", help="minimum number of alleles (AN) at the site. (must be less than twice number of samples in the cohort)", default="115_000")
     arg("vcf", help="population VCF to use to find sites", nargs=1)
@@ -81,6 +82,7 @@ proc findsites_main*() =
     argv = @["-h"]
   let opts = p.parse(argv)
   if opts.help:
+    stderr.write_line "this will write output sites to: ./sites.vcf.gz"
     quit 0
 
   var
@@ -90,10 +92,13 @@ proc findsites_main*() =
     min_AN = parseInt(opts.min_AN)
 
   var exclude_regions = newTable[string, seq[region]]()
+  var include_regions = newTable[string, seq[region]]()
   var indels = newTable[string, seq[region]]()
   var snps = newTable[string, seq[region]]()
   for e in opts.exclude:
     bed_to_table(e, exclude_regions)
+  if opts.include != "":
+    opts.include.bed_to_table(include_regions)
 
   if not open(vcf, opts.vcf, threads=2):
     quit "couldn't open " & opts.vcf
@@ -108,6 +113,7 @@ proc findsites_main*() =
   var ans = newSeq[int32](1)
   var oms = ""
   var lap:Lapper[region]
+  var lap_incl:Lapper[region]
   var empty_regions: seq[region]
 
   var saved = newSeqOfCap[vf](100000)
@@ -122,6 +128,12 @@ proc findsites_main*() =
       else:
         var seqs = newSeq[region]()
         lap = lapify(seqs)
+      if include_regions.contains($last_chrom):
+        lap_incl = lapify(include_regions[$last_chrom])
+      else:
+        var seqs = newSeq[region]()
+        lap_incl = lapify(seqs)
+
 
     # stuff outside of PAR on human only.
     if $last_chrom in ["X", "chrX"] and (v.start < 2781479 or v.start > 154931044) : continue
@@ -175,6 +187,9 @@ proc findsites_main*() =
     if skip: continue
 
     if lap.find(v.start.int, v.stop.int, empty_regions):
+      continue
+
+    if include_regions.len > 0 and not lap_incl.find(v.start.int, v.stop.int, empty_regions):
       continue
 
     #discard wtr.write_variant(v)
