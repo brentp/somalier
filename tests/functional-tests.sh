@@ -46,3 +46,8 @@ assert_exit_code 0
 # checks that final column, expected relatedness is 1.
 assert_equal "1" $(awk 'NR == 1 && NR == 1.0' test_prefix_A/out.pairs.tsv | wc -l) 
 rm -rf test_prefix_A test_prefix_B
+
+
+run check_gvcf_no_alt $exe extract -s tests/x.gvcf.gz -f tests/test.fa tests/x.gvcf.gz
+assert_exit_code 0
+

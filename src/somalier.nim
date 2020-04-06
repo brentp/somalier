@@ -36,7 +36,7 @@ proc looks_like_gvcf_variant(v:Variant): bool {.inline.} =
 
 proc get_variant(ivcf:VCF, site:Site): Variant =
   for v in ivcf.query(&"{site.chrom}:{site.position+1}-{site.position+2}"):
-    if v.start == site.position and (
+    if v.start == site.position and v.ALT.len > 0 and (
       (v.REF == site.A_allele and v.ALT[0] == site.B_allele) or
       (v.REF == site.B_allele and v.ALT[0] == site.A_allele)):
       return(v.copy())
@@ -126,7 +126,12 @@ proc get_ref_alt_counts(ivcf:VCF, sites:seq[Site], fai:Fai=nil): seq[counts] =
 
     var mult = int(AD.len / vcf_samples.len)
     for j, s in vcf_samples:
-      var ac = allele_count(nref: max(0, AD[mult * j]).uint32, nalt: max(0, AD[mult * j + 1]).uint32, nother: 0)
+      var ac:allele_count
+      if mult >= 2:
+        ac = allele_count(nref: max(0, AD[mult * j]).uint32, nalt: max(0, AD[mult * j + 1]).uint32, nother: 0)
+      else:
+        ac = allele_count(nref: 0'u32, nalt: 0'u32, nother: 0)
+
       doAssert site.A_allele < site.B_allele
       # we always store a site by alphabetical order, so sometimes we have to
       # flip the alts.
