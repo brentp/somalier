@@ -1,6 +1,7 @@
 v0.2.10
 =======
 + fix extra output column in pairs.tsv (#47)
++ change output file name of ancestry to include
 
 v0.2.9
 ======

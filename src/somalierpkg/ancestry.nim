@@ -204,7 +204,7 @@ proc ancestry_main*() =
   stderr.write_line &"[somalier] reduced query set to: {q_proj.shape}"
 
   var ancestry_fh: File
-  if not open(ancestry_fh, opts.output_prefix & "tsv", fmWrite):
+  if not open(ancestry_fh, opts.output_prefix & "somalier-ancestry.tsv", fmWrite):
     quit "couldn't open output file {opts.output_prefix & \"tsv\"}"
 
   var header = @["#sample_id", "predicted_ancestry", "given_ancestry"]
@@ -279,7 +279,7 @@ type ForHtml = object
   fh_html.write_line(%* qhtmls)
   fh_html.write(htmls[1])
   fh_html.close()
-  stderr.write_line &"[somalier] wrote html file to {opts.output_prefix}html"
+  stderr.write_line &"[somalier] wrote html file to {opts.output_prefix}somalier-ancestry.tsv"
 
 when isMainModule:
   ancestry_main()
