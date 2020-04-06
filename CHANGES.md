@@ -1,3 +1,7 @@
+v0.2.10
+=======
++ fix extra output column in pairs.tsv (#47)
+
 v0.2.9
 ======
 + support multi-sample GVCF and fix some GVCF cases (thanks @ameynert for implementing)

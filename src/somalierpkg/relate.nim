@@ -122,7 +122,7 @@ proc add*(rt:var seq[relations], rel:relation, expected_relatedness:float) =
     rt.add(rel, expected_relatedness)
 
 
-const header = "$sample_a\t$sample_b\t$relatedness\t$ibs0\t$ibs2\t$hom_concordance\t$hets_a\t$hets_b\t$shared_hets\t$hom_alts_a\t$hom_alts_b\t$shared_hom_alts\t$ibs2\t$n\t$x_ibs0\t$x_ibs2\t$expected_relatedness"
+const header = "$sample_a\t$sample_b\t$relatedness\t$ibs0\t$ibs2\t$hom_concordance\t$hets_a\t$hets_b\t$shared_hets\t$hom_alts_a\t$hom_alts_b\t$shared_hom_alts\t$n\t$x_ibs0\t$x_ibs2\t$expected_relatedness"
 
 proc tsv(r:relation, expected_relatedness:float= -1.0): string =
   result = &"{r.sample_a}\t{r.sample_b}\t{r.rel:.3f}\t{r.ibs0}\t{r.ibs2}\t{r.hom_alt_concordance:.3f}\t{r.hets_a}\t{r.hets_b}\t{r.shared_hets}\t{r.hom_alts_a}\t{r.hom_alts_b}\t{r.shared_hom_alts}\t{r.n}\t{r.x_ibs0}\t{r.xibs2}\t{expected_relatedness}"
@@ -302,7 +302,7 @@ proc ab*(c:allele_count, min_depth:int): float {.inline.} =
     return 0
   result = c.nalt.float / (c.nalt + c.nref).float
 
-proc alts*(ab:float, ab_cutoff:float=0.04): int8 {.inline.} =
+proc alts*(ab:float, ab_cutoff:float=0.01): int8 {.inline.} =
   if ab < 0: return -1
   if ab < ab_cutoff: return 0
   if ab > (1 - ab_cutoff): return 2
