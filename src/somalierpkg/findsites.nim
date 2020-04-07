@@ -224,7 +224,7 @@ proc findsites_main*() =
     if indel_lappers[$v.v.CHROM].find(v.v.start.int, v.v.stop.int, empty):
       continue
     if snp_lappers[$v.v.CHROM].find(v.v.start.int, v.v.stop.int, empty) and empty.len > 1:
-      echo "skipping with nearby snp"
+      #echo "skipping with nearby snp"
       continue
     discard added.hasKeyOrPut(v.v.CHROM, newSeq[Variant]())
     var vs = added[v.v.CHROM]
@@ -258,6 +258,9 @@ proc findsites_main*() =
         discard info.delete(f.name)
       except:
         discard
+    # these make the compressed vcf smaller
+    v.ID = "."
+    v.QUAL = 100
     doAssert wtr.write_variant(v)
 
   stderr.write_line "[somalier] wrote ", $used.len, " variants to:", $out_path
