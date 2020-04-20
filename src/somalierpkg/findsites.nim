@@ -2,6 +2,7 @@ import os
 import lapper
 import algorithm
 import hts
+import slivarpkg/gnotate
 import strutils
 import tables
 import argparse
@@ -71,6 +72,7 @@ proc findsites_main*() =
   var p = newParser("somalier find-sites"):
     option("-x", "--exclude", multiple=true, help="optional exclude files")
     option("-i", "--include", help="optional include file. only consider variants that fall in ranges within this file")
+    option("--gnotate-exclude", help="sites in slivar gnotation (zip) format to exclude")
     option("--snp-dist", help="minimum distance between autosomal SNPs to avoid linkage", default="10000")
     option("--min-AN", help="minimum number of alleles (AN) at the site. (must be less than twice number of samples in the cohort)", default="115_000")
     arg("vcf", help="population VCF to use to find sites", nargs=1)
@@ -85,11 +87,13 @@ proc findsites_main*() =
     stderr.write_line "this will write output sites to: ./sites.vcf.gz"
     quit 0
 
+
   var
     vcf:VCF
     wtr:VCF
     snp_dist = parseInt(opts.snp_dist)
     min_AN = parseInt(opts.min_AN)
+    gno:Gnotater
 
   var exclude_regions = newTable[string, seq[region]]()
   var include_regions = newTable[string, seq[region]]()
@@ -99,6 +103,9 @@ proc findsites_main*() =
     bed_to_table(e, exclude_regions)
   if opts.include != "":
     opts.include.bed_to_table(include_regions)
+
+  if opts.gnotate_exclude != "":
+    doAssert gno.open(opts.gnotate_exclude, tmpDir=getEnv("TMPDIR"))
 
   if not open(vcf, opts.vcf, threads=2):
     quit "couldn't open " & opts.vcf
@@ -138,8 +145,6 @@ proc findsites_main*() =
     # stuff outside of PAR on human only.
     if $last_chrom in ["X", "chrX"] and (v.start < 2781479 or v.start > 154931044) : continue
 
-    if v.FILTER != "PASS":
-      continue
     if v.info.get("AF", afs) != Status.OK:
       afs = @[0'f32]
 
@@ -148,13 +153,21 @@ proc findsites_main*() =
         discard indels.hasKeyOrPut($v.CHROM, newSeq[region]())
         var r = region(chrom: $v.CHROM, start: max(v.start.int - 7, 0), stop: v.stop.int + 7)
         indels[$v.CHROM].add(r)
-
       continue
 
-    if afs[0] > 0.02:
+    if v.FILTER != "PASS":
+      continue
+
+    if afs[0] > 0.01:
       var r = region(chrom: $v.CHROM, start: max(v.start.int - 1, 0), stop: v.stop.int + 1)
-      discard snps.hasKeyOrPut($v.CHROM, newSeq[region]())
-      snps[$v.CHROM].add(r)
+      #discard snps.hasKeyOrPut($v.CHROM, newSeq[region]())
+      #snps[$v.CHROM].add(r)
+      snps.mGetOrPut($v.CHROM, newSeq[region]()).add(r)
+
+    # check exclude after putting into interval trees
+    if gno != nil and gno.contains(v):
+      echo "gno-skip"
+      continue
 
     var info = v.info
     if info.get("AF", afs) != Status.OK:
@@ -181,12 +194,19 @@ proc findsites_main*() =
     # BaseQRankSum=0.571;ClippingRankSum=0;MQRankSum=0.101;ReadPosRankSum
     var skip = false
     for rs in @["BaseQ", "MQ", "Clipping", "ReadPos"]:
-      if info.get(rs & "RankSum", ranksum) == Status.OK and abs(ranksum[0]) > 2.8:
+      if info.get(rs & "RankSum", ranksum) == Status.OK and abs(ranksum[0]) > 2.4:
         skip = true
         break
     if skip: continue
 
-    if lap.find(v.start.int, v.stop.int, empty_regions):
+    if info.get("FS", ranksum) == Status.OK and abs(ranksum[0]) > 2.4:
+      continue
+    if info.get("QD", ranksum) == Status.OK and abs(ranksum[0]) < 12:
+      continue
+    if info.get("MQ", ranksum) == Status.OK and ranksum[0] < 50:
+      continue
+
+    if lap.find(max(0, v.start.int - 5), v.stop.int + 5, empty_regions):
       continue
 
     if include_regions.len > 0 and not lap_incl.find(v.start.int, v.stop.int, empty_regions):
@@ -221,9 +241,9 @@ proc findsites_main*() =
   var empty: seq[region]
 
   for v in saved:
-    if indel_lappers[$v.v.CHROM].find(v.v.start.int, v.v.stop.int, empty):
+    if indel_lappers[$v.v.CHROM].find(max(0, v.v.start.int-1), v.v.stop.int+1, empty):
       continue
-    if snp_lappers[$v.v.CHROM].find(v.v.start.int, v.v.stop.int, empty) and empty.len > 1:
+    if snp_lappers[$v.v.CHROM].find(max(0, v.v.start.int-1), v.v.stop.int+1, empty) and empty.len > 1:
       #echo "skipping with nearby snp"
       continue
     discard added.hasKeyOrPut(v.v.CHROM, newSeq[Variant]())
