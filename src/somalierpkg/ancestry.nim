@@ -205,7 +205,7 @@ proc ancestry_main*() =
 
   var ancestry_fh: File
   if not open(ancestry_fh, opts.output_prefix & "somalier-ancestry.tsv", fmWrite):
-    quit "couldn't open output file {opts.output_prefix & \"tsv\"}"
+    quit "couldn't open output file {opts.output_prefix & \"somalier-ancestry.tsv\"}"
 
   var header = @["#sample_id", "predicted_ancestry", "given_ancestry"]
   var inv_orders = newSeq[string](orders.len)
@@ -266,10 +266,10 @@ type ForHtml = object
     ancestry_fh.write_line(join(line, "\t"))
 
   ancestry_fh.close
-  stderr.write_line &"[somalier] wrote text file to {opts.output_prefix}tsv"
+  stderr.write_line &"[somalier] wrote text file to {opts.output_prefix}somalier-ancestry.tsv"
 
   var fh_html: File
-  if not fh_html.open(opts.output_prefix & "html", fmWrite):
+  if not fh_html.open(opts.output_prefix & "somalier-ancestry.html", fmWrite):
     quit "couldn't open:" & opts.output_prefix & "html"
   var htmls = tmpl_html.split("<BACKGROUND_JSON>")
   fh_html.write(htmls[0])
@@ -279,7 +279,7 @@ type ForHtml = object
   fh_html.write_line(%* qhtmls)
   fh_html.write(htmls[1])
   fh_html.close()
-  stderr.write_line &"[somalier] wrote html file to {opts.output_prefix}somalier-ancestry.tsv"
+  stderr.write_line &"[somalier] wrote html file to {opts.output_prefix}somalier-ancestry.html"
 
 when isMainModule:
   ancestry_main()
