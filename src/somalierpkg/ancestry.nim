@@ -110,7 +110,7 @@ proc ancestry_main*() =
     if i > 0: doAssert cnt.sites.len == train_mat[0].len, &"bad number of sites {cnt.sites.len} in {f}"
     var vec = newSeq[float32](cnt.sites.len)
     for j, ac in cnt.sites:
-      vec[j] = ac.ab(5).alts.float32
+      vec[j] = ac.ab(5).alts(0.3).float32
     train_mat[i] = vec
 
   for i, f in query_samples:
@@ -119,7 +119,7 @@ proc ancestry_main*() =
     doAssert cnt.sites.len == train_mat[0].len, &"bad number of sites {cnt.sites.len} in {f}"
     var vec = newSeq[float32](cnt.sites.len)
     for j, ac in cnt.sites:
-      vec[j] = ac.ab(5).alts.float32
+      vec[j] = ac.ab(5).alts(0.3).float32
     query_mat[i] = vec
 
 

@@ -4,6 +4,7 @@ v0.2.10
 + change output file name of ancestry to include
 + fix for gvcf with empty alts (#46)
 + add include regions to find-sites
++ add --min-ab option to somalier relate to limit het sites to `min_ab..(1-min_ab)`. default is 0.3
 
 v0.2.9
 ======

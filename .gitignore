@@ -1,5 +1,8 @@
 src/somalier
 src/somalierpkg/rel
+src/somalierpkg/findsites
+src/somalierpkg/avx512
+src/somalierpkg/avx256
 src/somalierpkg/relate
 *.json
 nimcache

@@ -302,41 +302,28 @@ proc ab*(c:allele_count, min_depth:int): float {.inline.} =
     return 0
   result = c.nalt.float / (c.nalt + c.nref).float
 
-proc alts*(ab:float, ab_cutoff:float=0.01): int8 {.inline.} =
+proc alts*(ab:float, min_ab:float, ab_cutoff:float=0.01): int8 {.inline.} =
   if ab < 0: return -1
   if ab < ab_cutoff: return 0
   if ab > (1 - ab_cutoff): return 2
-  if ab >= 0.2 and ab <= 0.8: return 1
+  if ab >= min_ab and ab <= (1 - min_ab): return 1
   return -1
 
 {.push checks: off, optimization: speed.}
 template depth*(c:allele_count): uint32 =
   c.nref + c.nalt
 
-proc alts*(c:allele_count, min_depth:int=7): int8 {.inline.} =
+proc alts*(c:allele_count, min_ab:float, min_depth:int=7): int8 {.inline.} =
   if c.proportion_other > 0.04: return -1
   if int(c.nref + c.nalt) < min_depth: return -1
   if c.nref == 0: return 2
   if c.nalt == 0: return 0
   var ab = c.nalt.float / (c.depth).float
-  return ab.alts
+  return ab.alts(min_ab)
 
-proc to_bits*(cs:seq[allele_count], min_depth:int=7): genotypes =
-  result.hom_ref = create_bitset(cs.len)
-  result.het = create_bitset(cs.len)
-  result.hom_alt = create_bitset(cs.len)
-
-  for i, c in cs:
-    var a = c.alts(min_depth)
-    if a == 0:
-      result.hom_ref.set(i)
-    elif a == 1:
-      result.het.set(i)
-    elif a == 2:
-      result.hom_alt.set(i)
 {.pop.}
 
-proc fill_sample_info(r:var relation_matrices, sample_i:int, min_depth:int, unk2hr:bool) =
+proc fill_sample_info(r:var relation_matrices, sample_i:int, min_ab:float, min_depth:int, unk2hr:bool) =
 
   var n = r.allele_counts[sample_i].len
   r.genotypes[sample_i].hom_ref = create_bitset(n)
@@ -355,7 +342,7 @@ proc fill_sample_info(r:var relation_matrices, sample_i:int, min_depth:int, unk2
       stat.ab.push(abi)
     if abi != -1:
       stat.gtdp.push(int(c.nref + c.nalt))
-    var alt = abi.alts
+    var alt = abi.alts(min_ab)
     if alt < 0 and unk2hr: alt = 0
     if abi > 0.02 and abi < 0.98 and (abi < 0.1 or abi > 0.9):
       r.gt_counts[4][sample_i].inc
@@ -376,7 +363,7 @@ proc fill_sample_info(r:var relation_matrices, sample_i:int, min_depth:int, unk2
   r.x_genotypes[sample_i].het = create_bitset(n)
   r.x_genotypes[sample_i].hom_alt = create_bitset(n)
   for k, c in r.x_allele_counts[sample_i]:
-    var alt = c.alts
+    var alt = c.alts(min_ab)
     if alt == -1: continue
     stat.x_dp.push(c.depth.float)
     if alt == 0:
@@ -390,13 +377,13 @@ proc fill_sample_info(r:var relation_matrices, sample_i:int, min_depth:int, unk2
       r.x_genotypes[sample_i].hom_alt.set(k)
 
   for c in r.y_allele_counts[sample_i]:
-    var alt = c.alts
+    var alt = c.alts(min_ab)
     if alt == -1: continue
     stat.y_dp.push(c.depth.float)
   r.stats[sample_i] = stat
 
 
-proc read_extracted*(paths: seq[string], min_depth:int, unk2hr:bool): relation_matrices =
+proc read_extracted*(paths: seq[string], min_ab:float, min_depth:int, unk2hr:bool): relation_matrices =
   var n_samples = paths.len
 
   # aggregated from all samples
@@ -456,12 +443,12 @@ proc read_extracted*(paths: seq[string], min_depth:int, unk2hr:bool): relation_m
 
     f.close()
 
-    result.fill_sample_info(i, min_depth, unk2hr)
+    result.fill_sample_info(i, min_ab, min_depth, unk2hr)
 
 const missing = [".", "0", "-9", ""]
 
 proc high_quality(gt_counts: array[5, seq[uint16]], i:int): bool {.inline.} =
-  # less than 3% of sites with allele balance outside of 0.2 .. 0.8
+  # less than 3% of sites with allele balance outside of 0.1 .. 0.9
   result = gt_counts[4][i].float / (gt_counts[0][i] + gt_counts[1][i] + gt_counts[2][i] + gt_counts[3][i] + gt_counts[4][i]).float < 0.06
   if not result: 
     return false
@@ -930,6 +917,7 @@ specified as comma-separated groups per line e.g.:
     option("--sample-prefix", multiple=true, help="optional sample prefixes that can be removed to find identical samples. e.g. batch1-sampleA batch2-sampleA")
     option("-p", "--ped", help="optional path to a ped/fam file indicating the expected relationships among samples.")
     option("-d", "--min-depth", default="7", help="only genotype sites with at least this depth.")
+    option("--min-ab", default="0.3", help="hets sites must be between min-ab and 1 - min_ab")
     flag("-u", "--unknown", help="set unknown genotypes to hom-ref. it is often preferable to use this with VCF samples that were not jointly called")
     flag("-i", "--infer", help="infer relationships (https://github.com/brentp/somalier/wiki/pedigree-inference)")
     option("-o", "--output-prefix", help="output prefix for results.", default="somalier")
@@ -950,13 +938,14 @@ specified as comma-separated groups per line e.g.:
     groups: seq[pair]
     samples: seq[Sample]
     min_depth = parseInt(opts.min_depth)
+    min_ab = parseFloat(opts.min_ab)
     unk2hr = opts.unknown
 
   if not opts.output_prefix.endswith(".") or opts.output_prefix.endswith("/"):
     opts.output_prefix &= '.'
 
   var t0 = cpuTime()
-  var final = read_extracted(opts.extracted, min_depth, unk2hr)
+  var final = read_extracted(opts.extracted, min_ab, min_depth, unk2hr)
   var n_samples = final.samples.len
   stderr.write_line &"[somalier] time to read files and get per-sample stats for {n_samples} samples: {cpuTime() - t0:.2f}"
   t0 = cpuTime()
@@ -970,7 +959,6 @@ specified as comma-separated groups per line e.g.:
   # send in groups so we can adjust baed on self-self samples
   groups.add(readGroups(opts.groups, groups))
   stderr.write_line &"[somalier] time to get expected relatedness from pedigree graph: {cpuTime() - t0:.2f}"
-
 
   var
     fh_tsv:File
