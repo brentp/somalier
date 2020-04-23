@@ -166,7 +166,6 @@ proc findsites_main*() =
 
     # check exclude after putting into interval trees
     if gno != nil and gno.contains(v):
-      echo "gno-skip"
       continue
 
     var info = v.info
