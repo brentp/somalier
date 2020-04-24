@@ -112,8 +112,8 @@
                             <option value="p_middling_ab">Proportion sites with AB &lt; 0.1 or AB &gt; 0.9</option>
                             <option value="x_depth_mean">Scaled mean depth on X</option>
                             <option value="x_hom_ref">Number of 0/0 sites on X</option>
-                            <option value="x_het">Number of 0/1 sites on X</option>
-                            <option value="x_hom_alt" selected>Number of 1/1 sites on X</option>
+                            <option value="x_het" selected >Number of 0/1 sites on X</option>
+                            <option value="x_hom_alt">Number of 1/1 sites on X</option>
                             <option value="y_depth_mean">Scaled mean depth on Y</option>
                         </select>
                     </div>
@@ -154,7 +154,7 @@
         <div class="col-12 h-100 bg-light pt-2 border-right">
             Choose pre-set selection for sample plot:
             <ul>
-            <li><a href="javascript:set_plotb('x_hom_alt', 'x_depth_mean')">Sex QC: Scaled mean depth on chrX vs. Number of 1/1 sites on X</a></li>
+            <li><a href="javascript:set_plotb('x_het', 'x_depth_mean')">Sex QC: Number of 0/1 sites on X vs scaled mean depth on chrX</a></li>
 
             <li><a href="javascript:set_plotb('x_depth_mean', 'y_depth_mean')">Sex ploidy QC: Scaled mean depth on chrX vs. chrY</a></li>
             <li><a href="javascript:set_plotb('n_unknown', 'p_middling_ab')">General QC: number of sites with unknown genotype vs. proportion of hets with allele balance outside of 0.1 - 0.9</a></li>

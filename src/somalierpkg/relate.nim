@@ -917,7 +917,7 @@ specified as comma-separated groups per line e.g.:
     option("--sample-prefix", multiple=true, help="optional sample prefixes that can be removed to find identical samples. e.g. batch1-sampleA batch2-sampleA")
     option("-p", "--ped", help="optional path to a ped/fam file indicating the expected relationships among samples.")
     option("-d", "--min-depth", default="7", help="only genotype sites with at least this depth.")
-    option("--min-ab", default="0.3", help="hets sites must be between min-ab and 1 - min_ab")
+    option("--min-ab", default="0.3", help="hets sites must be between min-ab and 1 - min_ab. set this to 0.2 for RNA-Seq data")
     flag("-u", "--unknown", help="set unknown genotypes to hom-ref. it is often preferable to use this with VCF samples that were not jointly called")
     flag("-i", "--infer", help="infer relationships (https://github.com/brentp/somalier/wiki/pedigree-inference)")
     option("-o", "--output-prefix", help="output prefix for results.", default="somalier")
@@ -1020,11 +1020,13 @@ specified as comma-separated groups per line e.g.:
             sibs = true
           break
       if not sibs:
-        stderr.write_line &"[somalier] apparent identical twins or sample duplicate found with {rel.sample_a} and {rel.sample_b} NOT assuming siblings"
+        if opts.infer:
+          stderr.write_line &"[somalier] apparent identical twins or sample duplicate found with {rel.sample_a} and {rel.sample_b} NOT assuming siblings"
       else:
-        stderr.write_line &"[somalier] apparent identical twins or sample duplicate found with {rel.sample_a} and {rel.sample_b} assuming siblings as these were specified as such in the pedigree file"
-        sib_pairs.mgetOrPut(rel.sample_a, @[]).add(rel.sample_b)
-        sib_pairs.mgetOrPut(rel.sample_b, @[]).add(rel.sample_a)
+        if opts.infer:
+          stderr.write_line &"[somalier] apparent identical twins or sample duplicate found with {rel.sample_a} and {rel.sample_b} assuming siblings as these were specified as such in the pedigree file"
+          sib_pairs.mgetOrPut(rel.sample_a, @[]).add(rel.sample_b)
+          sib_pairs.mgetOrPut(rel.sample_b, @[]).add(rel.sample_a)
     elif rr > 0.2 and final.gt_counts.high_quality(T.i) and final.gt_counts.high_quality(T.j):
       relGt0p2.mgetOrPut(rel.sample_a, @[]).add(rel.sample_b)
       relGt0p2.mgetOrPut(rel.sample_b, @[]).add(rel.sample_a)
