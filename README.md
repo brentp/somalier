@@ -146,10 +146,6 @@ all cases.
 By default `somalier` will only consider variants that have a "PASS" or "RefCall" FILTER. To extend this list, set
 the environment variable `SOMALIER_ALLOWED_FILTERS` to a comma-delimited list of additional filters to allow.
  
-## License
-
-`somalier` is free and unrestricted for non-commercial use. For commercial use, please contact [bpedersen@base2genomics.com]
-
 ## Other Work
 
 https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5499645/
