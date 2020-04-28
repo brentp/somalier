@@ -229,21 +229,8 @@ proc extract_main() =
 
   for cnts in sample_counts:
     var stored_sample_name : string = opts.sample_prefix & cnts.sample_name
-
-    var s = newFileStream(opts.outdir & "/" & cnts.sample_name & ".somalier", fmWrite)
-    s.write(formatVersion.uint8)
-    s.write(stored_sample_name.len.uint8)
-    s.write(stored_sample_name)
-    s.write(cnts.sites.len.uint16)
-    s.write(cnts.x_sites.len.uint16)
-    s.write(cnts.y_sites.len.uint16)
-    for st in cnts.sites:
-      s.write(st)
-    for st in cnts.x_sites:
-      s.write(st)
-    for st in cnts.y_sites:
-      s.write(st)
-    s.close()
+    let fname = opts.outdir & "/" & cnts.sample_name & ".somalier"
+    cnts.write_counts(stored_sample_name, fname)
 
 proc main() =
 

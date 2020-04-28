@@ -15,6 +15,7 @@ import ./litestats
 import math
 import pedfile
 import ./results_html
+import ./common
 import ./estimate_contamination
 
 type Stat4 = object
@@ -30,18 +31,6 @@ type Stat4 = object
 
     y_dp: RunningStat
 
-type allele_count* = object
-  nref*: uint32
-  nalt*: uint32
-  nother*: uint32
-
-const formatVersion* = 2'u8
-
-type counts* = object
-  sample_name*: string
-  sites*: seq[allele_count]
-  x_sites*: seq[allele_count]
-  y_sites*: seq[allele_count]
 
 type relation_matrices = object {.shallow.}
   sites_tested: int

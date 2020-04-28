@@ -3,6 +3,8 @@ import algorithm
 import hts/private/hts_concat
 import hts/fai
 
+const formatVersion* = 2'u8
+
 type Site* = object
   A_allele*: string
   B_allele*: string
@@ -59,3 +61,33 @@ proc readSites*(path: string): seq[Site] =
     stderr.write_line "warning:cant use more than 65535 sites"
   sort(result, siteOrder)
   # check reference after sorting so we get much faster access.
+
+type allele_count* = object
+  nref*: uint32
+  nalt*: uint32
+  nother*: uint32
+
+type counts* = object
+  sample_name*: string
+  sites*: seq[allele_count]
+  x_sites*: seq[allele_count]
+  y_sites*: seq[allele_count]
+
+import streams
+
+proc write_counts*(cnts: counts, sample_name: string, fname: string) =
+    echo fname
+    var s = newFileStream(fname, fmWrite)
+    s.write(formatVersion.uint8)
+    s.write(sample_name.len.uint8)
+    s.write(sample_name)
+    s.write(cnts.sites.len.uint16)
+    s.write(cnts.x_sites.len.uint16)
+    s.write(cnts.y_sites.len.uint16)
+    for st in cnts.sites:
+      s.write(st)
+    for st in cnts.x_sites:
+      s.write(st)
+    for st in cnts.y_sites:
+      s.write(st)
+    s.close()

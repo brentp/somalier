@@ -7,6 +7,7 @@ import ./common
 import json
 import ./relate
 import argparse
+export counts, allele_count
 
 type Trace = object
   y: seq[float32]

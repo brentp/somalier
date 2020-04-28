@@ -87,7 +87,6 @@ proc findsites_main*() =
     stderr.write_line "this will write output sites to: ./sites.vcf.gz"
     quit 0
 
-
   var
     vcf:VCF
     wtr:VCF
@@ -130,6 +129,7 @@ proc findsites_main*() =
     if $v.CHROM notin ["chrY", "Y", "chrX", "X"] and v.REF == "C": continue
     if v.CHROM != last_chrom:
       last_chrom = v.CHROM
+      stderr.write_line "on chrom:", last_chrom
       if exclude_regions.contains($last_chrom):
         lap = lapify(exclude_regions[$last_chrom])
       else:
@@ -165,7 +165,7 @@ proc findsites_main*() =
       snps.mGetOrPut($v.CHROM, newSeq[region]()).add(r)
 
     # check exclude after putting into interval trees
-    if gno != nil and gno.contains(v):
+    if gno != nil and gno.contains(v) and $v.CHROM notin ["chrX", "X"]:
       continue
 
     var info = v.info
@@ -173,10 +173,10 @@ proc findsites_main*() =
       continue
     if info.get("AN", ans) == Status.OK and (($v.CHROM notin ["chrX", "X", "chrY", "Y"]) and ans[0] < min_AN) :
       continue
-    if $v.CHROM in ["chrY", "Y"]:
+    if $v.CHROM in ["chrY", "Y", "chrX", "X"]:
       if afs[0] < 0.04 or afs[0] > 0.96: continue
     else:
-      if afs[0] < 0.12 or afs[0] > 0.88: continue
+      if afs[0] < 0.1 or afs[0] > 0.9: continue
 
     if info.get("AS_FilterStatus", oms) == Status.OK and oms != "PASS":
       continue
@@ -191,19 +191,20 @@ proc findsites_main*() =
       continue
 
     # BaseQRankSum=0.571;ClippingRankSum=0;MQRankSum=0.101;ReadPosRankSum
-    var skip = false
-    for rs in @["BaseQ", "MQ", "Clipping", "ReadPos"]:
-      if info.get(rs & "RankSum", ranksum) == Status.OK and abs(ranksum[0]) > 2.4:
-        skip = true
-        break
-    if skip: continue
+    if $v.CHROM notin ["chrX", "X", "chrY", "Y"]:
+      var skip = false
+      for rs in @["BaseQ", "MQ", "Clipping", "ReadPos"]:
+        if info.get(rs & "RankSum", ranksum) == Status.OK and abs(ranksum[0]) > 2.4:
+          skip = true
+          break
+      if skip: continue
 
-    if info.get("FS", ranksum) == Status.OK and abs(ranksum[0]) > 2.4:
-      continue
-    if info.get("QD", ranksum) == Status.OK and abs(ranksum[0]) < 12:
-      continue
-    if info.get("MQ", ranksum) == Status.OK and ranksum[0] < 50:
-      continue
+      if info.get("FS", ranksum) == Status.OK and abs(ranksum[0]) > 2.4:
+        continue
+      if info.get("QD", ranksum) == Status.OK and abs(ranksum[0]) < 12:
+        continue
+      if info.get("MQ", ranksum) == Status.OK and ranksum[0] < 50:
+        continue
 
     if lap.find(max(0, v.start.int - 5), v.stop.int + 5, empty_regions):
       continue
@@ -254,7 +255,7 @@ proc findsites_main*() =
         if (close - v.v.start).abs < 200:
           continue
       elif $v.v.CHROM in ["chrX", "X"]:
-        if (close - v.v.start).abs < 20000:
+        if (close - v.v.start).abs < 1000:
           continue
       elif (close - v.v.start).abs < snp_dist:
         continue
