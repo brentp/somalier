@@ -3,8 +3,9 @@ v0.2.10
 + fix extra output column in pairs.tsv (#47)
 + change output file name of ancestry to include
 + fix for gvcf with empty alts (#46)
-+ add include regions to find-sites
++ add include regions and exlude sites to find-sites
 + add --min-ab option to somalier relate to limit het sites to `min_ab..(1-min_ab)`. default is 0.3
++ html output for sample plot defaults to number of het sites on X (was hom-alt)
 
 v0.2.9
 ======

@@ -76,7 +76,6 @@ type counts* = object
 import streams
 
 proc write_counts*(cnts: counts, sample_name: string, fname: string) =
-    echo fname
     var s = newFileStream(fname, fmWrite)
     s.write(formatVersion.uint8)
     s.write(sample_name.len.uint8)
