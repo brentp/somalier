@@ -6,6 +6,7 @@ v0.2.10
 + add include regions and exclude sites to find-sites
 + add --min-ab option to somalier relate to limit het sites to `min_ab..(1-min_ab)`. default is 0.3
 + html output for sample plot defaults to number of het sites on X (was hom-alt)
++ better estimates in `somalier ancestry` when incoming samples are different ancestry from training (thousand genomes samples)
 
 v0.2.9
 ======

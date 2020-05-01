@@ -136,6 +136,8 @@ the red. In the somalier output, the user can **hover to see which sample-pairs 
 
 ## Ancestry Estimate
 
+note: this feature is working, but still experimental. it may change in future versions.
+
 `somalier` can predict ancestry on a set of query samples given a set of labelled samples, for example from thousand genomes along with labels for.
 This would look like:
 
