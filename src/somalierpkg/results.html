@@ -169,6 +169,18 @@ var nan = NaN; // hack to support json dumped with NaN values.
 var sample_data = <SAMPLE_JSON>
 var input = <INPUT_JSON>
 
+// ibs0 and ibs2 are counts. on page-load, we change them to scale by n
+    /*
+for(var i=0; i< input.length; i++){
+    var rel = input[i];
+    for(var j=0; j<rel.ibs0.length; j++){
+        rel.ibs0[j] /= rel.n[j];
+        rel.ibs2[j] /= rel.n[j];
+    }
+}
+*/
+
+
 var colors = ['rgba(55,126,184,0.7)', 'rgba(228,26,28,0.7)', 'rgba(152,78,163,0.7)', 'rgba(255,127,0,0.7)', 'rgba(166,86,40,0.7)', 'rgba(247,129,191,0.7)', 'rgba(77,175,74,0.7)',]
 var size
 if (sample_data.length > 700) {

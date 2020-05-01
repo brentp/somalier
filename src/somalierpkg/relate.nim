@@ -79,6 +79,7 @@ type relations = object
   shared_hom_alts: seq[uint16]
   concordance: seq[float32]
   relatedness: seq[float32]
+  n: seq[uint16]
 
 proc hom_alt_concordance(r: relation): float64 {.inline.} =
   return (r.shared_hom_alts.float64 - 2 * r.ibs0.float64) / max(1'u16, min(r.hom_alts_a, r.hom_alts_b)).float64
@@ -100,6 +101,7 @@ proc add*(rt:var seq[relations], rel:relation, expected_relatedness:float) =
       r.shared_hom_alts.add(rel.shared_hom_alts)
       r.concordance.add(rel.hom_alt_concordance)
       r.relatedness.add(rel.rel)
+      r.n.add(rel.n)
       added = true
       break
     if r.expected_relatedness > expected_relatedness: break
@@ -107,7 +109,7 @@ proc add*(rt:var seq[relations], rel:relation, expected_relatedness:float) =
 
   if not added:
     rt.insert(relations(expected_relatedness: expected_relatedness), i)
-    # recurse and add not that we have the correct position.
+    # recurse and add now that we have the correct position.
     rt.add(rel, expected_relatedness)
 
 
