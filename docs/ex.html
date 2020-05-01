@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="author" content="Brent Pedersen" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/selectize.js/0.12.6/css/selectize.bootstrap3.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.3.1/css/bootstrap.min.css">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/selectize.js/0.12.6/js/standalone/selectize.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+    <style>
+    html,body { height: 100%; margin: 0px; padding: 0px; }
+    .form-control.selectize-control {
+        padding: 5px 6px 0px;
+        height: unset !important;
+    }
+    .remove-single {
+        color: gray !important;
+        top: -1px !important;
+        font-size: 20px !important;
+    }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark p-0" style="background-color:#4b636e !important">
+  <a class="navbar-brand ml-2" href="https://github.com/brentp/somalier">somalier</a>
+  <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#toggler" aria-controls="toggler" aria-expanded="false" aria-label="Toggle navigation">
+    <span class="navbar-toggler-icon"></span>
+  </button>
+
+  <div class="collapse navbar-collapse" id="toggler">
+    <div class="navbar-nav mr-auto">
+    </div>
+    <div>
+        <div class="input-group" style="width:300px">
+            <input type="text" class="form-control" id="sample-search" aria-label="sample-search">
+        </div>
+    </div>
+  </div>
+</nav>
+<div class="container-fluid h-100">
+    <div class="row h-75">
+        <div class="col-6 h-100 bg-light pt-2 border-right">
+            <div class="row">
+                <div class="col">
+                    <h5>Sample to Sample Relatedness</h5>
+                </div>
+            </div>
+            <div class="row pb-2">
+                <div class="col-6">
+                    <div class="input-group">
+                        <div class="input-group-prepend">
+                            <div class="input-group-text">X Axis</div>
+                        </div>
+                        <select class="custom-select" id="plotax_select">
+                            <option value="shared_hets" title="the number of sites where both samples are heterozygotes">Shared hets</option>
+                            <option value="shared_hom_alts" title="the number of sites where both samples are homozygous alternate">Shared hom-alts</option>
+                            <option value="concordance" title="a relatedness estimate that is not affected by loss-of-heterozygosity">Homozygous concordance</option>
+                            <option value="relatedness" title="relatedness of a pair of samples (2*kinship coefficient")>Relatedness</option>
+                            <option value="ibs0" title="the number of sites where one sample is hom-ref and another is hom-alt" selected>IBS0</option>
+                            <option value="ibs2" title="the number of sites where the samples have the same genotype">IBS2</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="input-group">
+                        <div class="input-group-prepend">
+                            <div class="input-group-text">Y Axis</div>
+                        </div>
+                        <select class="custom-select" id="plotay_select">
+                            <option value="shared_hets" title="the number of sites where both samples are heterozygotes">Shared hets</option>
+                            <option value="shared_hom_alts" title="the number of sites where both samples are homozygous alternate">Shared hom-alts</option>
+                            <option value="concordance" title="a relatedness estimate that is not affected by loss-of-heterozygosity">Homozygous concordance</option>
+                            <option value="relatedness" title="relatedness of a pair of samples (2*kinship coefficient")>Relatedness</option>
+                            <option value="ibs0" title="the number of sites where one sample is hom-ref and another is hom-alt">IBS0</option>
+                            <option value="ibs2" title="the number of sites where the samples have the same genotype" selected>IBS2</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="row h-100">
+                <div class="col h-100">
+                    <div id="plota" style="height: 90%"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-6 h-100 bg-light pt-2">
+            <div class="row pt-0 pb-0">
+                <div class="col pt-0 pb-0">
+                    <h5>Sample Depth Metrics</h5>
+                </div>
+            </div>
+            <div class="row pb-2">
+                <div class="col-6">
+                    <div class="input-group">
+                        <div class="input-group-prepend">
+                            <div class="input-group-text">X Axis</div>
+                        </div>
+                        <select class="custom-select" id="plotbx_select">
+                            <option value="gt_depth_mean">Mean depth of genotyped sites</option>
+                            <option value="depth_mean">Mean depth of all sites</option>
+                            <option value="ab_mean">Mean allele balance</option>
+                            <option value="pct_other_alleles">% reads with neither REF nor ALT</option>
+                            <option value="n_hom_ref">Number of 0/0 sites</option>
+                            <option value="n_het">Number of 0/1 sites</option>
+                            <option value="n_hom_alt">Number of 1/1 sites</option>
+                            <option value="n_unknown">Number of unknown sites</option>
+                            <option value="n_known">Number of known sites</option>
+                            <option value="p_middling_ab">Proportion sites with AB &lt; 0.1 or AB &gt; 0.9</option>
+                            <option value="x_depth_mean">Scaled mean depth on X</option>
+                            <option value="x_hom_ref">Number of 0/0 sites on X</option>
+                            <option value="x_het" selected >Number of 0/1 sites on X</option>
+                            <option value="x_hom_alt">Number of 1/1 sites on X</option>
+                            <option value="y_depth_mean">Scaled mean depth on Y</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="input-group">
+                        <div class="input-group-prepend">
+                            <div class="input-group-text">Y Axis</div>
+                        </div>
+                        <select class="custom-select" id="plotby_select">
+                            <option value="gt_depth_mean">Mean depth of genotyped sites</option>
+                            <option value="depth_mean">Mean depth of all sites</option>
+                            <option value="ab_mean">Mean allele balance</option>
+                            <option value="pct_other_alleles">% reads with neither REF nor ALT</option>
+                            <option value="n_hom_ref">Number of 0/0 sites</option>
+                            <option value="n_het">Number of 0/1 sites</option>
+                            <option value="n_hom_alt">Number of 1/1 sites</option>
+                            <option value="n_unknown">Number of unknown sites</option>
+                            <option value="n_known">Number of known sites</option>
+                            <option value="p_middling_ab">Proportion sites with AB &lt; 0.1 or AB &gt; 0.9</option>
+                            <option value="x_depth_mean" selected>Scaled mean depth on X</option>
+                            <option value="x_hom_ref">Number of 0/0 sites on X</option>
+                            <option value="x_het">Number of 0/1 sites on X</option>
+                            <option value="x_hom_alt">Number of 1/1 sites on X</option>
+                            <option value="y_depth_mean">Scaled mean depth on Y</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="row h-100">
+                <div class="col h-100">
+                    <div id="plotb" style="height: 90%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row h-25">
+        <div class="col-12 h-100 bg-light pt-2 border-right">
+            Choose pre-set selection for sample plot:
+            <ul>
+            <li><a href="javascript:set_plotb('x_het', 'x_depth_mean')">Sex QC: Number of 0/1 sites on X vs scaled mean depth on chrX</a></li>
+
+            <li><a href="javascript:set_plotb('x_depth_mean', 'y_depth_mean')">Sex ploidy QC: Scaled mean depth on chrX vs. chrY</a></li>
+            <li><a href="javascript:set_plotb('n_unknown', 'p_middling_ab')">General QC: number of sites with unknown genotype vs. proportion of hets with allele balance outside of 0.1 - 0.9</a></li>
+            <li><a href="javascript:set_plotb('gt_depth_mean', 'ab_mean')">Depth and allele QC: mean depth vs. mean het allele-balance</a></li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script>
+var nan = NaN; // hack to support json dumped with NaN values.
+var sample_data = [{"sample":"sample_1004","sex":"male","gt_depth_mean":27.2530134379145,"depth_mean":27.18246663598708,"ab_mean":0.5286563921833103,"pct_other_alleles":0.0,"n_hom_ref":4464,"n_het":6563,"n_hom_alt":5575,"n_unknown":782,"n_known":16602,"p_middling_ab":0.02375470320660415,"x_depth_mean":1.016456128802807,"x_hom_ref":164,"x_het":0,"x_hom_alt":171,"y_depth_mean":0.7548313370296703},
+{"sample":"sample_1005","sex":"male","gt_depth_mean":28.10076714541143,"depth_mean":28.02525310630456,"ab_mean":0.5279771087860324,"pct_other_alleles":0.0,"n_hom_ref":4573,"n_het":6516,"n_hom_alt":5635,"n_unknown":660,"n_known":16724,"p_middling_ab":0.01818592567491246,"x_depth_mean":0.9997831877981526,"x_hom_ref":180,"x_het":0,"x_hom_alt":158,"y_depth_mean":1.001497823786373},
+{"sample":"sample_1006","sex":"female","gt_depth_mean":29.01707331141498,"depth_mean":28.93873676944317,"ab_mean":0.5290219281739534,"pct_other_alleles":0.0,"n_hom_ref":4429,"n_het":6659,"n_hom_alt":5532,"n_unknown":764,"n_known":16620,"p_middling_ab":0.02610644257703081,"x_depth_mean":1.961571883340741,"x_hom_ref":124,"x_het":121,"x_hom_alt":101,"y_depth_mean":0.0},
+{"sample":"sample_1007","sex":"male","gt_depth_mean":28.27798604302436,"depth_mean":28.20478601012427,"ab_mean":0.5277680429242713,"pct_other_alleles":0.0,"n_hom_ref":4455,"n_het":6752,"n_hom_alt":5503,"n_unknown":674,"n_known":16710,"p_middling_ab":0.02039896314662459,"x_depth_mean":1.021514176872908,"x_hom_ref":172,"x_het":0,"x_hom_alt":180,"y_depth_mean":1.018460082559677},
+{"sample":"sample_1008","sex":"male","gt_depth_mean":22.70131518227972,"depth_mean":22.63949608835706,"ab_mean":0.5304474238989036,"pct_other_alleles":0.0,"n_hom_ref":4473,"n_het":6433,"n_hom_alt":5620,"n_unknown":858,"n_known":16526,"p_middling_ab":0.01840767927724449,"x_depth_mean":1.012750540934098,"x_hom_ref":164,"x_het":1,"x_hom_alt":160,"y_depth_mean":1.179192947822089},
+{"sample":"sample_1009","sex":"female","gt_depth_mean":29.77268270173609,"depth_mean":29.69264841233318,"ab_mean":0.5300215440492919,"pct_other_alleles":0.0,"n_hom_ref":4368,"n_het":6847,"n_hom_alt":5484,"n_unknown":685,"n_known":16699,"p_middling_ab":0.02216222297221285,"x_depth_mean":1.949441882501105,"x_hom_ref":104,"x_het":119,"x_hom_alt":126,"y_depth_mean":0.0},
+{"sample":"sample_1010","sex":"female","gt_depth_mean":29.15308300167275,"depth_mean":29.07426369075017,"ab_mean":0.5261055683942851,"pct_other_alleles":0.0,"n_hom_ref":4489,"n_het":6725,"n_hom_alt":5463,"n_unknown":707,"n_known":16677,"p_middling_ab":0.02265699668297071,"x_depth_mean":1.945003797354935,"x_hom_ref":106,"x_het":123,"x_hom_alt":121,"y_depth_mean":0.0},
+{"sample":"sample_1011","sex":"male","gt_depth_mean":28.70730722648374,"depth_mean":28.63299585826034,"ab_mean":0.5284923466864778,"pct_other_alleles":0.0,"n_hom_ref":4487,"n_het":6547,"n_hom_alt":5581,"n_unknown":769,"n_known":16615,"p_middling_ab":0.02588815420822593,"x_depth_mean":0.9978417206188785,"x_hom_ref":161,"x_het":0,"x_hom_alt":183,"y_depth_mean":0.9428493746601383},
+{"sample":"sample_1012","sex":"female","gt_depth_mean":29.14397784956162,"depth_mean":29.06419696272438,"ab_mean":0.5307229618548097,"pct_other_alleles":0.0,"n_hom_ref":4430,"n_het":6629,"n_hom_alt":5591,"n_unknown":734,"n_known":16650,"p_middling_ab":0.02364504352709913,"x_depth_mean":1.951994651606716,"x_hom_ref":103,"x_het":142,"x_hom_alt":106,"y_depth_mean":0.0},
+{"sample":"sample_1013","sex":"female","gt_depth_mean":26.93828584611844,"depth_mean":26.86729176254025,"ab_mean":0.5310374256995483,"pct_other_alleles":0.0,"n_hom_ref":4468,"n_het":6564,"n_hom_alt":5636,"n_unknown":716,"n_known":16668,"p_middling_ab":0.02017810844324202,"x_depth_mean":1.958126501808281,"x_hom_ref":108,"x_het":136,"x_hom_alt":106,"y_depth_mean":0.0},
+{"sample":"sample_1014","sex":"male","gt_depth_mean":24.4097017938513,"depth_mean":24.34370685687982,"ab_mean":0.5309032551216714,"pct_other_alleles":0.0,"n_hom_ref":4287,"n_het":6443,"n_hom_alt":5502,"n_unknown":1152,"n_known":16232,"p_middling_ab":0.03753737127671354,"x_depth_mean":1.046006645062964,"x_hom_ref":164,"x_het":0,"x_hom_alt":157,"y_depth_mean":1.005064852513404},
+{"sample":"sample_1015","sex":"male","gt_depth_mean":28.77136924674126,"depth_mean":28.69546709618042,"ab_mean":0.5328717042942831,"pct_other_alleles":0.0,"n_hom_ref":4388,"n_het":6758,"n_hom_alt":5591,"n_unknown":647,"n_known":16737,"p_middling_ab":0.0191276871861423,"x_depth_mean":1.018991623413279,"x_hom_ref":161,"x_het":1,"x_hom_alt":181,"y_depth_mean":0.968555456213574},
+{"sample":"sample_1016","sex":"male","gt_depth_mean":29.3946594382607,"depth_mean":29.31856879889562,"ab_mean":0.5324085894429523,"pct_other_alleles":0.0,"n_hom_ref":4452,"n_het":6621,"n_hom_alt":5654,"n_unknown":657,"n_known":16727,"p_middling_ab":0.02023333145465818,"x_depth_mean":0.9881469399424058,"x_hom_ref":161,"x_het":1,"x_hom_alt":184,"y_depth_mean":0.9768538320573499},
+{"sample":"sample_1017","sex":"female","gt_depth_mean":24.62859779661996,"depth_mean":24.56270133456048,"ab_mean":0.5292832040682848,"pct_other_alleles":0.0,"n_hom_ref":4364,"n_het":6634,"n_hom_alt":5499,"n_unknown":887,"n_known":16497,"p_middling_ab":0.02359020444843855,"x_depth_mean":1.961788176209281,"x_hom_ref":109,"x_het":124,"x_hom_alt":115,"y_depth_mean":0.0},
+{"sample":"sample_1018","sex":"male","gt_depth_mean":29.94221120018462,"depth_mean":29.86470317533353,"ab_mean":0.5350771529987138,"pct_other_alleles":0.0,"n_hom_ref":4355,"n_het":6594,"n_hom_alt":5674,"n_unknown":761,"n_known":16623,"p_middling_ab":0.02566976796323282,"x_depth_mean":1.006906167787788,"x_hom_ref":170,"x_het":0,"x_hom_alt":179,"y_depth_mean":0.9529467661078217},
+{"sample":"sample_1019","sex":"female","gt_depth_mean":25.79126773560965,"depth_mean":25.72313621721123,"ab_mean":0.5223676467512927,"pct_other_alleles":0.0,"n_hom_ref":4548,"n_het":6622,"n_hom_alt":5461,"n_unknown":753,"n_known":16631,"p_middling_ab":0.02161188653759568,"x_depth_mean":1.993715666580399,"x_hom_ref":101,"x_het":116,"x_hom_alt":135,"y_depth_mean":0.0},
+{"sample":"sample_1020","sex":"male","gt_depth_mean":30.88828007844045,"depth_mean":30.8066037735851,"ab_mean":0.5266848982299123,"pct_other_alleles":0.0,"n_hom_ref":4511,"n_het":6542,"n_hom_alt":5591,"n_unknown":740,"n_known":16644,"p_middling_ab":0.02752293577981652,"x_depth_mean":1.028067079162549,"x_hom_ref":147,"x_het":0,"x_hom_alt":188,"y_depth_mean":1.001458587359946},
+{"sample":"sample_1021","sex":"female","gt_depth_mean":25.76643977849563,"depth_mean":25.69592728946167,"ab_mean":0.5263682178038454,"pct_other_alleles":0.0,"n_hom_ref":4571,"n_het":6517,"n_hom_alt":5549,"n_unknown":747,"n_known":16637,"p_middling_ab":0.01968082106806519,"x_depth_mean":2.00459059283018,"x_hom_ref":107,"x_het":111,"x_hom_alt":126,"y_depth_mean":0.0},
+{"sample":"sample_1022","sex":"male","gt_depth_mean":25.75643096089524,"depth_mean":25.68862172112289,"ab_mean":0.5279908200730236,"pct_other_alleles":0.0,"n_hom_ref":4452,"n_het":6657,"n_hom_alt":5497,"n_unknown":778,"n_known":16606,"p_middling_ab":0.02221722256594859,"x_depth_mean":1.009456630053852,"x_hom_ref":157,"x_het":0,"x_hom_alt":174,"y_depth_mean":1.070467745057107},
+{"sample":"sample_1023","sex":"female","gt_depth_mean":25.64005998039106,"depth_mean":25.57368844914864,"ab_mean":0.5312466256272266,"pct_other_alleles":0.0,"n_hom_ref":4432,"n_het":6545,"n_hom_alt":5626,"n_unknown":781,"n_known":16603,"p_middling_ab":0.0199018999830862,"x_depth_mean":1.988410112318191,"x_hom_ref":110,"x_het":127,"x_hom_alt":115,"y_depth_mean":0.0},
+{"sample":"sample_1024","sex":"male","gt_depth_mean":30.38035642193902,"depth_mean":30.3017142199724,"ab_mean":0.5317544959958405,"pct_other_alleles":0.0,"n_hom_ref":4416,"n_het":6774,"n_hom_alt":5594,"n_unknown":600,"n_known":16784,"p_middling_ab":0.01829681499887057,"x_depth_mean":1.01422444068987,"x_hom_ref":172,"x_het":0,"x_hom_alt":180,"y_depth_mean":1.072121344432525},
+{"sample":"sample_1028","sex":"male","gt_depth_mean":30.68625641617163,"depth_mean":30.60682236539343,"ab_mean":0.5274442930691587,"pct_other_alleles":0.0,"n_hom_ref":4433,"n_het":6795,"n_hom_alt":5519,"n_unknown":637,"n_known":16747,"p_middling_ab":0.02161188653759568,"x_depth_mean":0.9941650815012338,"x_hom_ref":169,"x_het":1,"x_hom_alt":177,"y_depth_mean":1.064537368900149},
+{"sample":"sample_1029","sex":"male","gt_depth_mean":30.6428859795836,"depth_mean":30.56356419696294,"ab_mean":0.5302250527217321,"pct_other_alleles":0.0,"n_hom_ref":4474,"n_het":6720,"n_hom_alt":5607,"n_unknown":583,"n_known":16801,"p_middling_ab":0.01713122632441906,"x_depth_mean":1.02609554323902,"x_hom_ref":173,"x_het":0,"x_hom_alt":175,"y_depth_mean":1.048639261809177},
+{"sample":"sample_1030","sex":"female","gt_depth_mean":29.28690084789766,"depth_mean":29.20806488725266,"ab_mean":0.5327657985340863,"pct_other_alleles":0.0,"n_hom_ref":4364,"n_het":6816,"n_hom_alt":5582,"n_unknown":622,"n_known":16762,"p_middling_ab":0.0192936928805145,"x_depth_mean":1.989382811293244,"x_hom_ref":114,"x_het":118,"x_hom_alt":118,"y_depth_mean":0.0},
+{"sample":"sample_1031","sex":"female","gt_depth_mean":26.61654265443847,"depth_mean":26.54521398987568,"ab_mean":0.5291729730035839,"pct_other_alleles":0.0,"n_hom_ref":4459,"n_het":6703,"n_hom_alt":5549,"n_unknown":673,"n_known":16711,"p_middling_ab":0.01574000679424754,"x_depth_mean":1.963918753512883,"x_hom_ref":116,"x_het":103,"x_hom_alt":133,"y_depth_mean":0.0},
+{"sample":"sample_1032","sex":"male","gt_depth_mean":29.74088601753577,"depth_mean":29.65905430280732,"ab_mean":0.5309669761586596,"pct_other_alleles":0.0,"n_hom_ref":4525,"n_het":6554,"n_hom_alt":5665,"n_unknown":640,"n_known":16744,"p_middling_ab":0.02282181000562114,"x_depth_mean":1.008712382755223,"x_hom_ref":171,"x_het":0,"x_hom_alt":174,"y_depth_mean":1.035611379628695},
+{"sample":"sample_1033","sex":"female","gt_depth_mean":30.09216217774953,"depth_mean":30.01426599171651,"ab_mean":0.5254936623821344,"pct_other_alleles":0.0,"n_hom_ref":4511,"n_het":6794,"n_hom_alt":5502,"n_unknown":577,"n_known":16807,"p_middling_ab":0.01752006329829321,"x_depth_mean":1.961776311066852,"x_hom_ref":112,"x_het":107,"x_hom_alt":133,"y_depth_mean":0.0},
+{"sample":"sample_1045","sex":"female","gt_depth_mean":28.43067251124696,"depth_mean":28.35544178554994,"ab_mean":0.5307921867235017,"pct_other_alleles":0.0,"n_hom_ref":4113,"n_het":6634,"n_hom_alt":5415,"n_unknown":1222,"n_known":16162,"p_middling_ab":0.04739985752643981,"x_depth_mean":1.941853859484157,"x_hom_ref":109,"x_het":122,"x_hom_alt":110,"y_depth_mean":0.0},
+{"sample":"sample_1046-duplicate","sex":"female","gt_depth_mean":51.44131049201126,"depth_mean":51.30223193741362,"ab_mean":0.5304202577578258,"pct_other_alleles":0.0,"n_hom_ref":4367,"n_het":6722,"n_hom_alt":5575,"n_unknown":720,"n_known":16664,"p_middling_ab":0.01137397634212921,"x_depth_mean":1.927364035963952,"x_hom_ref":101,"x_het":151,"x_hom_alt":97,"y_depth_mean":0.0},
+{"sample":"sample_1046","sex":"female","gt_depth_mean":27.09062067374244,"depth_mean":27.01673953060281,"ab_mean":0.5304020069561686,"pct_other_alleles":0.0,"n_hom_ref":4563,"n_het":6442,"n_hom_alt":5682,"n_unknown":697,"n_known":16687,"p_middling_ab":0.01862933273117308,"x_depth_mean":1.969876186375086,"x_hom_ref":106,"x_het":151,"x_hom_alt":99,"y_depth_mean":0.0},
+{"sample":"sample_1047","sex":"male","gt_depth_mean":22.63829909993074,"depth_mean":22.57282558674635,"ab_mean":0.5332270089315243,"pct_other_alleles":0.0,"n_hom_ref":4374,"n_het":6516,"n_hom_alt":5604,"n_unknown":890,"n_known":16494,"p_middling_ab":0.01846310202698888,"x_depth_mean":1.066797028912372,"x_hom_ref":156,"x_het":0,"x_hom_alt":163,"y_depth_mean":1.133771868344349},
+{"sample":"sample_11","sex":"female","gt_depth_mean":24.29963086861234,"depth_mean":24.23561895996317,"ab_mean":0.5326621131073407,"pct_other_alleles":0.0,"n_hom_ref":4907,"n_het":5764,"n_hom_alt":6066,"n_unknown":647,"n_known":16737,"p_middling_ab":0.01546129013988786,"x_depth_mean":1.963040084156284,"x_hom_ref":107,"x_het":123,"x_hom_alt":118,"y_depth_mean":0.0},
+{"sample":"sample_12","sex":"male","gt_depth_mean":30.69862144546327,"depth_mean":30.61591118269682,"ab_mean":0.5345016510540105,"pct_other_alleles":0.0,"n_hom_ref":4798,"n_het":5771,"n_hom_alt":6093,"n_unknown":722,"n_known":16662,"p_middling_ab":0.02463109465297649,"x_depth_mean":1.00632380766902,"x_hom_ref":178,"x_het":0,"x_hom_alt":167,"y_depth_mean":0.9521850771930686},
+{"sample":"sample_13","sex":"female","gt_depth_mean":21.7376406114795,"depth_mean":21.67751955821433,"ab_mean":0.5328979125386787,"pct_other_alleles":0.0,"n_hom_ref":4862,"n_het":5529,"n_hom_alt":6095,"n_unknown":898,"n_known":16486,"p_middling_ab":0.02260204655346902,"x_depth_mean":1.952518649408194,"x_hom_ref":112,"x_het":120,"x_hom_alt":111,"y_depth_mean":0.0}]
+var input = [{"expected_relatedness":0.0,"text":["sample_1004<br>sample_1006","sample_1004<br>sample_1007","sample_1004<br>sample_1008","sample_1004<br>sample_1009","sample_1004<br>sample_1010","sample_1004<br>sample_1011","sample_1004<br>sample_1012","sample_1004<br>sample_1013","sample_1004<br>sample_1014","sample_1004<br>sample_1015","sample_1004<br>sample_1016","sample_1004<br>sample_1017","sample_1004<br>sample_1018","sample_1004<br>sample_1019","sample_1004<br>sample_1020","sample_1004<br>sample_1021","sample_1004<br>sample_1022","sample_1004<br>sample_1023","sample_1004<br>sample_1024","sample_1004<br>sample_1028","sample_1004<br>sample_1029","sample_1004<br>sample_1030","sample_1004<br>sample_1031","sample_1004<br>sample_1032","sample_1004<br>sample_1033","sample_1004<br>sample_1045","sample_1004<br>sample_1046-duplicate","sample_1004<br>sample_1046","sample_1004<br>sample_1047","sample_1004<br>sample_11","sample_1004<br>sample_12","sample_1004<br>sample_13","sample_1005<br>sample_1007","sample_1005<br>sample_1008","sample_1005<br>sample_1009","sample_1005<br>sample_1010","sample_1005<br>sample_1011","sample_1005<br>sample_1012","sample_1005<br>sample_1013","sample_1005<br>sample_1014","sample_1005<br>sample_1015","sample_1005<br>sample_1016","sample_1005<br>sample_1017","sample_1005<br>sample_1018","sample_1005<br>sample_1019","sample_1005<br>sample_1020","sample_1005<br>sample_1021","sample_1005<br>sample_1022","sample_1005<br>sample_1023","sample_1005<br>sample_1024","sample_1005<br>sample_1028","sample_1005<br>sample_1029","sample_1005<br>sample_1030","sample_1005<br>sample_1031","sample_1005<br>sample_1032","sample_1005<br>sample_1033","sample_1005<br>sample_1045","sample_1005<br>sample_1046-duplicate","sample_1005<br>sample_1046","sample_1005<br>sample_1047","sample_1005<br>sample_11","sample_1005<br>sample_12","sample_1005<br>sample_13","sample_1006<br>sample_1007","sample_1006<br>sample_1008","sample_1006<br>sample_1009","sample_1006<br>sample_1010","sample_1006<br>sample_1011","sample_1006<br>sample_1012","sample_1006<br>sample_1013","sample_1006<br>sample_1014","sample_1006<br>sample_1015","sample_1006<br>sample_1016","sample_1006<br>sample_1017","sample_1006<br>sample_1018","sample_1006<br>sample_1019","sample_1006<br>sample_1020","sample_1006<br>sample_1021","sample_1006<br>sample_1022","sample_1006<br>sample_1023","sample_1006<br>sample_1024","sample_1006<br>sample_1028","sample_1006<br>sample_1029","sample_1006<br>sample_1030","sample_1006<br>sample_1031","sample_1006<br>sample_1032","sample_1006<br>sample_1033","sample_1006<br>sample_1045","sample_1006<br>sample_1046-duplicate","sample_1006<br>sample_1046","sample_1006<br>sample_1047","sample_1006<br>sample_11","sample_1006<br>sample_12","sample_1006<br>sample_13","sample_1007<br>sample_1010","sample_1007<br>sample_1011","sample_1007<br>sample_1012","sample_1007<br>sample_1013","sample_1007<br>sample_1014","sample_1007<br>sample_1015","sample_1007<br>sample_1016","sample_1007<br>sample_1017","sample_1007<br>sample_1018","sample_1007<br>sample_1019","sample_1007<br>sample_1020","sample_1007<br>sample_1021","sample_1007<br>sample_1022","sample_1007<br>sample_1023","sample_1007<br>sample_1024","sample_1007<br>sample_1028","sample_1007<br>sample_1029","sample_1007<br>sample_1030","sample_1007<br>sample_1031","sample_1007<br>sample_1032","sample_1007<br>sample_1033","sample_1007<br>sample_1045","sample_1007<br>sample_1046-duplicate","sample_1007<br>sample_1046","sample_1007<br>sample_1047","sample_1007<br>sample_11","sample_1007<br>sample_12","sample_1007<br>sample_13","sample_1008<br>sample_1009","sample_1008<br>sample_1010","sample_1008<br>sample_1011","sample_1008<br>sample_1012","sample_1008<br>sample_1013","sample_1008<br>sample_1014","sample_1008<br>sample_1015","sample_1008<br>sample_1016","sample_1008<br>sample_1017","sample_1008<br>sample_1018","sample_1008<br>sample_1019","sample_1008<br>sample_1020","sample_1008<br>sample_1021","sample_1008<br>sample_1022","sample_1008<br>sample_1023","sample_1008<br>sample_1024","sample_1008<br>sample_1028","sample_1008<br>sample_1029","sample_1008<br>sample_1030","sample_1008<br>sample_1031","sample_1008<br>sample_1032","sample_1008<br>sample_1033","sample_1008<br>sample_1045","sample_1008<br>sample_1046-duplicate","sample_1008<br>sample_1046","sample_1008<br>sample_1047","sample_1008<br>sample_11","sample_1008<br>sample_12","sample_1008<br>sample_13","sample_1009<br>sample_1010","sample_1009<br>sample_1011","sample_1009<br>sample_1012","sample_1009<br>sample_1013","sample_1009<br>sample_1014","sample_1009<br>sample_1015","sample_1009<br>sample_1016","sample_1009<br>sample_1017","sample_1009<br>sample_1018","sample_1009<br>sample_1019","sample_1009<br>sample_1020","sample_1009<br>sample_1021","sample_1009<br>sample_1022","sample_1009<br>sample_1023","sample_1009<br>sample_1024","sample_1009<br>sample_1028","sample_1009<br>sample_1029","sample_1009<br>sample_1030","sample_1009<br>sample_1031","sample_1009<br>sample_1032","sample_1009<br>sample_1033","sample_1009<br>sample_1045","sample_1009<br>sample_1046-duplicate","sample_1009<br>sample_1046","sample_1009<br>sample_1047","sample_1009<br>sample_11","sample_1009<br>sample_12","sample_1009<br>sample_13","sample_1010<br>sample_1013","sample_1010<br>sample_1014","sample_1010<br>sample_1015","sample_1010<br>sample_1016","sample_1010<br>sample_1017","sample_1010<br>sample_1018","sample_1010<br>sample_1019","sample_1010<br>sample_1020","sample_1010<br>sample_1021","sample_1010<br>sample_1022","sample_1010<br>sample_1023","sample_1010<br>sample_1024","sample_1010<br>sample_1028","sample_1010<br>sample_1029","sample_1010<br>sample_1030","sample_1010<br>sample_1031","sample_1010<br>sample_1032","sample_1010<br>sample_1033","sample_1010<br>sample_1045","sample_1010<br>sample_1046-duplicate","sample_1010<br>sample_1046","sample_1010<br>sample_1047","sample_1010<br>sample_11","sample_1010<br>sample_12","sample_1010<br>sample_13","sample_1011<br>sample_1012","sample_1011<br>sample_1013","sample_1011<br>sample_1014","sample_1011<br>sample_1015","sample_1011<br>sample_1016","sample_1011<br>sample_1017","sample_1011<br>sample_1018","sample_1011<br>sample_1019","sample_1011<br>sample_1020","sample_1011<br>sample_1021","sample_1011<br>sample_1022","sample_1011<br>sample_1023","sample_1011<br>sample_1024","sample_1011<br>sample_1028","sample_1011<br>sample_1029","sample_1011<br>sample_1030","sample_1011<br>sample_1031","sample_1011<br>sample_1032","sample_1011<br>sample_1033","sample_1011<br>sample_1045","sample_1011<br>sample_1046-duplicate","sample_1011<br>sample_1046","sample_1011<br>sample_1047","sample_1011<br>sample_11","sample_1011<br>sample_12","sample_1011<br>sample_13","sample_1012<br>sample_1013","sample_1012<br>sample_1014","sample_1012<br>sample_1015","sample_1012<br>sample_1016","sample_1012<br>sample_1017","sample_1012<br>sample_1018","sample_1012<br>sample_1019","sample_1012<br>sample_1020","sample_1012<br>sample_1021","sample_1012<br>sample_1022","sample_1012<br>sample_1023","sample_1012<br>sample_1024","sample_1012<br>sample_1028","sample_1012<br>sample_1029","sample_1012<br>sample_1030","sample_1012<br>sample_1031","sample_1012<br>sample_1032","sample_1012<br>sample_1033","sample_1012<br>sample_1045","sample_1012<br>sample_1046-duplicate","sample_1012<br>sample_1046","sample_1012<br>sample_1047","sample_1012<br>sample_11","sample_1012<br>sample_12","sample_1012<br>sample_13","sample_1013<br>sample_1015","sample_1013<br>sample_1016","sample_1013<br>sample_1017","sample_1013<br>sample_1018","sample_1013<br>sample_1019","sample_1013<br>sample_1020","sample_1013<br>sample_1021","sample_1013<br>sample_1022","sample_1013<br>sample_1023","sample_1013<br>sample_1024","sample_1013<br>sample_1028","sample_1013<br>sample_1029","sample_1013<br>sample_1030","sample_1013<br>sample_1031","sample_1013<br>sample_1032","sample_1013<br>sample_1033","sample_1013<br>sample_1045","sample_1013<br>sample_1046-duplicate","sample_1013<br>sample_1046","sample_1013<br>sample_1047","sample_1013<br>sample_11","sample_1013<br>sample_12","sample_1013<br>sample_13","sample_1014<br>sample_1016","sample_1014<br>sample_1017","sample_1014<br>sample_1018","sample_1014<br>sample_1019","sample_1014<br>sample_1020","sample_1014<br>sample_1021","sample_1014<br>sample_1022","sample_1014<br>sample_1023","sample_1014<br>sample_1024","sample_1014<br>sample_1028","sample_1014<br>sample_1029","sample_1014<br>sample_1030","sample_1014<br>sample_1031","sample_1014<br>sample_1032","sample_1014<br>sample_1033","sample_1014<br>sample_1045","sample_1014<br>sample_1046-duplicate","sample_1014<br>sample_1046","sample_1014<br>sample_1047","sample_1014<br>sample_11","sample_1014<br>sample_12","sample_1014<br>sample_13","sample_1015<br>sample_1016","sample_1015<br>sample_1017","sample_1015<br>sample_1018","sample_1015<br>sample_1019","sample_1015<br>sample_1020","sample_1015<br>sample_1021","sample_1015<br>sample_1022","sample_1015<br>sample_1023","sample_1015<br>sample_1024","sample_1015<br>sample_1028","sample_1015<br>sample_1029","sample_1015<br>sample_1030","sample_1015<br>sample_1031","sample_1015<br>sample_1032","sample_1015<br>sample_1033","sample_1015<br>sample_1045","sample_1015<br>sample_1046-duplicate","sample_1015<br>sample_1046","sample_1015<br>sample_1047","sample_1015<br>sample_11","sample_1015<br>sample_12","sample_1015<br>sample_13","sample_1016<br>sample_1019","sample_1016<br>sample_1020","sample_1016<br>sample_1021","sample_1016<br>sample_1022","sample_1016<br>sample_1023","sample_1016<br>sample_1024","sample_1016<br>sample_1028","sample_1016<br>sample_1029","sample_1016<br>sample_1030","sample_1016<br>sample_1031","sample_1016<br>sample_1032","sample_1016<br>sample_1033","sample_1016<br>sample_1045","sample_1016<br>sample_1046-duplicate","sample_1016<br>sample_1046","sample_1016<br>sample_1047","sample_1016<br>sample_11","sample_1016<br>sample_12","sample_1016<br>sample_13","sample_1017<br>sample_1018","sample_1017<br>sample_1019","sample_1017<br>sample_1020","sample_1017<br>sample_1021","sample_1017<br>sample_1022","sample_1017<br>sample_1023","sample_1017<br>sample_1024","sample_1017<br>sample_1028","sample_1017<br>sample_1029","sample_1017<br>sample_1030","sample_1017<br>sample_1031","sample_1017<br>sample_1032","sample_1017<br>sample_1033","sample_1017<br>sample_1045","sample_1017<br>sample_1046-duplicate","sample_1017<br>sample_1046","sample_1017<br>sample_1047","sample_1017<br>sample_11","sample_1017<br>sample_12","sample_1017<br>sample_13","sample_1018<br>sample_1019","sample_1018<br>sample_1020","sample_1018<br>sample_1021","sample_1018<br>sample_1022","sample_1018<br>sample_1023","sample_1018<br>sample_1024","sample_1018<br>sample_1028","sample_1018<br>sample_1029","sample_1018<br>sample_1030","sample_1018<br>sample_1031","sample_1018<br>sample_1032","sample_1018<br>sample_1033","sample_1018<br>sample_1045","sample_1018<br>sample_1046-duplicate","sample_1018<br>sample_1046","sample_1018<br>sample_1047","sample_1018<br>sample_11","sample_1018<br>sample_12","sample_1018<br>sample_13","sample_1019<br>sample_1022","sample_1019<br>sample_1023","sample_1019<br>sample_1024","sample_1019<br>sample_1028","sample_1019<br>sample_1029","sample_1019<br>sample_1030","sample_1019<br>sample_1031","sample_1019<br>sample_1032","sample_1019<br>sample_1033","sample_1019<br>sample_1045","sample_1019<br>sample_1046-duplicate","sample_1019<br>sample_1046","sample_1019<br>sample_1047","sample_1019<br>sample_11","sample_1019<br>sample_12","sample_1019<br>sample_13","sample_1020<br>sample_1021","sample_1020<br>sample_1022","sample_1020<br>sample_1023","sample_1020<br>sample_1024","sample_1020<br>sample_1028","sample_1020<br>sample_1029","sample_1020<br>sample_1030","sample_1020<br>sample_1031","sample_1020<br>sample_1032","sample_1020<br>sample_1033","sample_1020<br>sample_1045","sample_1020<br>sample_1046-duplicate","sample_1020<br>sample_1046","sample_1020<br>sample_1047","sample_1020<br>sample_11","sample_1020<br>sample_12","sample_1020<br>sample_13","sample_1021<br>sample_1022","sample_1021<br>sample_1023","sample_1021<br>sample_1024","sample_1021<br>sample_1028","sample_1021<br>sample_1029","sample_1021<br>sample_1030","sample_1021<br>sample_1031","sample_1021<br>sample_1032","sample_1021<br>sample_1033","sample_1021<br>sample_1045","sample_1021<br>sample_1046-duplicate","sample_1021<br>sample_1046","sample_1021<br>sample_1047","sample_1021<br>sample_11","sample_1021<br>sample_12","sample_1021<br>sample_13","sample_1022<br>sample_1023","sample_1022<br>sample_1028","sample_1022<br>sample_1029","sample_1022<br>sample_1030","sample_1022<br>sample_1031","sample_1022<br>sample_1032","sample_1022<br>sample_1033","sample_1022<br>sample_1045","sample_1022<br>sample_1046-duplicate","sample_1022<br>sample_1046","sample_1022<br>sample_1047","sample_1022<br>sample_11","sample_1022<br>sample_12","sample_1022<br>sample_13","sample_1023<br>sample_1028","sample_1023<br>sample_1029","sample_1023<br>sample_1030","sample_1023<br>sample_1031","sample_1023<br>sample_1032","sample_1023<br>sample_1033","sample_1023<br>sample_1045","sample_1023<br>sample_1046-duplicate","sample_1023<br>sample_1046","sample_1023<br>sample_1047","sample_1023<br>sample_11","sample_1023<br>sample_12","sample_1023<br>sample_13","sample_1024<br>sample_1028","sample_1024<br>sample_1029","sample_1024<br>sample_1030","sample_1024<br>sample_1031","sample_1024<br>sample_1032","sample_1024<br>sample_1033","sample_1024<br>sample_1045","sample_1024<br>sample_1046-duplicate","sample_1024<br>sample_1046","sample_1024<br>sample_1047","sample_1024<br>sample_11","sample_1024<br>sample_12","sample_1024<br>sample_13","sample_1028<br>sample_1030","sample_1028<br>sample_1031","sample_1028<br>sample_1032","sample_1028<br>sample_1033","sample_1028<br>sample_1045","sample_1028<br>sample_1046-duplicate","sample_1028<br>sample_1046","sample_1028<br>sample_1047","sample_1028<br>sample_11","sample_1028<br>sample_12","sample_1028<br>sample_13","sample_1029<br>sample_1031","sample_1029<br>sample_1032","sample_1029<br>sample_1033","sample_1029<br>sample_1045","sample_1029<br>sample_1046-duplicate","sample_1029<br>sample_1046","sample_1029<br>sample_1047","sample_1029<br>sample_11","sample_1029<br>sample_12","sample_1029<br>sample_13","sample_1030<br>sample_1031","sample_1030<br>sample_1032","sample_1030<br>sample_1033","sample_1030<br>sample_1045","sample_1030<br>sample_1046-duplicate","sample_1030<br>sample_1046","sample_1030<br>sample_1047","sample_1030<br>sample_11","sample_1030<br>sample_12","sample_1030<br>sample_13","sample_1031<br>sample_1045","sample_1031<br>sample_1046-duplicate","sample_1031<br>sample_1046","sample_1031<br>sample_1047","sample_1031<br>sample_11","sample_1031<br>sample_12","sample_1031<br>sample_13","sample_1032<br>sample_1033","sample_1032<br>sample_1045","sample_1032<br>sample_1046-duplicate","sample_1032<br>sample_1046","sample_1032<br>sample_1047","sample_1032<br>sample_11","sample_1032<br>sample_12","sample_1032<br>sample_13","sample_1033<br>sample_1045","sample_1033<br>sample_1046-duplicate","sample_1033<br>sample_1046","sample_1033<br>sample_1047","sample_1033<br>sample_11","sample_1033<br>sample_12","sample_1033<br>sample_13","sample_1045<br>sample_1046-duplicate","sample_1045<br>sample_1046","sample_1045<br>sample_1047","sample_1045<br>sample_11","sample_1045<br>sample_12","sample_1045<br>sample_13","sample_1046-duplicate<br>sample_1046","sample_1046-duplicate<br>sample_1047","sample_1046-duplicate<br>sample_11","sample_1046-duplicate<br>sample_12","sample_1046-duplicate<br>sample_13","sample_1046<br>sample_1047","sample_1046<br>sample_11","sample_1046<br>sample_12","sample_1046<br>sample_13","sample_1047<br>sample_11","sample_1047<br>sample_12","sample_1047<br>sample_13","sample_11<br>sample_12"],"ibs0":[1243,1201,1250,1212,1221,1255,1249,1196,1205,1304,1300,1307,1219,1200,1231,1284,1256,1271,1262,1326,1320,1316,1264,1305,1305,1115,1293,1382,1282,1892,1837,1817,1325,1359,1334,1327,1389,1360,1278,1268,1347,1384,1356,1310,1256,1344,1321,1368,1357,1339,1416,1420,1377,1320,1370,1412,1167,1332,1430,1360,1959,1863,1871,1359,1298,1257,1233,1263,1299,1274,1223,1274,1236,1226,1204,1259,1278,1343,1276,1418,1366,1319,1333,1333,1258,1273,1358,1124,1262,1348,1309,1917,1803,1847,1210,1307,1255,1299,1168,1215,1287,1307,1231,1197,1226,1270,1242,1315,1278,1320,1355,1280,1229,1304,1334,1080,1298,1386,1331,1888,1830,1851,1306,1237,1335,1232,1264,1194,1245,1370,1305,1321,1201,1237,1290,1266,1316,1242,1265,1337,1323,1238,1332,1335,1078,1233,1327,1276,1879,1849,1833,1210,1259,1262,1236,1133,1148,1302,1227,1200,1213,1238,1302,1256,1280,1280,1375,1308,1220,1224,1285,1332,1067,1258,1353,1236,1842,1809,1771,1240,1151,1214,1213,1164,1163,1229,1239,1262,1228,1272,1263,1279,1264,1238,1226,1274,1297,1116,1311,1391,1300,1875,1782,1817,1269,1214,1156,1241,1328,1224,1275,1251,1262,1297,1292,1235,1299,1302,1316,1245,1220,1300,1321,1135,1272,1362,1313,1849,1803,1853,1224,1181,1229,1274,1186,1237,1250,1302,1284,1262,1356,1313,1280,1247,1286,1346,1308,1354,1109,1306,1382,1284,1865,1861,1841,1206,1285,1243,1210,1277,1271,1273,1300,1317,1353,1307,1298,1268,1325,1341,1354,1169,1313,1400,1303,1884,1852,1851,1212,1155,1127,1153,1173,1241,1195,1250,1225,1195,1226,1156,1189,1220,1247,1041,1186,1258,1275,1789,1706,1735,1264,1265,1227,1239,1305,1254,1200,1286,1245,1268,1312,1263,1233,1266,1252,1126,1246,1330,1288,1897,1786,1867,1282,1352,1308,1270,1368,1320,1262,1278,1314,1314,1333,1339,1173,1303,1387,1290,1862,1840,1863,1202,1227,1274,1272,1221,1275,1255,1189,1204,1252,1281,1296,1264,1104,1257,1337,1287,1817,1778,1785,1237,1292,1256,1213,1331,1280,1261,1291,1236,1204,1289,1310,1110,1261,1340,1227,1856,1791,1759,1253,1267,1272,1322,1261,1201,1227,1289,1295,1087,1172,1246,1216,1876,1888,1854,1298,1252,1316,1288,1317,1322,1217,1276,1377,1324,1129,1283,1364,1304,1853,1885,1835,1385,1353,1343,1359,1352,1239,1313,1346,1402,1150,1289,1364,1268,1879,1861,1831,1330,1267,1346,1306,1258,1353,1245,1147,1262,1340,1263,1792,1847,1837,1237,1274,1265,1235,1306,1309,1179,1285,1373,1300,1873,1873,1855,1277,1328,1338,1231,1348,1319,1147,1269,1351,1308,1862,1874,1859,1297,1288,1239,1291,1101,1301,1387,1285,1855,1795,1830,1269,1297,1317,1102,1265,1359,1258,1903,1911,1906,1220,1293,1285,1095,1234,1314,1244,1837,1788,1801,1041,1201,1279,1250,1795,1767,1803,1320,1176,1328,1409,1309,1877,1829,1860,1107,1286,1363,1319,1845,1786,1798,0,0,1091,1747,1656,1710,0,6,1858,1761,1813,6,1967,1857,1916,1814,1746,1715,1126],"ibs2":[7529,7466,7372,7362,7400,7302,7440,7482,7291,7359,7318,7326,7400,7473,7512,7408,7459,7366,7487,7412,7467,7381,7397,7461,7333,7156,7311,7267,7340,6864,6758,6668,7401,7306,7293,7251,7278,7473,7355,7297,7451,7391,7378,7442,7534,7442,7332,7400,7308,7379,7394,7420,7461,7412,7361,7434,7313,7419,7383,7277,6741,6864,6723,7361,7295,7200,7436,7258,7381,7404,7235,7544,7261,7344,7369,7461,7390,7396,7385,7260,7339,7438,7344,7349,7503,7417,7417,7297,7409,7368,7261,6748,6786,6812,7516,7421,7409,7422,7337,7587,7351,7308,7372,7418,7413,7373,7302,7402,7436,7294,7384,7404,7407,7430,7386,7425,7456,7406,7342,6892,6881,6876,7302,7318,7290,7307,7312,7237,7402,7365,7256,7291,7381,7403,7206,7348,7298,7414,7347,7270,7302,7384,7443,7310,7247,7287,7244,7271,6704,6823,6828,7452,7488,7464,7278,7189,7473,7469,7299,7351,7387,7422,7421,7419,7321,7420,7249,7301,7371,7288,7431,7355,7264,7350,7283,7257,6885,6889,6705,7580,7335,7473,7539,7441,7633,7550,7493,7468,7475,7292,7438,7366,7451,7366,7407,7559,7406,7368,7319,7281,7229,6777,6804,6664,7429,7410,7340,7568,7434,7280,7398,7491,7395,7271,7321,7342,7467,7432,7462,7441,7345,7363,7400,7237,7175,7152,7383,6788,6690,6720,7409,7271,7477,7515,7522,7536,7384,7371,7357,7342,7217,7402,7460,7377,7389,7445,7445,7493,7428,7345,7308,7275,6774,6890,6708,7523,7470,7401,7479,7554,7508,7422,7351,7200,7316,7489,7439,7581,7445,7366,7437,7375,7446,7396,7228,6796,6854,6713,7330,7183,7270,7396,7477,7306,7404,7218,7283,7273,7384,7286,7414,7394,7358,7200,7228,7191,7210,6604,6654,6573,7384,7437,7405,7585,7562,7446,7510,7524,7620,7373,7441,7614,7558,7474,7540,7464,7336,7307,7269,6864,6777,6713,7569,7394,7530,7369,7319,7354,7374,7330,7395,7382,7325,7347,7300,7375,7347,7358,6817,6767,6883,7463,7352,7357,7362,7300,7349,7370,7448,7469,7362,7356,7327,7398,7256,7276,7243,7172,6805,6841,6669,7464,7405,7394,7417,7315,7406,7385,7417,7386,7374,7573,7453,7346,7367,7339,7253,6883,6825,6772,7304,7345,7501,7484,7472,7497,7398,7452,7317,7364,7349,7334,7250,6736,6849,6728,7327,7464,7377,7506,7444,7415,7482,7549,7487,7428,7349,7423,7399,7281,6829,6814,6724,7411,7341,7450,7353,7396,7367,7265,7405,7449,7266,7273,7224,7226,6767,6737,6709,7239,7416,7401,7349,7541,7454,7446,7203,7401,7378,7254,6757,6744,6710,7521,7558,7358,7346,7376,7477,7312,7395,7358,7301,6779,6833,6739,7580,7485,7534,7426,7453,7492,7281,7432,7402,7355,6823,6789,6681,7605,7624,7336,7489,7427,7469,7415,7367,6847,6870,6715,7552,7509,7354,7469,7514,7488,7502,6759,6798,6635,7562,7404,7483,7369,7520,7503,7415,6918,6764,6620,7349,7393,7380,7247,6852,6857,6779,7360,7270,7333,7315,7329,6826,6924,6782,7367,7369,7339,7285,6925,6951,6767,9652,9631,7374,6596,6716,6637,16364,9611,6807,6848,6783,9622,6793,6834,6751,6842,6845,6771,8484],"shared_hets":[2748,2703,2584,2719,2685,2590,2684,2632,2616,2687,2615,2697,2627,2678,2658,2644,2711,2621,2732,2759,2738,2733,2673,2657,2692,2591,2663,2551,2611,2284,2230,2110,2681,2545,2670,2612,2588,2692,2554,2582,2708,2647,2690,2636,2670,2640,2544,2699,2584,2678,2715,2715,2769,2649,2589,2735,2638,2695,2572,2574,2198,2237,2107,2764,2618,2683,2740,2609,2718,2664,2612,2812,2600,2713,2648,2725,2665,2691,2719,2687,2768,2799,2722,2773,2792,2650,2800,2702,2753,2635,2644,2284,2248,2234,2787,2742,2731,2717,2661,2829,2687,2731,2676,2699,2683,2666,2697,2730,2776,2764,2765,2781,2730,2693,2784,2771,2804,2685,2716,2364,2333,2290,2676,2618,2567,2571,2548,2522,2661,2646,2601,2582,2586,2553,2503,2637,2580,2647,2651,2610,2666,2633,2632,2637,2573,2589,2479,2568,2150,2231,2160,2791,2793,2818,2679,2645,2788,2794,2748,2713,2745,2731,2754,2794,2702,2818,2803,2744,2780,2725,2741,2808,2741,2799,2666,2685,2379,2396,2234,2761,2639,2774,2739,2717,2756,2781,2713,2700,2768,2638,2758,2755,2750,2743,2728,2725,2784,2748,2744,2621,2635,2287,2269,2165,2669,2605,2577,2780,2669,2617,2631,2705,2622,2557,2642,2588,2742,2745,2716,2728,2639,2586,2726,2654,2581,2485,2667,2204,2160,2132,2629,2582,2736,2716,2745,2726,2662,2648,2616,2694,2619,2761,2769,2659,2739,2751,2667,2808,2754,2713,2591,2609,2243,2316,2165,2713,2678,2661,2650,2720,2643,2605,2659,2547,2681,2755,2661,2793,2722,2603,2743,2721,2725,2607,2560,2224,2263,2109,2647,2576,2551,2645,2659,2595,2680,2594,2664,2656,2684,2633,2718,2625,2713,2614,2616,2505,2617,2141,2180,2050,2691,2772,2691,2795,2773,2693,2759,2754,2862,2765,2779,2885,2805,2699,2828,2794,2703,2601,2669,2335,2256,2183,2769,2668,2709,2671,2646,2699,2705,2637,2740,2711,2592,2702,2705,2699,2590,2652,2229,2213,2214,2703,2691,2658,2669,2677,2686,2739,2764,2740,2750,2729,2653,2760,2702,2692,2582,2600,2294,2313,2127,2681,2638,2604,2670,2641,2724,2715,2714,2704,2640,2712,2756,2697,2681,2576,2576,2285,2234,2147,2664,2611,2761,2807,2729,2747,2691,2654,2684,2702,2644,2538,2579,2224,2309,2167,2586,2704,2628,2737,2739,2684,2711,2744,2675,2718,2696,2690,2577,2569,2234,2265,2134,2709,2625,2727,2717,2685,2678,2614,2608,2762,2643,2611,2481,2555,2198,2188,2101,2626,2774,2758,2772,2795,2722,2776,2685,2760,2652,2620,2216,2281,2182,2748,2750,2686,2627,2594,2768,2679,2693,2571,2607,2234,2267,2160,2856,2786,2880,2731,2720,2815,2712,2778,2655,2699,2278,2310,2189,2915,2889,2635,2822,2798,2825,2699,2721,2339,2329,2197,2794,2705,2725,2759,2786,2674,2722,2263,2302,2161,2817,2691,2836,2767,2826,2722,2726,2364,2283,2146,2684,2702,2594,2609,2271,2277,2170,2662,2618,2652,2544,2592,2211,2266,2129,2763,2743,2630,2678,2338,2329,2184,3264,3126,2704,2238,2282,2212,6426,3134,2293,2279,2204,3006,2201,2194,2098,2246,2235,2128,2298],"shared_hom_alts":[2781,2726,2797,2705,2703,2727,2773,2813,2715,2743,2739,2683,2778,2715,2778,2721,2740,2764,2755,2701,2726,2690,2711,2732,2655,2647,2678,2701,2770,2675,2675,2691,2729,2762,2689,2656,2707,2798,2803,2741,2767,2761,2738,2815,2765,2761,2749,2715,2762,2719,2711,2714,2736,2748,2750,2694,2744,2749,2777,2781,2651,2727,2728,2691,2748,2652,2697,2677,2718,2747,2689,2762,2725,2704,2755,2700,2736,2692,2698,2708,2667,2696,2688,2670,2715,2754,2647,2692,2709,2727,2690,2613,2694,2708,2738,2714,2733,2751,2733,2780,2710,2660,2756,2696,2739,2697,2674,2744,2708,2623,2691,2711,2688,2700,2648,2708,2729,2745,2729,2595,2672,2667,2697,2745,2760,2783,2803,2764,2778,2752,2720,2772,2731,2801,2720,2765,2762,2794,2736,2749,2747,2752,2794,2682,2751,2778,2797,2783,2631,2717,2737,2692,2716,2695,2696,2647,2753,2716,2620,2728,2649,2717,2668,2642,2722,2662,2588,2672,2691,2619,2684,2589,2646,2631,2654,2685,2584,2634,2620,2749,2718,2712,2737,2704,2792,2696,2730,2713,2685,2701,2707,2662,2716,2685,2673,2750,2630,2690,2617,2646,2634,2596,2651,2625,2767,2788,2774,2772,2756,2697,2775,2719,2784,2712,2684,2776,2717,2722,2778,2782,2703,2745,2692,2683,2664,2688,2763,2632,2640,2652,2795,2745,2801,2799,2811,2823,2706,2705,2738,2692,2715,2712,2753,2764,2741,2684,2750,2687,2750,2709,2737,2750,2665,2716,2729,2789,2785,2767,2820,2751,2824,2777,2738,2742,2701,2768,2796,2823,2761,2773,2730,2756,2766,2792,2759,2682,2720,2710,2721,2703,2765,2731,2812,2727,2727,2724,2679,2695,2755,2750,2730,2746,2692,2698,2720,2744,2720,2634,2680,2689,2756,2726,2800,2764,2805,2751,2768,2813,2790,2704,2748,2775,2774,2804,2716,2737,2699,2722,2733,2673,2706,2706,2740,2705,2791,2724,2766,2726,2713,2729,2725,2695,2749,2665,2710,2745,2771,2752,2697,2670,2768,2808,2689,2731,2695,2643,2712,2678,2700,2721,2730,2696,2709,2667,2696,2696,2724,2674,2646,2684,2717,2763,2776,2801,2770,2770,2757,2762,2759,2740,2760,2845,2722,2763,2777,2802,2774,2722,2736,2743,2610,2727,2663,2686,2699,2710,2683,2715,2602,2700,2713,2741,2691,2597,2636,2654,2698,2727,2753,2731,2729,2752,2800,2772,2787,2706,2712,2779,2806,2746,2635,2651,2674,2672,2726,2700,2662,2706,2707,2664,2741,2649,2679,2687,2711,2715,2676,2664,2701,2677,2702,2727,2695,2712,2738,2668,2649,2687,2721,2735,2643,2624,2658,2766,2824,2759,2735,2787,2718,2730,2741,2773,2737,2672,2712,2736,2725,2731,2734,2708,2724,2684,2701,2690,2719,2702,2642,2635,2667,2759,2739,2739,2667,2713,2679,2709,2706,2626,2673,2656,2781,2806,2661,2747,2748,2781,2804,2622,2672,2644,2794,2758,2657,2726,2765,2799,2802,2692,2677,2680,2721,2724,2756,2716,2668,2682,2702,2665,2727,2719,2753,2759,2667,2735,2737,2668,2657,2686,2661,2672,2690,2676,3736,3779,2792,2606,2647,2654,5572,3774,2658,2715,2712,3819,2684,2733,2733,2723,2722,2765,3559],"concordance":[0.05332610383629799,0.05887697637081146,0.05327354371547699,0.0512399710714817,0.04777594655752182,0.03892376646399498,0.04932735487818718,0.07551569491624832,0.05543438717722893,0.02421524748206139,0.02493273466825485,0.01254773605614901,0.06098654866218567,0.05768174305558205,0.05668161436915398,0.02757253497838974,0.04147716984152794,0.03982062637805939,0.04143497720360756,0.008878420107066631,0.01542600896209478,0.01040358748286963,0.03297891467809677,0.0218834076076746,0.00817884411662817,0.07700830698013306,0.01650224253535271,-0.01130044832825661,0.03695067390799522,-0.1989237666130066,-0.1791928261518478,-0.1691479831933975,0.0143558057025075,0.007829181849956512,0.003829321591183543,0.0003660992078948766,-0.01272173412144184,0.01395099237561226,0.04383318498730659,0.03725918009877205,0.01305669825524092,-0.001242236001417041,0.004728132393211126,0.03460514545440674,0.04632851108908653,0.01305669825524092,0.0192827545106411,-0.003820265643298626,0.008531816303730011,0.00732928141951561,-0.02192426100373268,-0.02247191034257412,-0.00322465063072741,0.01946296542882919,0.001774622942321002,-0.02362777106463909,0.07571560144424438,0.01524663716554642,-0.01472937036305666,0.0108850821852684,-0.2248447239398956,-0.1772848218679428,-0.1799467653036118,-0.004906414542347193,0.02747650071978569,0.02516411431133747,0.04228445887565613,0.02729573473334312,0.02169197425246239,0.03597252443432808,0.04416575655341148,0.03868402168154716,0.04573391005396843,0.0458265133202076,0.06272596120834351,0.03332722932100296,0.03253795951604843,0.001084598712623119,0.02655994147062302,-0.02313810586929321,-0.01174981892108917,0.01050915010273457,0.003976861946284771,0.0007230658084154129,0.03597252443432808,0.03759942203760147,-0.01254089456051588,0.08199445903301239,0.03344179317355156,0.00560376001521945,0.01301518455147743,-0.2207158356904984,-0.1648589968681335,-0.178235724568367,0.05820977315306664,0.01817190647125244,0.04052335023880005,0.02780301682651043,0.07215557992458344,0.06360167264938354,0.02471379190683365,0.008365157060325146,0.05342540517449379,0.05530122667551041,0.05215337127447128,0.02852989360690117,0.034564308822155,0.02071597240865231,0.02762129716575146,-0.003089223988354206,-0.003452662145718932,0.02743957750499249,0.04179538413882256,0.01671815291047096,-0.003635041881352663,0.1012003719806671,0.02416863478720188,-0.004906414542347193,0.01217517722398043,-0.21461021900177,-0.1795384287834167,-0.1880792230367661,0.01549963559955359,0.04960644245147705,0.01612614281475544,0.05705598369240761,0.04893238469958305,0.0683387890458107,0.05151135846972466,0.002135231392458081,0.02000363729894161,0.02313167229294777,0.06024537608027458,0.05848685279488564,0.02522977069020271,0.04238675534725189,0.02313167229294777,0.05541651695966721,0.03732560202479362,0.01337613724172115,0.01809387281537056,0.04973869025707245,0.02313167229294777,0.002181024989113212,0.1098799630999565,0.05596412718296051,0.02544483914971352,0.04122055694460869,-0.2005338072776794,-0.174555167555809,-0.1653024852275848,0.04978949204087257,0.03610503301024437,0.03118161857128143,0.04084609821438789,0.06947483867406845,0.0833333358168602,0.02042304910719395,0.03026987612247467,0.05981035903096199,0.04083501175045967,0.04394602403044701,0.0116703137755394,0.02370532415807247,0.02954048104584217,0.01859956234693527,-0.02954048104584217,0.01021152455359697,0.04576951265335083,0.03118161857128143,0.02078774571418762,-0.01367614883929491,0.0945521667599678,0.02097009494900703,-0.009482129476964474,0.03884026408195496,-0.2005835175514221,-0.1794310659170151,-0.1681254506111145,0.049240343272686,0.07614863663911819,0.05198608711361885,0.05692842602729797,0.06882665306329727,0.08530111610889435,0.0435817614197731,0.04612850025296211,0.03459637612104416,0.04191835969686508,0.02873878739774227,0.03313197940587997,0.01903715915977955,0.03441332653164864,0.03825736790895462,0.0404539629817009,0.03697602078318596,0.006589785683900118,0.08457987010478973,-0.0009152480051852763,-0.02489474602043629,0.006223686505109072,-0.2112392485141754,-0.1671242862939835,-0.1846970468759537,0.04103207215666771,0.06450457125902176,0.08396946638822556,0.05196201428771019,0.01791793666779995,0.04528095945715904,0.04031535610556602,0.0397363118827343,0.04658663272857666,0.02126509323716164,0.0181917417794466,0.05482888221740723,0.0213223434984684,0.02138068526983261,0.02616018615663052,0.05232037231326103,0.04739592596888542,0.02598100714385509,0.009087604470551014,0.07626961916685104,0.02152466401457787,-0.006450457032769918,0.02454757131636143,-0.1910052001476288,-0.1730872541666031,-0.1888550370931625,0.0620640330016613,0.06961105018854141,0.06134859472513199,0.04489357769489288,0.07983269542455673,0.06242175027728081,0.03772202879190445,0.01806474663317204,0.03063615038990974,0.03056212514638901,0.0005365766701288521,0.01538186334073544,0.03497010469436646,0.0482918992638588,0.03027588687837124,-0.001441701198928058,0.02396708913147449,-0.003816793905571103,0.09824561327695847,0.01739910244941711,-0.004829189740121365,0.0325523167848587,-0.1904847025871277,-0.179932028055191,-0.1704525202512741,0.0674297958612442,0.03814762085676193,0.05110019817948341,0.07097232341766357,0.03607397899031639,0.05043820291757584,0.0416291207075119,0.02510460279881954,0.01919658668339252,-0.0008938147802837193,0.02790360525250435,0.03566969931125641,0.05141526460647583,0.02000360377132893,0.01614620350301266,0.003998545929789543,0.07719298452138901,0.02511210739612579,-0.001419446431100368,0.02730192802846432,-0.1926898509263992,-0.174591913819313,-0.1760113537311554,0.05398036912083626,0.07146754115819931,0.09287531673908234,0.07782457768917084,0.08469647169113159,0.0445292629301548,0.06130616739392281,0.04071246832609177,0.04162122681736946,0.05543438717722893,0.05507088452577591,0.07960741221904755,0.06397673487663269,0.05561614036560059,0.03598691523075104,0.1137580797076225,0.06324972957372665,0.0414394773542881,0.03089785575866699,-0.1715739667415619,-0.1330425292253494,-0.1419483870267868,0.04077982529997826,0.0356428436934948,0.06188517436385155,0.05237136036157608,0.0348774828016758,0.04379167407751083,0.06694560497999191,0.04310499131679535,0.05365766584873199,0.03044029697775841,0.02217850089073181,0.04460766911506653,0.05550549551844597,0.0486496165394783,0.03853144496679306,0.08956602215766907,0.03713004663586617,0.01108925044536591,0.02808084338903427,-0.2005008012056351,-0.1548917889595032,-0.1838669329881668,0.03222852945327759,0.0001788588851923123,0.03153721243143082,0.03347280248999596,0.005332385189831257,0.01537361461669207,0.0342453345656395,0.03085428848862648,0.01737728342413902,0.0120742479339242,0.014679872430861,-0.002362777246162295,0.06722068041563034,0.02493273466825485,-0.0005305978120304644,0.03069236315786839,-0.1816413104534149,-0.1786345988512039,-0.1694375723600388,0.07346790283918381,0.04303241148591042,0.03327877819538116,0.02745953761041164,0.03656540066003799,0.02945990115404129,0.0305510088801384,0.05855610221624374,0.05691944062709808,0.04109838232398033,0.02436806634068489,0.02127659507095814,0.02527732402086258,0.09012003988027573,0.03309692814946175,0.009092561900615692,0.01818512380123138,-0.1796690374612808,-0.1585742831230164,-0.1551191061735153,0.05292071029543877,0.03434090688824654,0.05208145454525948,0.06257958710193634,0.01919658668339252,0.03521630167961121,0.04348613694310188,0.03156768158078194,0.04801146686077118,0.06343485414981842,0.04713150858879089,0.0185387134552002,0.1002770066261292,0.04573991149663925,0.02150158584117889,0.05710206925868988,-0.1744800806045532,-0.1491011679172516,-0.1365879476070404,0.01904413104057312,0.03534151241183281,0.02179088070988655,0.007690899074077606,0.03241164609789848,0.05639992654323578,0.04193371161818504,0.02508698031306267,0.002197399735450745,0.09713757783174515,0.0675700455904007,0.04559604451060295,0.0474272109568119,-0.2114997208118439,-0.2087529748678207,-0.1930049508810043,0.01838169060647488,0.04056758061051369,0.02164192497730255,0.02772312611341476,0.01721326261758804,0.01931675896048546,0.06556789577007294,0.03964678198099136,0.005902342963963747,0.01054162159562111,0.08384118229150772,0.03820627927780151,0.01395099237561226,0.02468252554535866,-0.1915578544139862,-0.2001430839300156,-0.1781434416770935,-0.01782790571451187,0.003604253055527806,0.002522977069020271,-0.01014676596969366,0.0003604252997320145,0.04126869887113571,0.006848080549389124,0.00883041974157095,-0.02817157469689846,0.06999076902866364,0.01964317820966244,-0.003063615178689361,0.03225806355476379,-0.1949900835752487,-0.190664991736412,-0.1731843501329422,0.003092596074566245,0.03056212514638901,0.006367109250277281,0.01509914454072714,0.03565581142902374,0.005821357015520334,0.03238129988312721,0.06555863469839096,0.02965253777801991,0.007458613719791174,0.03802073746919632,-0.1711842864751816,-0.1946516335010529,-0.1848280876874924,0.05290813371539116,0.04922418296337128,0.04102472215890884,0.04775635153055191,0.03110558167099953,0.01817520894110203,0.06869806349277496,0.03067264519631863,0.004799146670848131,0.02444682456552982,-0.1908994019031525,-0.1837895512580872,-0.1731247752904892,0.03098387457430363,0.01340722199529409,0.01039054058492184,0.04433231055736542,0.005005362909287214,0.008360596373677254,0.07516159117221832,0.02726457454264164,0.003038970287889242,0.01537361461669207,-0.1934215277433395,-0.1989631801843643,-0.1878798753023148,0.02989672124385834,0.02953433617949486,0.04729117453098297,0.0154489278793335,0.09436749666929245,0.01395180262625217,-0.0117774959653616,0.02464214526116848,-0.1964123994112015,-0.1661532819271088,-0.1819170117378235,0.04379167407751083,0.03780988231301308,0.004907306283712387,0.1002770066261292,0.03910313919186592,0.01123595517128706,0.05139186233282089,-0.2111646085977554,-0.2051007598638535,-0.2083110362291336,0.06379527598619461,0.03081332892179489,0.01581243239343166,0.09898430109024048,0.05327354371547699,0.03063418157398701,0.05625224113464355,-0.1759226024150848,-0.1610533893108368,-0.1651737689971924,0.1180055364966393,0.05802847445011139,0.03568210452795029,0.03892593085765839,-0.166156068444252,-0.1535411775112152,-0.1629122346639633,0.004543802235275507,0.06925208121538162,0.01130044832825661,-0.01147396303713322,0.02516059949994087,-0.1918799579143524,-0.1629302799701691,-0.1735216230154037,0.08384118229150772,0.0154489278793335,-0.007270083762705326,0.004180298186838627,-0.185023620724678,-0.1603053361177444,-0.1672119200229645,0.6899353861808777,0.6978762745857239,0.1126500442624092,-0.1639889180660248,-0.1228070184588432,-0.1414589136838913,0.9994618892669678,0.6747981905937195,-0.1897757798433304,-0.1447533667087555,-0.1639461815357208,0.6793361902236938,-0.2199929654598236,-0.172650471329689,-0.1934178173542023,-0.161491796374321,-0.1374018490314484,-0.1186652407050133,0.2154632359743118],"relatedness":[0.03992076963186264,0.04586317390203476,0.01305767148733139,0.04494895786046982,0.03702574968338013,0.01221933681517839,0.02834069728851318,0.03656864166259766,0.03197268396615982,0.01203717850148678,0.002285540103912354,0.01264665555208921,0.02879780530929565,0.04235867783427238,0.02996025606989861,0.01166180800646544,0.03032149933278561,0.01207028236240149,0.03169282525777817,0.01630352064967155,0.01493219565600157,0.01538930367678404,0.02209355495870113,0.007171193137764931,0.01249428652226925,0.05500533431768417,0.01173243951052427,-0.03306426480412483,0.007213014177978039,-0.2602359354496002,-0.2502166032791138,-0.2756375372409821,0.00475751981139183,-0.02689258567988873,0.0003069367667194456,-0.006445672363042831,-0.02915899269282818,-0.004297114908695221,-0.0003069367667194456,0.007139531429857016,0.00214855745434761,-0.01856967434287071,-0.003376304404810071,0.002455494133755565,0.02424800582230091,-0.007366482634097338,-0.01503990218043327,-0.005678330082446337,-0.01995089091360569,0.0,-0.01795580051839352,-0.01918354816734791,0.002302025677636266,0.001381215522997081,-0.02317372709512711,-0.01365868654102087,0.04665438830852509,0.00475751981139183,-0.04470661282539368,-0.02240638434886932,-0.2984038889408112,-0.2580142021179199,-0.2957135140895844,0.006907944101840258,0.003419866319745779,0.02537918649613857,0.04114731773734093,0.0126775624230504,0.01810227707028389,0.01767215132713318,0.02576439455151558,0.03964559361338615,0.01933242753148079,0.03934277966618538,0.03639672324061394,0.0312594398856163,0.01666157133877277,0.0007672241772525012,0.02508637495338917,-0.02276547066867352,0.005406217183917761,0.02417780458927155,0.008409671485424042,0.01606847904622555,0.04144766554236412,0.0158681720495224,0.01261450629681349,0.06843533366918564,0.03438954800367355,-0.009469108656048775,0.003990177996456623,-0.2689104676246643,-0.2353145033121109,-0.264062225818634,0.05457248911261559,0.01955094002187252,0.03333836048841476,0.01812919043004513,0.05044234171509743,0.05909360200166702,0.01706690900027752,0.01763641834259033,0.0324537456035614,0.04605859145522118,0.0353103019297123,0.01933404989540577,0.03199639543890953,0.01527883857488632,0.03258293867111206,0.01836492866277695,0.00818452425301075,0.03273104131221771,0.04057884588837624,0.01296917907893658,0.01718009449541569,0.09210129827260971,0.03094317205250263,-0.01350512262433767,0.008287292905151844,-0.2449687719345093,-0.2299428135156631,-0.2553807199001312,0.009948701597750187,0.02238458022475243,-0.0160111915320158,0.01663298532366753,0.003108969423919916,0.02083009481430054,0.02658168785274029,-0.0146121559664607,-0.001399036264047027,-0.009326907806098461,0.02860251814126968,0.01228042878210545,-0.01196953188627958,0.01632208935916424,-0.00808332022279501,0.02533810026943684,0.01880926452577114,-0.009948701597750187,0.003108969423919916,0.02440541051328182,-0.004974350798875093,-0.005129799246788025,0.0648220106959343,0.01912016235291958,-0.02720348164439201,0.002487175399437547,-0.2789729237556458,-0.2542020380496979,-0.272381991147995,0.05516728758811951,0.04200397059321404,0.04435057938098907,0.03153564780950546,0.05882352963089943,0.07280260324478149,0.0286965724080801,0.04431715235114098,0.04746739566326141,0.04817275702953339,0.03897890448570251,0.02301672473549843,0.04236142337322235,0.021695950999856,0.03808680176734924,0.007799852639436722,0.01904761977493763,0.04988262802362442,0.04132477939128876,0.02609093673527241,0.02119517140090466,0.09149834513664246,0.04210056364536285,-0.006209251936525106,0.03268876671791077,-0.2264052778482437,-0.2117483913898468,-0.236570805311203,0.04280926287174225,0.05230482667684555,0.05144981294870377,0.04727382585406303,0.05863732472062111,0.06521079689264297,0.04877680540084839,0.03592173755168915,0.02700629085302353,0.04686795920133591,0.01436210889369249,0.03449814021587372,0.02929368056356907,0.03303571417927742,0.03970260173082352,0.04117559269070625,0.02700640819966793,0.02825278788805008,0.07778112590312958,0.01814936101436615,-0.02499223873019218,0.005371393635869026,-0.2538167834281921,-0.2243978530168533,-0.2656899988651276,0.02000916376709938,0.02703528292477131,0.04112990945577621,0.04551703110337257,0.001985642360523343,0.02581335045397282,0.01237207837402821,0.03100656718015671,0.0149801280349493,-0.005677458830177784,0.008859019726514816,0.01802903041243553,0.02199480682611465,0.02153658121824265,0.01283030398190022,0.03635252639651299,0.03039560094475746,-0.002138383919373155,0.01283030398190022,0.05865281820297241,0.005651443265378475,-0.03710027784109116,0.006292203906923532,-0.2591949999332428,-0.2505631744861603,-0.2846807837486267,0.02757464908063412,0.03414558619260788,0.04193694517016411,0.02537381090223789,0.05626791343092918,0.03821656107902527,0.02446390874683857,0.006725771818310022,0.007365352008491755,0.02564489282667637,-0.01420931983739138,0.02036506310105324,0.03152813389897346,0.02489063143730164,0.02519233711063862,0.008900286629796028,0.007781507447361946,0.01508523151278496,0.08085684478282928,0.01523608341813087,-0.02685501426458359,0.006292203906923532,-0.2579805552959442,-0.2436319589614868,-0.2743715047836304,0.04585618525743484,0.01645338162779808,0.02666057273745537,0.03503961116075516,0.02528945729136467,0.01543870382010937,0.009053245186805725,0.008988421410322189,-0.01329259015619755,-0.003808653214946389,0.02148080430924892,0.009902498684823513,0.03915295377373695,0.01096892170608044,-0.01205370761454105,0.005332114640623331,0.05834856629371643,0.01508226711302996,-0.02995963953435421,-0.00705954572185874,-0.2678695321083069,-0.2496967613697052,-0.2881172001361847,0.03461120650172234,0.04128511622548103,0.04609653726220131,0.05261524021625519,0.04857985302805901,0.0175384134054184,0.04501008987426758,0.01458947733044624,0.03321434184908867,0.04128511622548103,0.036008071154356,0.04982151091098785,0.05277044698596001,0.02871333248913288,0.03399037569761276,0.08257023245096207,0.03787055611610413,-0.001707544201053679,0.01039888244122267,-0.2493060380220413,-0.2134812027215958,-0.2568276226520538,0.02461863681674004,0.03647874668240547,0.03594176471233368,0.04787073284387589,0.02491592802107334,0.02838729508221149,0.0539281964302063,0.02780748717486858,0.05504587292671204,0.03388576582074165,0.02306547574698925,0.05312222614884377,0.05057436972856522,0.02548062242567539,0.04794317856431007,0.08170033246278763,0.03138946741819382,-0.009158646687865257,0.01427255943417549,-0.2531228363513947,-0.2280367314815521,-0.280520886182785,0.03096209093928337,-0.005502904299646616,0.01427036989480257,0.01978553086519241,-0.01375095453113317,0.008911040611565113,0.02733726054430008,0.01223380118608475,0.01691587455570698,0.0125358710065484,-0.01129081472754478,0.003624830162152648,0.05422141775488853,0.01404621638357639,-0.02856255881488323,0.01104972418397665,-0.2593684792518616,-0.2542020380496979,-0.2734671831130981,0.04534425213932991,0.03578979149460793,0.01681442931294441,0.01918060518801212,0.03542357683181763,0.02077922038733959,0.03451914340257645,0.05818510800600052,0.05004522204399109,0.03708169981837273,0.02517334930598736,0.009307293221354485,0.03497136011719704,0.07446487993001938,0.02683147415518761,-0.01428127940744162,0.003990177996456623,-0.2324774414300919,-0.2153872847557068,-0.2609875202178955,0.0313921757042408,0.008254356682300568,0.01411692518740892,0.03700333461165428,-0.003208556212484837,0.02487109415233135,0.0292690321803093,0.02001819759607315,0.03518350049853325,0.03518350049853325,0.02044552937150002,0.02062481082975864,0.07233849167823792,0.02411282993853092,-0.01614405401051044,0.0187231432646513,-0.247571125626564,-0.2335817068815231,-0.2479652762413025,0.02385986037552357,0.0117647061124444,0.03276955708861351,0.02461492083966732,0.0312594398856163,0.05209906399250031,0.03578979149460793,0.01159597188234329,0.01419510692358017,0.07973422110080719,0.04530353471636772,0.007140639703720808,0.02255985327064991,-0.2650936841964722,-0.2542020380496979,-0.2787122428417206,-0.001534448354505002,0.03057168982923031,-0.0006114338175393641,0.02461021021008492,0.01605013757944107,0.006114338058978319,0.04234179109334946,0.0293488223105669,-0.012075818143785,0.01070009171962738,0.06695200502872467,0.01895444840192795,-0.0234399251639843,-0.005985266994684935,-0.2553782165050507,-0.2607866823673248,-0.2778079211711884,-0.009360134601593018,-0.01242903154343367,0.006291238125413656,-0.0001534448383608833,-0.002915452001616359,0.03068896755576134,-0.001841338002122939,-0.01288936659693718,-0.00644468329846859,0.05263157933950424,0.005063679534941912,-0.03834212943911552,0.002915899269282818,-0.2706453800201416,-0.2658118307590485,-0.2823295295238495,-0.005194805096834898,0.03605227544903755,0.009914375841617584,0.02403485029935837,0.04191077128052711,0.002441257238388062,0.04296229407191277,0.05893880128860474,0.03545140475034714,-0.004346476402133703,0.01442602835595608,-0.2373351901769638,-0.244844913482666,-0.2698498964309692,0.04186401888728142,0.03086325526237488,0.02383498847484589,0.023987777531147,-0.002750190906226635,0.02291825786232948,0.04904507100582123,0.01879297196865082,-0.02716547623276711,0.001074278727173805,-0.2623178362846375,-0.2562814056873322,-0.2803400158882141,0.04458222538232803,0.0193452388048172,0.03011514618992805,0.04013128578662872,0.003661885857582092,0.02612931840121746,0.06300874054431915,0.03570365905761719,-0.007295870687812567,0.01273787580430508,-0.2508674561977386,-0.2491769194602966,-0.2765418589115143,0.04724061861634254,0.04669550806283951,0.02395483665168285,0.03532528877258301,0.08984021842479706,0.03317464888095856,-0.01164234708994627,0.02317372709512711,-0.2378556579351425,-0.218506321310997,-0.2646048069000244,0.03819185495376587,0.01693622209131718,0.01354166679084301,0.08365993201732635,0.03809523954987526,-0.006830176804214716,0.03161448612809181,-0.2676960527896881,-0.2633858919143677,-0.298607349395752,0.05624347180128098,0.01602075062692165,0.03915219381451607,0.08697618544101715,0.05325795710086823,0.01459174137562513,0.03652547672390938,-0.2272727340459824,-0.224051296710968,-0.2633387446403503,0.09074465185403824,0.04475608095526695,0.00558832660317421,0.01672805473208427,-0.2288341373205185,-0.2178132086992264,-0.2597214579582214,0.003356728702783585,0.04058590158820152,-0.0006103143095970154,-0.04253337532281876,-0.003990177996456623,-0.2676960527896881,-0.2412060350179672,-0.2877554595470428,0.08275549858808517,0.02543885819613934,-0.01490220427513123,0.006138735450804234,-0.2345593273639679,-0.2153872847557068,-0.2553807199001312,0.4920108616352081,0.4852530360221863,0.08011049777269363,-0.2179042398929596,-0.1784785985946655,-0.2184843569993973,0.9975162744522095,0.4791283011436462,-0.2468771636486053,-0.2153872847557068,-0.2571893632411957,0.4647625088691711,-0.3006592690944672,-0.2633858919143677,-0.3136191070079803,-0.2397640496492386,-0.2178132086992264,-0.235485628247261,0.007980569265782833],"n":[15919,16013,15831,16003,15983,15911,15951,15968,15551,16038,16022,15811,15930,15926,15949,15932,15900,15912,16086,16046,16094,16063,16005,16040,16094,15482,15959,15982,15802,16023,15963,15787,16115,15939,16116,16088,16031,16074,16078,15661,16154,16143,15916,16036,16049,16063,16047,16021,16022,16199,16154,16209,16166,16125,16155,16205,15602,16073,16098,15917,16144,16073,15899,16018,15843,16015,15996,15929,15960,15981,15556,16052,16036,15816,15933,15946,15972,15954,15922,15923,16096,16050,16104,16072,16020,16057,16113,15505,15983,16002,15823,16042,15973,15802,16074,16026,16044,16070,15638,16131,16117,15904,16017,16029,16054,16032,16007,16007,16183,16135,16192,16154,16113,16142,16197,15582,16066,16084,15900,16136,16064,15888,15923,15889,15842,15871,15895,15467,15953,15946,15734,15843,15865,15875,15861,15829,15827,15996,15965,16017,15979,15940,15974,16029,15408,15888,15907,15727,15951,15879,15712,16068,16008,16040,16055,15625,16126,16112,15884,16018,16032,16035,16020,15987,15996,16177,16131,16182,16152,16102,16130,16196,15589,16053,16073,15889,16110,16050,15875,16040,15620,16107,16097,15870,15996,15999,16023,16000,15972,15975,16141,16113,16159,16128,16074,16110,16161,15561,16032,16060,15876,16099,16026,15867,15968,15973,15563,16045,16044,15816,15937,15935,15947,15948,15918,15911,16090,16045,16099,16061,16013,16042,16123,15492,15979,15998,15815,16048,15970,15788,16007,15585,16080,16069,15854,15971,15985,15990,15978,15950,15948,16127,16083,16143,16101,16053,16088,16154,15528,16009,16025,15861,16074,16006,15829,16091,16086,15866,15983,15988,16011,15993,15962,15961,16153,16111,16157,16133,16069,16102,16163,15540,16025,16053,15856,16094,16024,15847,15667,15448,15565,15572,15600,15577,15556,15554,15715,15685,15723,15697,15658,15687,15744,15146,15611,15632,15442,15671,15601,15432,16144,15919,16052,16058,16073,16068,16036,16030,16202,16175,16212,16187,16135,16174,16231,15623,16100,16117,15922,16157,16091,15918,16049,16065,16050,16024,16021,16209,16166,16213,16175,16130,16161,16216,15604,16071,16098,15925,16149,16079,15919,15826,15821,15848,15834,15824,15793,15974,15931,15987,15953,15911,15937,15998,15395,15856,15878,15704,15932,15857,15702,15941,15967,15955,15924,15917,16097,16068,16122,16081,16028,16059,16113,15507,15978,16001,15822,16043,15974,15820,15930,15930,16106,16070,16125,16087,16031,16071,16125,15513,15981,16006,15824,16055,15993,15827,15980,15949,15946,16127,16071,16145,16107,16058,16074,16141,15527,16002,16020,15842,16074,15990,15838,15938,15933,16109,16068,16122,16091,16036,16075,16121,15512,15991,16017,15826,16064,15986,15826,15910,16035,16102,16063,16010,16047,16096,15489,15964,15985,15801,16032,15971,15792,16043,16092,16047,16011,16044,16096,15484,15965,15986,15803,16026,15949,15787,16220,16267,16229,16175,16215,16270,15654,16131,16155,15971,16205,16144,15959,16193,16144,16179,16238,15616,16106,16123,15929,16161,16101,15929,16201,16223,16292,15665,16165,16181,15982,16221,16154,15972,16159,16195,16252,15629,16109,16138,15951,16181,16112,15943,15582,16064,16088,15899,16141,16061,15890,16239,15616,16091,16119,15934,16160,16089,15928,15661,16150,16180,16000,16231,16160,15987,15591,15592,15372,15604,15539,15361,16365,15880,16092,16017,15848,15890,16114,16035,15862,15921,15859,15686,16090]},{"expected_relatedness":0.5,"text":["sample_1004<br>sample_1005","sample_1005<br>sample_1006","sample_1007<br>sample_1008","sample_1007<br>sample_1009","sample_1010<br>sample_1011","sample_1010<br>sample_1012","sample_1013<br>sample_1014","sample_1014<br>sample_1015","sample_1016<br>sample_1017","sample_1016<br>sample_1018","sample_1019<br>sample_1020","sample_1019<br>sample_1021","sample_1022<br>sample_1024","sample_1023<br>sample_1024","sample_1028<br>sample_1029","sample_1029<br>sample_1030","sample_1031<br>sample_1032","sample_1031<br>sample_1033","sample_11<br>sample_13","sample_12<br>sample_13"],"ibs0":[1,4,8,3,0,0,7,3,3,0,2,5,1,2,1,4,2,2,1,4],"ibs2":[9801,9693,9694,9623,9636,9966,9631,9680,9707,9782,9764,9653,9603,9797,10001,9651,9780,9801,10429,10594],"shared_hets":[3122,3102,3132,3253,3131,3324,3078,3199,3156,3152,3150,3083,3156,3202,3378,3214,3153,3272,2613,2723],"shared_hom_alts":[3813,3760,3783,3652,3700,3790,3773,3762,3780,3849,3743,3688,3679,3810,3786,3735,3746,3695,4456,4509],"concordance":[0.6835874319076538,0.6782357096672058,0.6845356822013855,0.6648432016372681,0.6772835254669189,0.6937580108642578,0.6832060813903809,0.6826608777046204,0.6863065958023071,0.6807569861412048,0.6846731305122375,0.673503041267395,0.6689103245735168,0.6803718209266663,0.6856314539909363,0.6676818132400513,0.6743557453155518,0.6708469390869141,0.7342565059661865,0.7387165427207947],"relatedness":[0.4788213670253754,0.4748311936855316,0.4843774139881134,0.480894535779953,0.4782342910766602,0.5014330744743347,0.4755548536777496,0.4955765902996063,0.4757589399814606,0.4780103266239166,0.480892688035965,0.4715359807014465,0.4737869799137115,0.4886172711849213,0.5023809671401978,0.4770833253860474,0.4804699420928955,0.4875428974628448,0.4722372889518738,0.491047203540802],"n":[16027,16052,15944,16099,15990,16035,15634,15708,15941,16057,15989,15960,16093,16085,16244,16257,16150,16219,15935,15862]}]
+
+// ibs0 and ibs2 are counts. on page-load, we change them to scale by n
+    /*
+for(var i=0; i< input.length; i++){
+    var rel = input[i];
+    for(var j=0; j<rel.ibs0.length; j++){
+        rel.ibs0[j] /= rel.n[j];
+        rel.ibs2[j] /= rel.n[j];
+    }
+}
+*/
+
+
+var colors = ['rgba(55,126,184,0.7)', 'rgba(228,26,28,0.7)', 'rgba(152,78,163,0.7)', 'rgba(255,127,0,0.7)', 'rgba(166,86,40,0.7)', 'rgba(247,129,191,0.7)', 'rgba(77,175,74,0.7)',]
+var size
+if (sample_data.length > 700) {
+    size = 8
+} else if (sample_data.length > 200) {
+    size = 9
+} else if (sample_data.length > 50) {
+    size = 10
+} else if (sample_data.length > 20) {
+    size = 12
+} else {
+    size = 15
+}
+
+function set_plotb(x, y) {
+    jQuery('#plotbx_select').val(x)
+    jQuery('#plotby_select').val(y)
+    jQuery('#plotby_select, #plotbx_select').trigger('change')
+}
+
+function set_xy_data_by_group(input, metric, is_x) {
+    let l = {"0.00": "unrelated", "0.50": "parent-child", "0.49": "sib-sib", "1.00": "identical"}
+    for(var i = 0; i < input.length; i++) {
+        var c = input[i]
+        if(c.expected_relatedness != undefined) {
+                c.name = l[c.expected_relatedness.toFixed(2)] || c.expected_relatedness.toFixed(3)
+        }
+        if(is_x) {
+            c.x = c[metric]
+            c.showlegend = i < input.length - 1 && c.x.length > 0;
+        } else {
+           c.y = c[metric]
+            c.showlegend =i < input.length - 1 &&  c.y.length > 0;
+        }
+        c.type = 'scattergl'
+        c.mode = 'markers'
+        if(i < input.length - 1 ){
+           c.marker = {size: size, color: colors[i]}
+        }
+
+    }
+}
+
+
+var layout_a = {
+    autosize: true,
+    margin: {t: 30, pad: 0},
+    xaxis: {
+        title: jQuery("#plotax_select option:selected").text(),
+    },
+    yaxis: {
+        title: jQuery("#plotay_select option:selected").text(),
+    },
+    hovermode: 'closest',
+    showlegend: true,
+    legend: {
+        xanchor: "right",
+        yanchor: "top",
+        y: 1,
+        x: 1,
+        orientation: "h",
+        borderwidth: 1,
+        bordercolor: '#eeeeee'
+    },
+}
+
+var layout_b = {
+    autosize: true,
+    margin: {t: 30, pad: 0},
+    xaxis: {
+        title: jQuery("#plotbx_select option:selected").text(),
+    },
+    yaxis: {
+        title: jQuery("#plotby_select option:selected").text(),
+    },
+    hovermode: 'closest',
+    showlegend: true,
+    legend: {
+        xanchor: "right",
+        yanchor: "top",
+        y: 1,
+        x: 1,
+        orientation: "h",
+        borderwidth: 1,
+        bordercolor: '#eeeeee'
+    },
+}
+
+input.push({mode:"markers", type:'scattergl', hoverinfo:'text+x+y', showlegend:false, name:'hovered', x:[], y:[], hovertext:[], marker:{size:size+3, opacity: 1, color:'#000000'}})
+set_xy_data_by_group(input, jQuery('#plotax_select').val(), true)
+set_xy_data_by_group(input, jQuery('#plotay_select').val(), false)
+
+// append final trace to hold plot B hover action markers
+
+var traces_b = [
+    // gray
+    {x:[], y:[], text: [], type: 'scatter', mode: 'markers', marker: {size: size + 3, color: 'rgba(187,187,187,0.9)', line:{color: '#222', width: []}}, showlegend:false, name: "unknown"},
+    // light blue
+    {x:[], y:[], text: [], type: 'scatter', mode: 'markers', marker: {size: size + 3, color: 'rgba(153,204,255,0.9)', line:{color: '#222', width: []}}, showlegend:true, name: "male"},
+    // light red
+    {x:[], y:[], text: [], type: 'scatter', mode: 'markers', marker: {size: size + 3, color: 'rgba(255,153,170,0.9)', line:{color: '#222', width: []}}, showlegend:true, name: "female"},
+]
+var xf = jQuery('#plotbx_select').val()
+var yf = jQuery('#plotby_select').val()
+
+for (i in sample_data) {
+    var idx = 0
+    var sex = sample_data[i].sex
+    if (sex == "male") {
+        idx = 1
+    } else if (sex == "female") {
+        idx = 2
+    }
+
+    traces_b[idx].x.push(sample_data[i][xf])
+    traces_b[idx].y.push(sample_data[i][yf])
+    traces_b[idx].text.push("sample:" + sample_data[i].sample)
+
+    // // individual is male; highlight points of low Y coverage
+    // if (idx == 1) {
+    //     // these samples could be female mislabeled as male
+    //     if (sample_data[i]["y_depth_mean"] <= 0.2) {
+    //         traces_b[idx].marker.line.width.push(size < 7 ? 1.5 : 2)
+    //     } else {
+    //         traces_b[idx].marker.line.width.push(0)
+    //     }
+    // // handle unknown and female
+    // } else {
+    //     // these samples could be male and mislabeled as female
+    //     if (sample_data[i]["y_depth_mean"] > 0.2) {
+    //         traces_b[idx].marker.line.width.push(size < 7 ? 1.5 : 2)
+    //     } else {
+    //         traces_b[idx].marker.line.width.push(0)
+    //     }
+    // }
+}
+
+var pa = document.getElementById("plota")
+var pb = document.getElementById("plotb")
+Plotly.newPlot(pa, input, layout_a)
+
+pa.on('plotly_hover', function(e) {
+    var p = e.points[0]
+    var split = p.text.split("<br>", 2)
+
+    Plotly.Fx.hover(pb,
+        [
+            {curveNumber: 0, pointNumber: unknown_sample_names.indexOf(split[0])},
+            {curveNumber: 0, pointNumber: unknown_sample_names.indexOf(split[1])},
+            {curveNumber: 1, pointNumber: male_sample_names.indexOf(split[0])},
+            {curveNumber: 1, pointNumber: male_sample_names.indexOf(split[1])},
+            {curveNumber: 2, pointNumber: female_sample_names.indexOf(split[0])},
+            {curveNumber: 2, pointNumber: female_sample_names.indexOf(split[1])},
+        ]
+    )
+})
+
+init_depth_metrics_plot()
+
+pa.on('plotly_unhover', function(e) {
+    Plotly.Fx.unhover(pb)
+})
+
+function pa_hover(sample) {
+    var ht = []
+    var xs = []
+    var ys = []
+    if (sample) {
+        var left = sample + "<br>"
+        var right = "<br>" + sample
+        var otr
+        for (var j=0; j < input.length-1; j++) {
+            otr = input[j]
+ 
+            for (var k=0; k < otr.x.length; k++) {
+                if (otr.text[k].startsWith(left) || otr.text[k].endsWith(right)) {
+                    xs.push(otr.x[k])
+                    ys.push(otr.y[k])
+                    ht.push(otr.text[k])
+                }
+            }
+        }
+    }
+
+    input[input.length-1].x = xs
+    input[input.length-1].y = ys
+    input[input.length-1].hovertext = ht
+    input[input.length-1].marker.opacity = 1
+
+    // remove all existing markers so highlights will be drawn on top
+    //Plotly.purge(pa)
+    // redraw with existing + marker traces
+    Plotly.react(pa, input, layout_a)
+}
+
+function select_and_hover() {
+    // get selection
+    var sample = sample_search_obj.items[0]
+    console.log("in select and hover with", sample)
+    
+    if (sample) {
+        // get curve and sample index
+        for (let curve_idx=0; curve_idx < pb.data.length; curve_idx++) {
+            for (let sample_idx=0; sample_idx < pb.data[curve_idx].text.length; sample_idx++) {
+                let b_sample = pb.data[curve_idx].text[sample_idx]
+                b_sample = b_sample.substring(7, b_sample.length)
+                if (b_sample == sample) {
+                    Plotly.Fx.hover(pb, [
+                        {curveNumber: curve_idx, pointNumber: sample_idx}
+                    ])
+                    pa_hover(sample)
+                }
+            }
+        }
+    } else {
+        // sample de-selected; reset A
+        pa_hover(false)
+        // reset B
+        Plotly.purge(pb)
+        init_depth_metrics_plot()
+    }
+}
+
+function init_depth_metrics_plot() {
+    Plotly.react(pb, traces_b, layout_b)
+
+    pb.removeAllListeners('plotly_hover')
+    pb.removeAllListeners('plotly_unhover')
+
+    pb.on('plotly_hover',  function(e) {
+        var p = e.points[0]
+        if (p.text[6] != ":") {
+            alert("bad sample name:" + p.text[6])
+        }
+        var sample = p.text.substring(7, p.text.length)
+        pa_hover(sample)
+    })
+
+    // remove the markers and fix opacity on unhover
+    pb.on('plotly_unhover',  function(e) {
+        input[input.length-1].x = [];
+        input[input.length-1].y = [];
+        input[input.length-1].hovertext = [];
+        for(j = 0; j < input.length-1; j++){
+            input[j].marker.opacity = 1
+        }
+        Plotly.react(pa, input, layout_a)
+    })
+}
+
+// select listeners for plot A
+jQuery('#plotay_select, #plotax_select').on('change', function() {
+    pa_hover(false)
+    var metric = this.value
+    set_xy_data_by_group(input, metric, this.id == "plotax_select")
+
+    if(this.id == 'plotay_select') {
+        layout_a.yaxis.title = jQuery("#plotay_select option:selected").text();
+    } else {
+        layout_a.xaxis.title = jQuery("#plotax_select option:selected").text();
+    }
+    Plotly.react(pa, input, layout_a)
+    select_and_hover()
+})
+
+// select listeners for plot B
+jQuery('#plotbx_select, #plotby_select').on('change', function() {
+    var field = this.value
+    var extracted = [[], [], []]
+    for (i in sample_data) {
+        var sex = sample_data[i].sex
+        var idx = sex == "male" ? 1 : ((sex == "female")? 2: 0)
+        extracted[idx].push(sample_data[i][field])
+    }
+    if (this.id == 'plotbx_select') {
+        layout_b.xaxis.title = jQuery("#plotbx_select option:selected").text()
+        traces_b[0].x = extracted[0]
+        traces_b[1].x = extracted[1]
+        traces_b[2].x = extracted[2]
+    } else {
+        layout_b.yaxis.title = jQuery("#plotby_select option:selected").text()
+        traces_b[0].y = extracted[0]
+        traces_b[1].y = extracted[1]
+        traces_b[2].y = extracted[2]
+    }
+    Plotly.react(pb, traces_b, layout_b)
+
+    // check if sample is selected in sample-select dropdown
+    select_and_hover()
+})
+
+// responsive plots
+window.onresize = function() {
+    Plotly.Plots.resize('plota')
+    Plotly.Plots.resize('plotb')
+};
+
+const sample_names = sample_data.map(function(x) {
+    return x.sample
+})
+const male_sample_names = sample_data.filter(function(x) { return x.sex == "male"}).map(function(x) { return x.sample })
+const female_sample_names = sample_data.filter(function(x) { return x.sex == "female"}).map(function(x) { return x.sample })
+const unknown_sample_names = sample_data.filter(function(x) { return x.sex != "male" && x.sex != "female"}).map(function(x) { return x.sample })
+
+// sample search
+const sample_list = sample_data.map(function(x) {
+    return { item: x.sample }
+})
+const sample_search = $('#sample-search').selectize({
+    plugins: ['remove_button'],
+    valueField: 'item',
+    labelField: 'item',
+    searchField: 'item',
+    options: sample_list,
+    placeholder: 'Sample ID',
+    mode: 'single',
+    closeAfterSelect: false,
+})
+const sample_search_obj = sample_search[0].selectize
+
+$('#sample-search').on('change', function() {
+    select_and_hover()
+})
+</script>
+
+</body>
+</html>
