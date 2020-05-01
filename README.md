@@ -12,6 +12,8 @@ The first step is to extract sites. For **VCF** just use:
 somalier extract -d extracted/ --sites sites.vcf.gz -f /data/human/g1k_v37_decoy.fa $cohort.vcf.gz
 ```
 
+with a sites file from [releases](https://github.com/brentp/somalier/releases/latest)
+
 For **BAM** or **CRAM**, use:
 This is parallelizable by sample via cluster or cloud, but here, using a for loop:
 ```
@@ -50,7 +52,7 @@ glob strings like:  `"/path/to/set-a/*.somalier" "/path/to/set-b/*.somalier"`.
 
 ## Usage
 
-The usage is also described above. Briefly, run:
+The usage is also described above. Briefly, after downloading the somalier binary and a sites vcf from the [releases](https://github.com/brentp/somalier/releases/latest) run:
 ```
 somalier extract -d cohort/ --sites sites.hg38.vcf.gz -f $reference $sample.bam
 ```
