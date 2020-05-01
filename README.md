@@ -7,9 +7,17 @@ but cancer projects have only somatic calls between tumor-normal pairs.
 
 `somalier` makes checking any number of samples for identity easy **directly from the alignments**:
 
-The first step is to extract sites. This is parallelizable by sample (here using `xargs`, but this can also be done via cluster or cloud):
+The first step is to extract sites. For **VCF** just use:
 ```
-ls *.cram | xargs -I{} -P 12 "somalier extract -d extracted/ --sites sites.vcf.gz -f /data/human/g1k_v37_decoy.fa {}"
+somalier extract -d extracted/ --sites sites.vcf.gz -f /data/human/g1k_v37_decoy.fa $cohort.vcf.gz
+```
+
+For **BAM** or **CRAM**, use:
+This is parallelizable by sample via cluster or cloud, but here, using a for loop:
+```
+for f in *.cram; do
+    somalier extract -d extracted/ --sites sites.vcf.gz -f /data/human/g1k_v37_decoy.fa $f
+done
 ```
 
 `--sites` is a VCF of known polymorphic sites in VCF format. A good set is provided in
@@ -24,6 +32,8 @@ somalier relate --ped $pedigree extracted/*.somalier
 This will create text and interactive HTML output (similar to [peddy](https://github.com/brentp/peddy))
 that makes it fast and easy to detect mismatched samples and sample-swaps.
 
+Example output is [here](https://brentp.github.io/somalier/ex.html)
+
 Note that the `somalier relate` command runs extremely quickly (< 2 seconds for 600 samples and ~1 minute for 4,500 samples) so it's possible
 to add/remove samples or adjust a pedigree file and re-run iteratively.
 
@@ -32,6 +42,11 @@ the already extracted data from the `n` original samples.
 
 For *huge* sample-sets, if you run into a bash error for *argument list too long*, you can pass the somalier files as quoted
 glob strings like:  `"/path/to/set-a/*.somalier" "/path/to/set-b/*.somalier"`.
+
+## Example Output
+
++ Interactive output from `somalier relate` is [here](https://brentp.github.io/somalier/ex.html)
++ Interactive output from `somalier ancestry` is [here](https://brentp.github.io/somalier/ex.somalier-ancestry.html)
 
 ## Usage
 
@@ -136,6 +151,8 @@ and the somalier files for thousand genomes can be downloaded from [here](https:
 These were created from the thousand genomes high coverage data from [here](http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/1000G_2504_high_coverage/working/20190425_NYGC_GATK/)
 
 Note that these will work for either GRCh37 or hg38 as long as you use the most recent sites files distributed with `somalier`.
+
+Example output is [here](https://brentp.github.io/somalier/ex.somalier-ancestry.html)
 
 
 ## Usage

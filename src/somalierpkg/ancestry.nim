@@ -1,4 +1,5 @@
 import strutils
+import math
 import os
 import json
 import times
@@ -53,9 +54,24 @@ type ForHtml = ref object
   ancestry_label: string
 
 proc subset(T: var Tensor[float32], Q: var Tensor[float32], labels: var Tensor[int]) =
-  echo T.shape
-  echo Q.shape
-  echo labels.shape
+  var sel = (Q !=. -1'f).asType(float32).sum(axis=0) >. (0.7'f32 * Q.shape[0].float32)
+  sel = sel and ((T !=. -1'f).asType(float32).sum(axis=0) >. (0.85'f32 * T.shape[0].float32))
+  var n = sel.asType(int).sum
+  #Q = Q[_, sel]
+  #T = T[_, sel]
+  var Qr = newTensorUninit[float32](Q.shape[0], n)
+  var Tr = newTensorUninit[float32](T.shape[0], n)
+  var j = 0
+  for i, s in sel.squeeze():
+    if not s: continue
+    Qr[_, j] = Q[_, i]
+    Tr[_, j] = T[_, i]
+    j.inc
+
+  Q = Qr#.transpose()
+  T = Tr#.transpose()
+
+  stderr.write_line &"[somalier] subset from {sel.shape[1]} to {Q.shape[1]} high call-rate sites (removed {100 - 100 * Q.shape[1].float / sel.shape[1].float:.2f}%)"
 
 proc ancestry_main*() =
 
@@ -123,15 +139,27 @@ proc ancestry_main*() =
     query_mat[i] = vec
 
 
+
+
   var
     nPCs = parseInt(opts.n_pcs)
     T = train_mat.toTensor()
     Q = query_mat.toTensor()
     Y = int_labels.toTensor() #.astype(float32)#.unsqueeze(0).transpose
     t0 = cpuTime()
-    res = T.pca(nPCs) #, center=true) #, n_power_iters=4)
 
-  #subset(T, Q, Y)
+  subset(T, Q, Y)
+  var res = T.pca_detailed(nPCs)
+  #[
+  echo res.explained_variance_ratio
+  var erv = (res.explained_variance_ratio ^. 0.85) /. (res.explained_variance_ratio ^. 0.85).sum
+  while erv[^1][0] < 0.4 / nPCs.float:
+    erv = (erv ^. 0.95) #/. (erv ^. 0.8).sum
+    erv = erv /. erv.sum
+  echo "erv:", erv
+  erv = erv.unsqueeze(0)
+  ]#
+
 
   stderr.write_line &"[somalier] time for dimensionality reduction to shape {res.projected.shape}: {cpuTime() - t0:.2f} seconds"
 
@@ -139,9 +167,10 @@ proc ancestry_main*() =
     ctx = newContext Tensor[float32]
     nHidden = parseInt(opts.nn_hidden_size)
     nOut = int_labels.toHashSet.len
+    nn_test_samples = parseInt(opts.nn_test_samples)
+  var
     t_proj = T * res.components
     X = ctx.variable t_proj
-    nn_test_samples = parseInt(opts.nn_test_samples)
 
   network ctx, AncestryNet:
     layers:
@@ -154,12 +183,25 @@ proc ancestry_main*() =
 
   let
     model = ctx.init(AncestryNet)
-    optim = model.optimizerSGD(learning_rate = 0.005'f32)
+    optim = model.optimizerSGD(learning_rate = 0.01'f32)
     batch_size = parseInt(opts.nn_batch_size)
   t0 = cpuTime()
+  # range of data in first PC
+  var proj_range = t_proj[_, 0].max() -  t_proj[_, 0].min()
+  var rand_scale = proj_range / 5.0'f32
+  #echo "rand_scale:", rand_scale
+
 
   # train the model
-  for epoch in 0..<1000:
+  for epoch in 0..10_000:
+
+    # adds random-ness scaled inversely by proportion variance explained.
+    var r = randomTensor[float32](t_proj.shape[0], t_proj.shape[1], rand_scale) -. (rand_scale / 2'f32)
+    #r = r /. erv
+    #echo r.mean(axis=0)
+    var t_proj_r = t_proj +. r
+    #echo t_proj_r.mean(axis=0)
+    X = ctx.variable t_proj_r
 
     for batch_id in 0..<X.value.shape[0] div batch_size:
 
@@ -178,7 +220,7 @@ proc ancestry_main*() =
       loss.backprop()
       optim.update()
 
-    if epoch mod 100 == 0:
+    if epoch mod 500 == 0:
       ctx.no_grad_mode:
         let
           clf = model.forward(X[X.value.shape[0] - nn_test_samples..<X.value.shape[0], _])
@@ -187,7 +229,7 @@ proc ancestry_main*() =
           loss = clf.sparse_softmax_cross_entropy(y).value.data[0]
           accuracy = accuracy_score(y_pred, y)
       stderr.write_line &"[somalier] Epoch:{epoch}. loss: {loss:.5f}. accuracy on unseen data: {accuracy:.3f}.  total-time: {cpuTime() - t0:.2f}"
-      if epoch >= 100 and ((loss < 0.005 and accuracy > 0.98) or (accuracy >= 0.995 and loss < 0.025)):
+      if epoch >= 800 and ((loss < 0.005 and accuracy > 0.98) or (accuracy >= 0.995 and loss < 0.025)):
         stderr.write_line &"[somalier] breaking with trained model at this accuracy and loss"
         break
 
