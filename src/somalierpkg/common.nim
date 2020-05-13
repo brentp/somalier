@@ -1,4 +1,5 @@
 import strutils
+import strformat
 import algorithm
 import hts/private/hts_concat
 import hts/fai
@@ -77,6 +78,8 @@ import streams
 
 proc write_counts*(cnts: counts, sample_name: string, fname: string) =
     var s = newFileStream(fname, fmWrite)
+    if s == nil:
+      raise newException(IOError, &"somalier: error opening file: {fname}")
     s.write(formatVersion.uint8)
     s.write(sample_name.len.uint8)
     s.write(sample_name)

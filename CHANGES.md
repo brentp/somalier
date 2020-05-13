@@ -1,3 +1,7 @@
+v0.2.11 (dev)
+=============
++ more informative error message on bad sample name (#53)
+
 v0.2.10
 =======
 + fix extra output column in pairs.tsv (#47)
