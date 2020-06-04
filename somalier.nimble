@@ -10,7 +10,7 @@ license       = "academic only"
 # Dependencies
 
 requires "https://github.com/brentp/zip#dev"
-requires "nim >= 0.20.0", "hts >= 0.3.4", "https://github.com/brentp/pedfile", "https://github.com/brentp/hileup", "argparse", "lapper", "arraymancer#head"
+requires "nim >= 0.20.0", "hts >= 0.3.4", "https://github.com/brentp/pedfile >= 0.0.3", "https://github.com/brentp/hileup", "argparse", "lapper", "arraymancer#head"
 requires "https://github.com/brentp/slivar#head"
 srcDir = "src"
 
