@@ -57,6 +57,7 @@ type relation = object
   hom_alts_b: uint16
   shared_hom_alts: uint16
   shared_hets: uint16
+  het_ab: uint16
   ibs0: uint16
   ibs2: uint16
   x_ibs0: uint16
@@ -85,7 +86,7 @@ proc hom_alt_concordance(r: relation): float64 {.inline.} =
   return (r.shared_hom_alts.float64 - 2 * r.ibs0.float64) / max(1'u16, min(r.hom_alts_a, r.hom_alts_b)).float64
 
 proc rel(r:relation): float64 {.inline.} =
-  return (r.shared_hets.float64 - 2 * r.ibs0.float64) / min(r.hets_a, r.hets_b).float64
+  return 2 * (r.shared_hets.float64 - 2 * r.ibs0.float64) / r.het_ab.float64
 
 proc add*(rt:var seq[relations], rel:relation, expected_relatedness:float) =
 
@@ -247,6 +248,7 @@ proc relatedness(r: var relation_matrices, j: int, k:int): relation {.inline.} =
   r.n[j * r.n_samples + k] = ir.N.uint16
   r.n[k * r.n_samples + j] = ir.IBS2.uint16
   r.shared_hom_alts[j * r.n_samples + k] = ir.shared_hom_alts.uint16
+  r.shared_hom_alts[k * r.n_samples + j] = ir.het_ab.uint16
 
   let xir = r.x_genotypes[j].XIBS(r.x_genotypes[k])
   r.x[j * r.n_samples + k] = xir.IBS0.uint16
@@ -261,6 +263,7 @@ proc relatedness(r: var relation_matrices, j: int, k:int): relation {.inline.} =
                  shared_hom_alts: ir.shared_hom_alts.uint16,
                  ibs2: ir.IBS2.uint16,
                  n: ir.N.uint16,
+                 het_ab: ir.het_ab.uint16,
                  x_ibs0: xir.IBS0.uint16,
                  x_ibs2: xir.IBS2.uint16,
                  )
