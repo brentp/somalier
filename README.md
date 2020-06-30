@@ -166,6 +166,9 @@ all cases.
 
 By default `somalier` will only consider variants that have a "PASS" or "RefCall" FILTER. To extend this list, set
 the environment variable `SOMALIER_ALLOWED_FILTERS` to a comma-delimited list of additional filters to allow.
+
+by default sites with an allele balance < 0.01 will be considered homozygous reference. To adjust this, use e.g. : 
+`SOMALIER_AB_HOM_CUTOFF=0.04 somalier relate ...`
  
 ## Other Work
 

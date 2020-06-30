@@ -293,7 +293,16 @@ proc ab*(c:allele_count, min_depth:int): float {.inline.} =
     return 0
   result = c.nalt.float / (c.nalt + c.nref).float
 
-proc alts*(ab:float, min_ab:float, ab_cutoff:float=0.01): int8 {.inline.} =
+var ab_cutoff: float = 0.01
+try:
+  ab_cutoff = parseFloat(getEnv("SOMALIER_AB_HOM_CUTOFF"))
+  if ab_cutoff > 0.5:
+    stderr.writeline("[somalier] error setting SOMALIER_AB_HOM_CUTOFF to:" & getEnv("SOMALIER_AB_HOM_CUTOFF"))
+    ab_cutoff = 0.01
+except:
+  discard
+
+proc alts*(ab:float, min_ab:float, ab_cutoff:float=ab_cutoff): int8 {.inline.} =
   if ab < 0: return -1
   if ab < ab_cutoff: return 0
   if ab > (1 - ab_cutoff): return 2

@@ -1,6 +1,7 @@
 v0.2.11 (dev)
 =============
 + more informative error message on bad sample name (#53)
++ allow setting SOMALIER_AB_HOM_CUTOFF to change which calls are considered hom-ref (#56)
 
 v0.2.10
 =======
