@@ -3,7 +3,10 @@ v0.2.11 (dev)
 + more informative error message on bad sample name (#53)
 + allow setting SOMALIER_AB_HOM_CUTOFF to change which calls are considered hom-ref (#56)
 + adjust (fix) relatedness calculation which was off when the number of shared sites was low (#55).
-  many thanks to @fgvieira who found and diagnosed this problem.
+  many thanks to @fgvieira who found and diagnosed this problem. This change adds a `hets_ab` column
+  which is the count of times sample `a` was het and `b` was **not** unknown + the times sample `b` was het
+  and `a` was not unknown; this is mostly not needed except to (re) calculate relatedness but is reported
+  in the text output for completeness.
 
 v0.2.10
 =======
