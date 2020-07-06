@@ -44,8 +44,13 @@
     <div class="row h-75">
         <div class="col-6 h-100 bg-light pt-2 border-right">
             <div class="row">
-                <div class="col">
+                <div class="col-6">
                     <h5>Sample to Sample Relatedness</h5>
+                </div>
+                <div class="col-6">
+                    <input type="checkbox" name="n_scale" id="n_scale" >
+                    <label for="n_scale" title="scale the x and y-axis values
+                        (except relatedness and concordance) by the number of sites where both samples have a known genotype">Scale by shared-sites</label>
                 </div>
             </div>
             <div class="row pb-2">
@@ -201,7 +206,7 @@ function set_plotb(x, y) {
     jQuery('#plotby_select, #plotbx_select').trigger('change')
 }
 
-function set_xy_data_by_group(input, metric, is_x) {
+function set_xy_data_by_group(input, metric, is_x, scale) {
     let l = {"0.00": "unrelated", "0.50": "parent-child", "0.49": "sib-sib", "1.00": "identical"}
     for(var i = 0; i < input.length; i++) {
         var c = input[i]
@@ -211,10 +216,23 @@ function set_xy_data_by_group(input, metric, is_x) {
         if(is_x) {
             c.x = c[metric]
             c.showlegend = i < input.length - 1 && c.x.length > 0;
+            if(scale && c.x && metric != "relatedness" && metric != "concordance") {
+                c.x = c.x.slice()
+                for(var k=0; k< c.x.length; k++){
+                   c.x[k] = c.x[k] / c.n[k]
+               }
+            }
         } else {
            c.y = c[metric]
-            c.showlegend =i < input.length - 1 &&  c.y.length > 0;
+           c.showlegend =i < input.length - 1 &&  c.y.length > 0;
+            if(scale && c.y && metric != "concordance" && metric != "relatedness") {
+                c.y = c.y.slice()
+                for(var k=0; k< c.y.length; k++){
+                   c.y[k] = c.y[k] / c.n[k]
+               }
+            }
         }
+
         c.type = 'scattergl'
         c.mode = 'markers'
         if(i < input.length - 1 ){
@@ -270,8 +288,8 @@ var layout_b = {
 }
 
 input.push({mode:"markers", type:'scattergl', hoverinfo:'text+x+y', showlegend:false, name:'hovered', x:[], y:[], hovertext:[], marker:{size:size+3, opacity: 1, color:'#000000'}})
-set_xy_data_by_group(input, jQuery('#plotax_select').val(), true)
-set_xy_data_by_group(input, jQuery('#plotay_select').val(), false)
+set_xy_data_by_group(input, jQuery('#plotax_select').val(), true, false)
+set_xy_data_by_group(input, jQuery('#plotay_select').val(), false, false)
 
 // append final trace to hold plot B hover action markers
 
@@ -379,7 +397,7 @@ function pa_hover(sample) {
 function select_and_hover() {
     // get selection
     var sample = sample_search_obj.items[0]
-    console.log("in select and hover with", sample)
+    //console.log("in select and hover with", sample)
     
     if (sample) {
         // get curve and sample index
@@ -432,10 +450,18 @@ function init_depth_metrics_plot() {
 }
 
 // select listeners for plot A
-jQuery('#plotay_select, #plotax_select').on('change', function() {
+jQuery('#plotay_select, #plotax_select, #n_scale').on('change', function() {
     pa_hover(false)
-    var metric = this.value
-    set_xy_data_by_group(input, metric, this.id == "plotax_select")
+    var scale = jQuery('#n_scale').is(":checked");
+    if(this.id != "n_scale") {
+        var metric = this.value
+        set_xy_data_by_group(input, metric, this.id == "plotax_select", scale)
+    } else {
+        // if scale, then we need to reset both X and Y
+        set_xy_data_by_group(input, jQuery("#plotax_select").val(), true, scale)
+        set_xy_data_by_group(input, jQuery("#plotay_select").val(), false, scale)
+   }
+
 
     if(this.id == 'plotay_select') {
         layout_a.yaxis.title = jQuery("#plotay_select option:selected").text();

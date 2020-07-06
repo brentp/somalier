@@ -1,3 +1,9 @@
+v0.2.12 (dev)
+=============
++ add checkbox to HTML to scale IBS0, IBS2, etc by number of sites shared by the samples. this almost always
+  results in a scaling that is better across (pairs of) samples.
+
+
 v0.2.11
 =======
 + more informative error message on bad sample name (#53)
