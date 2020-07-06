@@ -463,11 +463,13 @@ jQuery('#plotay_select, #plotax_select, #n_scale').on('change', function() {
    }
 
 
-    if(this.id == 'plotay_select') {
-        layout_a.yaxis.title = jQuery("#plotay_select option:selected").text();
-    } else {
-        layout_a.xaxis.title = jQuery("#plotax_select option:selected").text();
-    }
+    layout_a.yaxis.title = jQuery("#plotay_select option:selected").text();
+    var yv = jQuery('#plotay_select').val()
+    if(scale && yv != "relatedness" && yv != "concordance") { layout_a.yaxis.title = "Scaled " + layout_a.yaxis.title }
+
+    var xv = jQuery('#plotax_select').val()
+    layout_a.xaxis.title = jQuery("#plotax_select option:selected").text();
+    if(scale && xv != "relatedness" && xv != "concordance") { layout_a.xaxis.title = "Scaled " + layout_a.xaxis.title }
     Plotly.react(pa, input, layout_a)
     select_and_hover()
 })
