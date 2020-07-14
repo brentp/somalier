@@ -1,6 +1,7 @@
 # somalier: extract informative sites, evaluate relatedness, and perform quality-control on BAM/CRAM/BCF/VCF/GVCF
 
 [![Actions Status](https://github.com/brentp/somalier/workflows/Docker%20Image%20CI/badge.svg)](https://github.com/brentp/somalier/actions)
+[![Cite](https://img.shields.io/badge/cite-genome%20medicine-blue)](https://genomemedicine.biomedcentral.com/articles/10.1186/s13073-020-00761-2)
 
 Existing software for checking relatedness requires jointly-called germ-line variant calls,
 but cancer projects have only somatic calls between tumor-normal pairs.
