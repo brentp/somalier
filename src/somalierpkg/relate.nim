@@ -868,17 +868,6 @@ proc toj(sample_names: seq[string], stats: seq[Stat4], gt_counts: array[5, seq[u
     ))
   result.add("]")
 
-proc update_with_glob(files: var seq[string]) =
-  var toadd = newSeqOfCap[string](256)
-  for i in 0..<min(files.len, 10):
-    for w in files[i].walkFiles:
-      toadd.add(w)
-
-  if files.len > 10:
-    files = toadd & files[10..files.high]
-  else:
-    files = toadd
-
 proc add_prefixed_samples(groups: var seq[pair], samples: seq[string], prefixes: seq[string]) =
   # update groups so that sample == ${prefix}sample
   #if len(prefixes) == 0: return
@@ -1034,7 +1023,7 @@ specified as comma-separated groups per line e.g.:
       relGt0p2.mgetOrPut(rel.sample_a, @[]).add(rel.sample_b)
       relGt0p2.mgetOrPut(rel.sample_b, @[]).add(rel.sample_a)
 
-    let ra = random(1'f32)
+    let ra = rand(1'f32)
     let interesting = expected_relatedness != -1 or rr > 0.05
     if (ra > proportion_sampled) and not interesting:
       continue

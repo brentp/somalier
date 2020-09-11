@@ -9,6 +9,7 @@ import strformat
 import arraymancer
 import ./relate
 import ./depthview
+import ./common
 import argparse
 import sets
 import arraymancer
@@ -103,6 +104,8 @@ proc ancestry_main*() =
   if opts.extracted.len == 0:
     echo p.help
     quit "send argument for extracted files"
+
+  opts.extracted.update_with_glob
 
   var (labeled_samples, query_samples) = opts.extracted.split_labeled_samples
 

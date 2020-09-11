@@ -3,6 +3,7 @@ import strformat
 import algorithm
 import hts/private/hts_concat
 import hts/fai
+import os
 
 const formatVersion* = 2'u8
 
@@ -15,6 +16,21 @@ type Site* = object
   ## A/B_allele so instead we keep the `flip` attribute and just swap ref, atl
   ## counts if swap is true.
   flip*:bool
+
+
+proc update_with_glob*(files: var seq[string]) =
+  var toadd = newSeqOfCap[string](256)
+  for i in 0..<min(files.len, 10):
+    if files[i] == "++":
+      toadd.add(files[i])
+      continue
+    for w in files[i].walkFiles:
+      toadd.add(w)
+
+  if files.len > 10:
+    files = toadd & files[10..files.high]
+  else:
+    files = toadd
 
 {.push checks: off, optimization:speed.}
 proc toSite(toks: seq[string]): Site =
