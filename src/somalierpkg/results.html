@@ -109,6 +109,7 @@
                             <option value="depth_mean">Mean depth of all sites</option>
                             <option value="ab_mean">Mean allele balance</option>
                             <option value="pct_other_alleles">% reads with neither REF nor ALT</option>
+                            <option value="heterozygosity">Heterozygosity rate</option>
                             <option value="n_hom_ref">Number of 0/0 sites</option>
                             <option value="n_het">Number of 0/1 sites</option>
                             <option value="n_hom_alt">Number of 1/1 sites</option>
@@ -133,6 +134,7 @@
                             <option value="depth_mean">Mean depth of all sites</option>
                             <option value="ab_mean">Mean allele balance</option>
                             <option value="pct_other_alleles">% reads with neither REF nor ALT</option>
+                            <option value="heterozygosity">Heterozygosity rate</option>
                             <option value="n_hom_ref">Number of 0/0 sites</option>
                             <option value="n_het">Number of 0/1 sites</option>
                             <option value="n_hom_alt">Number of 1/1 sites</option>
@@ -313,6 +315,7 @@ for (i in sample_data) {
     } else if (sex == "female") {
         idx = 2
     }
+    sample_data[i].heterozygosity = sample_data[i].n_het / (sample_data[i].n_het + sample_data[i].n_hom_ref + sample_data[i].n_hom_alt)
 
     traces_b[idx].x.push(sample_data[i][xf])
     traces_b[idx].y.push(sample_data[i][yf])

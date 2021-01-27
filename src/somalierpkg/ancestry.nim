@@ -6,7 +6,6 @@ import times
 import sequtils
 import random
 import strformat
-import arraymancer
 import ./relate
 import ./depthview
 import ./common
@@ -229,7 +228,7 @@ proc ancestry_main*() =
           clf = model.forward(X[X.value.shape[0] - nn_test_samples..<X.value.shape[0], _])
           y_pred = clf.value.softmax.argmax(axis=1).squeeze
           y = Y[X.value.shape[0] - nn_test_samples..<X.value.shape[0]]
-          loss = clf.sparse_softmax_cross_entropy(y).value.data[0]
+          loss = clf.sparse_softmax_cross_entropy(y).value.unsafe_raw_offset[0]
           accuracy = accuracy_score(y_pred, y)
       stderr.write_line &"[somalier] Epoch:{epoch}. loss: {loss:.5f}. accuracy on unseen data: {accuracy:.3f}.  total-time: {cpuTime() - t0:.2f}"
       if epoch >= 800 and ((loss < 0.005 and accuracy > 0.98) or (accuracy >= 0.995 and loss < 0.025)):

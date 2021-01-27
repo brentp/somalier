@@ -1,9 +1,13 @@
+v0.2.13
+=======
++ add "Heterozygosity rate" as a per-sample metric to the html output. (Thanks Irenaeus and Kelly for the suggestion)
+
+
 v0.2.12
 =======
 + add checkbox to HTML to scale IBS0, IBS2, etc by number of sites shared by the samples. this almost always
   results in a scaling that is better across (pairs of) samples.
 + ancestry: allow globs for ancestry files (#59)
-
 
 v0.2.11
 =======

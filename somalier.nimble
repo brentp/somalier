@@ -1,6 +1,6 @@
 #import somalierpkg/version as _
 
-version       = "0.2.12" #somalierVersion
+version       = "0.2.13" #somalierVersion
 author        = "Brent Pedersen"
 description   = "sample-swap checking directly on BAMs/CRAMs for cancer data"
 license       = "academic only"
@@ -10,7 +10,7 @@ license       = "academic only"
 # Dependencies
 
 requires "https://github.com/brentp/zip#dev"
-requires "nim >= 0.20.0", "hts >= 0.3.4", "https://github.com/brentp/pedfile >= 0.0.3", "https://github.com/brentp/hileup", "argparse", "lapper", "arraymancer#head"
+requires "nim >= 0.20.0", "hts >= 0.3.4", "https://github.com/brentp/pedfile >= 0.0.3", "https://github.com/brentp/hileup", "argparse == 0.10.1", "lapper", "arraymancer#head"
 requires "https://github.com/brentp/slivar#head"
 srcDir = "src"
 
