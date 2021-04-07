@@ -235,6 +235,7 @@ proc relatedness(r: var relation_matrices, j: int, k:int): relation {.inline.} =
                  ibs0: r.ibs[j * r.n_samples + k],
                  shared_hets: r.ibs[k * r.n_samples + j],
                  shared_hom_alts: r.shared_hom_alts[j * r.n_samples + k],
+                 het_ab: r.shared_hom_alts[k * r.n_samples + j],
                  ibs2: r.n[k * r.n_samples + j],
                  n: r.n[j * r.n_samples + k],
                  x_ibs0: r.x[j * r.n_samples + k],
@@ -254,7 +255,7 @@ proc relatedness(r: var relation_matrices, j: int, k:int): relation {.inline.} =
   r.x[j * r.n_samples + k] = xir.IBS0.uint16
   r.x[k * r.n_samples + j] = xir.IBS2.uint16
 
-  return relation(#sample_a: sample_names[j],
+  result = relation(#sample_a: sample_names[j],
                  #sample_b: sample_names[k],
                  hets_a: hets_j, hets_b: hets_k,
                  hom_alts_a: r.gt_counts[2][j], hom_alts_b: r.gt_counts[2][k],
@@ -453,7 +454,7 @@ const missing = [".", "0", "-9", ""]
 proc high_quality(gt_counts: array[5, seq[uint16]], i:int): bool {.inline.} =
   # less than 3% of sites with allele balance outside of 0.1 .. 0.9
   result = gt_counts[4][i].float / (gt_counts[0][i] + gt_counts[1][i] + gt_counts[2][i] + gt_counts[3][i] + gt_counts[4][i]).float < 0.06
-  if not result: 
+  if not result:
     return false
   result = gt_counts[2][i].float / gt_counts[1][i].float > 0.7
 
@@ -995,6 +996,7 @@ specified as comma-separated groups per line e.g.:
     let expected_relatedness = if idx == -1: -1'f else: groups[idx].rel
     let rr = rel.rel
 
+    # PARENT_CHILD
     if rr > 0.4 and rr < 0.6 and rel.ibs0.float / rel.ibs2.float < 0.005:
       parent_child_pair.mgetOrPut(rel.sample_a, @[]).add(rel.sample_b)
       parent_child_pair.mgetOrPut(rel.sample_b, @[]).add(rel.sample_a)

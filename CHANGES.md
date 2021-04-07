@@ -1,6 +1,7 @@
 v0.2.13
 =======
 + add "Heterozygosity rate" as a per-sample metric to the html output. (Thanks Irenaeus and Kelly for the suggestion)
++ fix inference for some cases. obvious parent-child pairs were sometimes missed.
 
 
 v0.2.12
