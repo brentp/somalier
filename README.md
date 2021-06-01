@@ -3,10 +3,7 @@
 [![Actions Status](https://github.com/brentp/somalier/workflows/Docker%20Image%20CI/badge.svg)](https://github.com/brentp/somalier/actions)
 [![Cite](https://img.shields.io/badge/cite-genome%20medicine-blue)](https://genomemedicine.biomedcentral.com/articles/10.1186/s13073-020-00761-2)
 
-Existing software for checking relatedness requires jointly-called germ-line variant calls,
-but cancer projects have only somatic calls between tumor-normal pairs.
-
-`somalier` makes checking any number of samples for identity easy **directly from the alignments**:
+`somalier` makes checking any number of samples for identity easy **directly from the alignments** or from jointly-called VCFs:
 
 The first step is to extract sites. For **VCF** just use:
 ```
@@ -50,6 +47,16 @@ glob strings like:  `"/path/to/set-a/*.somalier" "/path/to/set-b/*.somalier"`.
 
 + Interactive output from `somalier relate` is [here](https://brentp.github.io/somalier/ex.html)
 + Interactive output from `somalier ancestry` is [here](https://brentp.github.io/somalier/ex.somalier-ancestry.html)
+
+## Infer
+
+`somalier` can also infer first-degree relationships (parent-child) when both-parents
+are present and can often build entire pedigrees on high-qualty data. To do this, use
+ `somalier relate --infer ...` and the **samples.tsv** output will be a pedigree file
+indicating the inferred relationships.
+
+See [wiki](https://github.com/brentp/somalier/wiki/pedigree-inference) for more detail.
+
 
 ## Usage
 
