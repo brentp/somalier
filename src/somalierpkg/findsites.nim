@@ -4,6 +4,7 @@ import algorithm
 import hts
 import slivarpkg/gnotate
 import strutils
+import strformat
 import tables
 import argparse
 
@@ -68,6 +69,7 @@ proc closest(v:Variant, vs: seq[Variant]): Variant =
     if d < closest_dist:
       closest_dist = d
       result = o
+
 proc findsites_main*() =
   var p = newParser("somalier find-sites"):
     option("-x", "--exclude", multiple=true, help="optional exclude files")
@@ -75,6 +77,7 @@ proc findsites_main*() =
     option("--gnotate-exclude", help="sites in slivar gnotation (zip) format to exclude")
     option("--snp-dist", help="minimum distance between autosomal SNPs to avoid linkage", default="10000")
     option("--min-AN", help="minimum number of alleles (AN) at the site. (must be less than twice number of samples in the cohort)", default="115_000")
+    option("--min-AF", help="minimum allele frequency for a site", default="0.15")
     arg("vcf", help="population VCF to use to find sites", nargs=1)
 
   var argv = commandLineParams()
@@ -92,6 +95,7 @@ proc findsites_main*() =
     wtr:VCF
     snp_dist = parseInt(opts.snp_dist)
     min_AN = parseInt(opts.min_AN)
+    min_AF = parseFloat(opts.min_AF)
     gno:Gnotater
 
   var exclude_regions = newTable[string, seq[region]]()
@@ -108,6 +112,7 @@ proc findsites_main*() =
 
   if not open(vcf, opts.vcf, threads=2):
     quit "couldn't open " & opts.vcf
+  vcf.set_samples(@[])
   var out_path = "sites.vcf.gz"
   if not open(wtr, out_path, mode="wz", threads=1):
     quit "couldn't open stdout for writing sites"
@@ -126,6 +131,7 @@ proc findsites_main*() =
   var ranksum = @[0'f32]
 
   for v in vcf:
+    if v.c == nil: break
     if $v.CHROM notin ["chrY", "Y", "chrX", "X"] and v.REF == "C": continue
     if v.CHROM != last_chrom:
       last_chrom = v.CHROM
@@ -169,14 +175,12 @@ proc findsites_main*() =
       continue
 
     var info = v.info
-    if info.get("AF", afs) != Status.OK:
-      continue
     if info.get("AN", ans) == Status.OK and (($v.CHROM notin ["chrX", "X", "chrY", "Y"]) and ans[0] < min_AN) :
       continue
     if $v.CHROM in ["chrY", "Y", "chrX", "X"]:
       if afs[0] < 0.04 or afs[0] > 0.96: continue
     else:
-      if afs[0] < 0.1 or afs[0] > 0.9: continue
+      if afs[0] < min_AF or afs[0] > (1 - min_AF): continue
 
     if info.get("AS_FilterStatus", oms) == Status.OK and oms != "PASS":
       continue
@@ -230,7 +234,6 @@ proc findsites_main*() =
     snp_lappers[k] = lapify(vs)
 
 
-
   # Sort all variants by reverse AF, then write any variant that's
   # not within X bases of a previously added variant.
   saved.sort(vf_by)
@@ -238,6 +241,7 @@ proc findsites_main*() =
   var added = newTable[cstring, seq[Variant]]()
 
   var used = newSeqOfCap[Variant](8192)
+  var usedxy = newSeqOfCap[Variant](8192)
   var empty: seq[region]
 
   for v in saved:
@@ -261,27 +265,37 @@ proc findsites_main*() =
         continue
 
     #discard wtr.write_variant(v.v)
-    vs.add(v.v.copy())
-    used.add(v.v.copy())
+    if $v.v.CHROM in ["chrX", "X", "Y", "chrY"]:
+      usedxy.add(v.v.copy())
+    else:
+      vs.add(v.v.copy())
+      used.add(v.v.copy())
 
     added[v.v.CHROM] = vs
 
-  sort(used, proc(a, b: Variant): int =
-      if a.rid != b.rid: return cmp(a.rid, b.rid)
-      return cmp(a.start, b.start)
-  )
-  for v in used:
-    var info = v.info
-    for f in info.fields:
-      if f.name in ["AF", "AC"]: continue
-      try:
-        discard info.delete(f.name)
-      except:
-        discard
-    # these make the compressed vcf smaller
-    v.ID = "."
-    v.QUAL = 100
-    doAssert wtr.write_variant(v)
+  stderr.write_line &"sorted and filtered to {used.len} variants. now dropping INFOs and writing"
+  if used.len.int > uint16.high.int:
+    used = used[0..<uint16.high.int]
+
+  var uu = [used, usedxy]
+
+  for us in uu.mitems:
+    sort(us, proc(a, b: Variant): int =
+        if a.rid != b.rid: return cmp(a.rid, b.rid)
+        return cmp(a.start, b.start)
+    )
+    for v in us:
+      var info = v.info
+      for f in info.fields:
+        if f.name in ["AF", "AC"]: continue
+        try:
+          discard info.delete(f.name)
+        except:
+          discard
+      # these make the compressed vcf smaller
+      v.ID = "."
+      v.QUAL = 100
+      doAssert wtr.write_variant(v)
 
   stderr.write_line "[somalier] wrote ", $used.len, " variants to:", $out_path
   if vcf.header == nil:

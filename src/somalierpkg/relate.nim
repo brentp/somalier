@@ -249,7 +249,7 @@ proc relatedness(r: var relation_matrices, j: int, k:int): relation {.inline.} =
   r.n[j * r.n_samples + k] = ir.N.uint16
   r.n[k * r.n_samples + j] = ir.IBS2.uint16
   r.shared_hom_alts[j * r.n_samples + k] = ir.shared_hom_alts.uint16
-  r.shared_hom_alts[k * r.n_samples + j] = ir.het_ab.uint16
+  r.shared_hom_alts[k * r.n_samples + j] = min(uint16.high.int32, ir.het_ab).uint16
 
   let xir = r.x_genotypes[j].XIBS(r.x_genotypes[k])
   r.x[j * r.n_samples + k] = xir.IBS0.uint16
@@ -264,7 +264,7 @@ proc relatedness(r: var relation_matrices, j: int, k:int): relation {.inline.} =
                  shared_hom_alts: ir.shared_hom_alts.uint16,
                  ibs2: ir.IBS2.uint16,
                  n: ir.N.uint16,
-                 het_ab: ir.het_ab.uint16,
+                 het_ab: min(uint16.high.int32, ir.het_ab).uint16,
                  x_ibs0: xir.IBS0.uint16,
                  x_ibs2: xir.IBS2.uint16,
                  )
