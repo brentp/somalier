@@ -24,6 +24,14 @@ done
 the [releases](https://github.com/brentp/somalier/releases) but any set of common variants will work.
 
 
+> :warning: `somalier` can work on GVCF and individual VCFs, but it is
+> recommended to extract from bam/cram when possible. It is also good to
+> extract from a jointly-called VCF/BCF when only looking within that cohort.
+> While extracting from a single-sample VCF is possible (with --unknown) and
+> GVCF is also supported, these options are less accurate and more prone to
+> problems.
+
+
 The next step is to calculate relatedness on the extracted data:
 
 ```
