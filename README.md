@@ -159,52 +159,6 @@ specified as comma-separated groups per line e.g.:
   -o, --output-prefix=OUTPUT_PREFIX
                              output prefix for results. (default: somalier)
 ```
-### somalier ancestry (somalier pca)
-```
-$somalier ancestry --help
-
-somalier pca
-
-dimensionality reduction
-
-Usage:
-  somalier pca [options] [extracted ...]
-
-Arguments:
-  [extracted ...]  $sample.somalier files for each sample. place labelled samples first followed by '++' then *.somalier for query samples
-
-Options:
-  --labels=LABELS            file with ancestry labels
-  -o, --output-prefix=OUTPUT_PREFIX
-                             prefix for output files (default: somalier-ancestry)
-  --n-pcs=N_PCS              number of principal components to use in the reduced dataset (default: 5)
-  --nn-hidden-size=NN_HIDDEN_SIZE
-                             shape of hidden layer in neural network (default: 16)
-  --nn-batch-size=NN_BATCH_SIZE
-                             batch size fo training neural network (default: 32)
-  --nn-test-samples=NN_TEST_SAMPLES
-                             number of labeled samples to test for NN convergence (default: 101)
-```
-### somalier find-sites
-```
-$somalier find-sites --help
-
-Usage:
-  somalier find-sites [options] vcf
-
-Arguments:
-  vcf              population VCF to use to find sites
-
-Options:
-  -x, --exclude=EXCLUDE      optional exclude files
-  -i, --include=INCLUDE      optional include file. only consider variants that fall in ranges within this file
-  --gnotate-exclude=GNOTATE_EXCLUDE
-                             sites in slivar gnotation (zip) format to exclude
-  --snp-dist=SNP_DIST        minimum distance between autosomal SNPs to avoid linkage (default: 10000)
-  --min-AN=MIN_AN            minimum number of alleles (AN) at the site. (must be less than twice number of samples in the cohort) (default: 115_000)
-  -h, --help                 Show this help
-this will write output sites to: ./sites.vcf.gz
-```
 
 ## Install
 
