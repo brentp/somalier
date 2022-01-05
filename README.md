@@ -2,7 +2,7 @@
 
 [![Actions Status](https://github.com/brentp/somalier/workflows/Docker%20Image%20CI/badge.svg)](https://github.com/brentp/somalier/actions)
 [![Cite](https://img.shields.io/badge/cite-genome%20medicine-blue)](https://genomemedicine.biomedcentral.com/articles/10.1186/s13073-020-00761-2)
-
+## Quick Start 
 `somalier` makes checking any number of samples for identity easy **directly from the alignments** or from jointly-called VCFs:
 
 The first step is to extract sites. For **VCF** just use:
@@ -80,18 +80,6 @@ for a vcf, run:
 somalier extract -d cohort/ --sites sites.hg38.vcf.gz -f $reference $cohort.bcf
 ```
 
-Then run:
-```
-somalier relate --ped $pedigree_file cohort/*.somalier
-```
-This will create an html file for QC in a few seconds. 
-
-Note that if a new sample is added to the cohort, it's only necessary to perform
-the `extract` step on that sample and then run the (fast) `relate` step again with all
-of the extracted files.
-
-## VCF
-
 `somalier` can `extract` from a multi or single-sample VCF or a GVCF. This will be much faster, in cases where it's available,
 this would look like:
 
@@ -104,6 +92,73 @@ following this, there will be a `$sample.somalier` file for each sample in the `
 Note that `somalier` uses the `AD` field to extract depth information. If that FORMAT field is not present in the
 header, then it will use the genotypes only and use a total depth of 20 (10,10 for heterozygote), etc.
 
+
+Then run:
+```
+somalier relate --ped $pedigree_file cohort/*.somalier
+```
+This will create an html file for QC in a few seconds. 
+
+Note that if a new sample is added to the cohort, it's only necessary to perform
+the `extract` step on that sample and then run the (fast) `relate` step again with all
+of the extracted files.
+
+## Extended Usage
+For each command of somalier, extended parameters are listed in `--help` of each subcommand.
+```
+$./somalier --help
+Commands:
+  extract      :   extract genotype-like information for a single sample from VCF/BAM/CRAM.
+  relate       :   aggregate `extract`ed information and calculate relatedness among samples.
+  ancestry     :   perform ancestry prediction on a set of samples, given a set of labeled samples
+  find-sites   :   create a new sites.vcf.gz file from a population VCF (this is rarely needed).
+```
+### somalier extract
+```
+$somalier extract --help
+
+extract genotype-like information for a single-sample at selected sites
+
+Usage:
+  somalier extract [options] sample_file
+
+Arguments:
+  sample_file      single-sample CRAM/BAM/GVCF file or multi/single-sample VCF from which to extract
+
+Options:
+  -s, --sites=SITES          sites vcf file of variants to extract
+  -f, --fasta=FASTA          path to reference fasta file
+  -d, --out-dir=OUT_DIR      path to output directory (default: .)
+  --sample-prefix=SAMPLE_PREFIX
+                             prefix for the sample name stored inside the digest
+```
+### somalier relate
+```
+$somalier relate --help
+
+calculate relatedness among samples from extracted, genotype-like information
+
+Usage:
+  somalier relate [options] [extracted ...]
+
+Arguments:
+  [extracted ...]  $sample.somalier files for each sample. the first 10 are tested as a glob patterns
+
+Options:
+  -g, --groups=GROUPS        optional path  to expected groups of samples (e.g. tumor normal pairs).
+specified as comma-separated groups per line e.g.:
+    normal1,tumor1a,tumor1b
+    normal2,tumor2a
+  --sample-prefix=SAMPLE_PREFIX
+                             optional sample prefixes that can be removed to find identical samples. e.g. batch1-sampleA batch2-sampleA
+  -p, --ped=PED              optional path to a ped/fam file indicating the expected relationships among samples.
+  -d, --min-depth=MIN_DEPTH  only genotype sites with at least this depth. (default: 7)
+  --min-ab=MIN_AB            hets sites must be between min-ab and 1 - min_ab. set this to 0.2 for RNA-Seq data (default: 0.3)
+  -u, --unknown              set unknown genotypes to hom-ref. it is often preferable to use this with VCF samples that were not jointly called
+  -i, --infer                infer relationships (https://github.com/brentp/somalier/wiki/pedigree-inference)
+  -o, --output-prefix=OUTPUT_PREFIX
+                             output prefix for results. (default: somalier)
+```
 
 ## Install
 
