@@ -904,9 +904,9 @@ proc rel_main*() =
   var p = newParser("somalier relate"):
     help("calculate relatedness among samples from extracted, genotype-like information")
     option("-g", "--groups", help="""optional path  to expected groups of samples (e.g. tumor normal pairs).
-specified as comma-separated groups per line e.g.:
-    normal1,tumor1a,tumor1b
-    normal2,tumor2a""")
+                             A group file is specified as comma-separated groups per line e.g.:
+                                 normal1,tumor1a,tumor1b
+                                 normal2,tumor2a""")
     option("--sample-prefix", multiple=true, help="optional sample prefixes that can be removed to find identical samples. e.g. batch1-sampleA batch2-sampleA")
     option("-p", "--ped", help="optional path to a ped/fam file indicating the expected relationships among samples.")
     option("-d", "--min-depth", default="7", help="only genotype sites with at least this depth.")
