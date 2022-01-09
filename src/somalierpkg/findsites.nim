@@ -19,7 +19,9 @@ type vf = object
   v: Variant
   af: float32
 
-const target_af = 0.48
+var target_af = 0.48
+if getEnv("SOMALIER_TARGET_AF") != "":
+    target_af = parseFloat(getEnv("SOMALIER_TARGET_AF"))
 
 proc vf_by(a:vf, b:vf): int =
   return cmp((a.af - target_af).abs, (b.af - target_af).abs)
