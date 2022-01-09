@@ -160,6 +160,10 @@ specified as comma-separated groups per line e.g.:
                              output prefix for results. (default: somalier)
 ```
 
+## find-sites
+
+To create a set of new sites, use `somalier find-sites` on a population VCF. More info on this tool is available in [the wiki](https://github.com/brentp/somalier/wiki/find-sites)
+
 ## Install
 
 get a static binary from [here](https://github.com/brentp/somalier/releases)
@@ -209,26 +213,7 @@ the red. In the somalier output, the user can **hover to see which sample-pairs 
 
 ## Ancestry Estimate
 
-note: this feature is working, but still experimental. it may change in future versions.
-
-`somalier` can predict ancestry on a set of query samples given a set of labelled samples, for example from thousand genomes along with labels for.
-This would look like:
-
-```
-somalier ancestry --labels ancestry-labels-1kg.tsv 1kg-somalier/*.somalier ++ query-samples-somalier/*.somalier
-```
-Where the `++` separates the labeled samples from the query samples. This command will create an html output along
-with a text file of the predictions.
-
-`ancestry-labels-1kg.tsv` is [here](https://raw.githubusercontent.com/brentp/somalier/master/scripts/ancestry-labels-1kg.tsv)
-
-and the somalier files for thousand genomes can be downloaded from [here](https://zenodo.org/record/3479773/files/1kg.somalier.tar.gz?download=1)
-These were created from the thousand genomes high coverage data from [here](http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/1000G_2504_high_coverage/working/20190425_NYGC_GATK/)
-
-Note that these will work for either GRCh37 or hg38 as long as you use the most recent sites files distributed with `somalier`.
-
-Example output is [here](https://brentp.github.io/somalier/ex.somalier-ancestry.html)
-
+`somalier` can predict ancestry on a set of query samples given a set of labelled samples. You can read more about this in [the wiki](https://github.com/brentp/somalier/wiki/ancestry)
 
 ## Usage
 
