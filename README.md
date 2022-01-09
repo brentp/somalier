@@ -114,11 +114,10 @@ Commands:
   find-sites   :   create a new sites.vcf.gz file from a population VCF (this is rarely needed).
 ```
 ### somalier extract
-```
-$somalier extract --help
 
 extract genotype-like information for a single-sample at selected sites
 
+```
 Usage:
   somalier extract [options] sample_file
 
@@ -133,11 +132,10 @@ Options:
                              prefix for the sample name stored inside the digest
 ```
 ### somalier relate
-```
-$somalier relate --help
 
 calculate relatedness among samples from extracted, genotype-like information
 
+```
 Usage:
   somalier relate [options] [extracted ...]
 
@@ -159,6 +157,11 @@ specified as comma-separated groups per line e.g.:
   -o, --output-prefix=OUTPUT_PREFIX
                              output prefix for results. (default: somalier)
 ```
+
+Note that for large cohorts, by default, `somalier relate` will subset to interesting sample-pairs so as not to
+balloon the size of the output. By default, pairs that are expected to be unrelated and have a relatedness <= 0.05.
+If you wish to force all samples to be reported, then set the environment variable `SOMALIER_REPORT_ALL_PAIRS` to any non-empty
+value, e.g. `export SOMALIER_REPORT_ALL_PAIRS=1`
 
 ## find-sites
 

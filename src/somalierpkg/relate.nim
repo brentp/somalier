@@ -937,6 +937,8 @@ proc rel_main*() =
   if not opts.output_prefix.endswith(".") or opts.output_prefix.endswith("/"):
     opts.output_prefix &= '.'
 
+  let include_all = getEnv("SOMALIER_REPORT_ALL_PAIRS") != ""
+
   var t0 = cpuTime()
   var final = read_extracted(opts.extracted, min_ab, min_depth, unk2hr)
   var n_samples = final.samples.len
@@ -1027,12 +1029,14 @@ proc rel_main*() =
 
     let ra = rand(1'f32)
     let interesting = expected_relatedness != -1 or rr > 0.05
+    if include_all or interesting or ra <= proportion_sampled:
+        fh_tsv.write_line rel.tsv(expected_relatedness)
+
     if (ra > proportion_sampled) and not interesting:
       continue
     rels.add(rel, max(0, expected_relatedness))
     nrels.inc
 
-    fh_tsv.write_line rel.tsv(expected_relatedness)
   stderr.write_line &"[somalier] time to calculate all vs all relatedness for all {npairs} combinations: {cpuTime() - t0:.2f}"
 
   fh_html.write(%* rels)

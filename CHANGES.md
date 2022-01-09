@@ -1,8 +1,13 @@
+v0.2.14
+=======
++ minor fixes to find-sites
++ allow setting env variable `SOMALIER_REPORT_ALL_PAIRS` to force reporting of all sample-pairs (#76)
++ improve readme (via @zztin)
+
 v0.2.13
 =======
 + add "Heterozygosity rate" as a per-sample metric to the html output. (Thanks Irenaeus and Kelly for the suggestion)
 + fix inference for some cases. obvious parent-child pairs were sometimes missed.
-
 
 v0.2.12
 =======
