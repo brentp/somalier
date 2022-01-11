@@ -1,0 +1,50 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the article as below."
+abstract: "When interpreting sequencing data from multiple spatial or longitudinal biopsies, detecting sample mix-ups is essential, yet more difficult than in studies of germline variation. In most genomic studies of tumors, genetic variation is detected through pairwise comparisons of the tumor and a matched normal tissue from the sample donor. In many cases, only somatic variants are reported, which hinders the use of existing tools that detect sample swaps solely based on genotypes of inherited variants. To address this problem, we have developed Somalier, a tool that operates directly on alignments and does not require jointly called germline variants. Instead, Somalier extracts a small sketch of informative genetic variation for each sample. Sketches from hundreds of germline or somatic samples can then be compared in under a second, making Somalier a useful tool for measuring relatedness in large cohorts. Somalier produces both text output and an interactive visual report that facilitates the detection and correction of sample swaps using multiple relatedness metrics."
+authors:
+    - 
+      family-names: Pedersen
+      given-names: Brent S.
+      email: bpederse@gmail.com
+title: "Somalier: rapid relatedness estimation for cancer and germline studies using efficient genome sketches"
+preferred-citation:
+    authors:
+      - 
+        family-names: Pedersen
+        given-names: Brent S.
+        email: bpederse@gmail.com
+      - 
+        family-names: Bhetariya
+        given-names: Preetida J.
+      - 
+        family-names: Brown
+        given-names: Joe M.
+      - 
+        family-names: Kravitz
+        given-names: Stephanie N.
+      - 
+        family-names: Marth
+        given-names: Gabor
+      - 
+        family-names: Jensen
+        given-names: Randy L.
+      - 
+        family-names: Bronner
+        given-names: Mary P.
+      - 
+        family-names: Underhill
+        given-names: Hunder R.
+      - 
+        family-names: Quinlan
+        given-names: Aaron R.
+    title: "Somalier: rapid relatedness estimation for cancer and germline studies using efficient genome sketches"
+    journal: Genome Medicine
+    issue: 12
+    number: 62
+    type: article
+    year: 2020
+    doi: 10.1186/s13073-020-00761-2
+
+version: 0.2.14
+date-released: 2022-01-01
+license: MIT
