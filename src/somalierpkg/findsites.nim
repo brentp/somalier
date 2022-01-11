@@ -22,6 +22,7 @@ type vf = object
 var target_af = 0.48
 if getEnv("SOMALIER_TARGET_AF") != "":
     target_af = parseFloat(getEnv("SOMALIER_TARGET_AF"))
+    stderr.write_line &"[somalier/find-sites] using {target_af:.2f} as the target allele frequency"
 
 proc vf_by(a:vf, b:vf): int =
   return cmp((a.af - target_af).abs, (b.af - target_af).abs)
@@ -114,7 +115,7 @@ proc findsites_main*() =
 
   if not open(vcf, opts.vcf, threads=2):
     quit "couldn't open " & opts.vcf
-  vcf.set_samples(@[])
+  vcf.set_samples(@["^"])
   var out_path = "sites.vcf.gz"
   if not open(wtr, out_path, mode="wz", threads=1):
     quit "couldn't open stdout for writing sites"
