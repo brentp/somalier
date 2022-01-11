@@ -4,7 +4,7 @@ FROM brentp/musl-hts-nim:v0.3.4
 RUN apk add bash procps
 
 RUN cd / &&    \
-    git clone -b master --depth 10 git://github.com/brentp/somalier.git && \
+    git clone -b master --depth 5 https://github.com/brentp/somalier.git && \
     cd somalier && \
     nimble install -y nimble && \
     /root/.nimble/bin/nimble install -d -y
