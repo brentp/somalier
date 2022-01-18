@@ -3,7 +3,7 @@
 version       = "0.2.15" #somalierVersion
 author        = "Brent Pedersen"
 description   = "sample-swap checking directly on BAMs/CRAMs for cancer data"
-license       = "academic only"
+license       = "MIT"
 
 
 
