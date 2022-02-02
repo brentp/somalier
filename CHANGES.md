@@ -1,3 +1,11 @@
+v0.2.16
+=======
++ change `SOMALIER_REPORT_ALL_PAIRS` to the more general `SOMALIER_SAMPLE_RATE`
+  the new env var can be set to 0 to not report any pairs that have
+  a relatedness value < 0.05 and are specified to be unrelated (by the groups or
+  pedigree file, if given). This can also be set to 1 to replicate the effect of
+  `SOMALIER_REPORT_ALL_PAIRS` which is now removed.
+
 v0.2.14
 =======
 + minor fixes to find-sites
