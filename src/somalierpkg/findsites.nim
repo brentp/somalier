@@ -54,7 +54,7 @@ proc bed_to_table(bed: string, bed_regions:var TableRef[string, seq[region]]) =
       continue
     var v = bed_line_to_region($kstr.s)
     if v.chrom.len == 0: continue
-    discard bed_regions.hasKeyOrPut(v.chrom, new_seq[region]())
+    let x = bed_regions.hasKeyOrPut(v.chrom, new_seq[region]())
     bed_regions[v.chrom].add(v)
 
   # since it is read into mem, can also well sort.
@@ -63,15 +63,12 @@ proc bed_to_table(bed: string, bed_regions:var TableRef[string, seq[region]]) =
 
   hts.free(kstr.s)
 
-proc closest(v:Variant, vs: seq[Variant]): Variant =
-  ## find the closest variant by brute force.
-  result = vs[0]
-  var closest_dist = (v.start - vs[0].start).abs
-  for o in vs:
-    var d = (v.start - o.start).abs
-    if d < closest_dist:
-      closest_dist = d
-      result = o
+proc closest_dist(v:Variant, vs: seq[int64]): int64 =
+  ## find the distance to the closest variant by brute force.
+  let vstart = v.start
+  result = (vstart - vs[0]).abs
+  for ostart in vs:
+    result = min(result, (vstart - ostart).abs)
 
 proc findsites_main*() =
   var p = newParser("somalier find-sites"):
@@ -155,11 +152,12 @@ proc findsites_main*() =
     if $last_chrom in ["X", "chrX"] and (v.start < 2781479 or v.start > 154931044) : continue
 
     if v.info.get("AF", afs) != Status.OK:
+      stderr.write_line "[somalier] af not found, using 0"
       afs = @[0'f32]
 
     if v.REF.len > 1 or v.ALT.len > 1 or v.ALT[0].len > 1:
       if afs[0] > 0.02:
-        discard indels.hasKeyOrPut($v.CHROM, newSeq[region]())
+        let x = indels.hasKeyOrPut($v.CHROM, newSeq[region]())
         var r = region(chrom: $v.CHROM, start: max(v.start.int - 7, 0), stop: v.stop.int + 7)
         indels[$v.CHROM].add(r)
       continue
@@ -241,37 +239,38 @@ proc findsites_main*() =
   # not within X bases of a previously added variant.
   saved.sort(vf_by)
   stderr.write_line $(saved.len), " candidate variants"
-  var added = newTable[cstring, seq[Variant]]()
+  var added = newTable[cstring, seq[int64]]()
 
   var used = newSeqOfCap[Variant](8192)
   var usedxy = newSeqOfCap[Variant](8192)
   var empty: seq[region]
 
   for v in saved:
-    if indel_lappers[$v.v.CHROM].find(max(0, v.v.start.int-1), v.v.stop.int+1, empty):
+    let chrom = $v.v.CHROM
+    if chrom in indel_lappers and indel_lappers[chrom].find(max(0, v.v.start.int-1), v.v.stop.int+1, empty):
       continue
-    if snp_lappers[$v.v.CHROM].find(max(0, v.v.start.int-1), v.v.stop.int+1, empty) and empty.len > 1:
+    if chrom in snp_lappers and snp_lappers[chrom].find(max(0, v.v.start.int-1), v.v.stop.int+1, empty) and empty.len > 1:
       #echo "skipping with nearby snp"
       continue
-    discard added.hasKeyOrPut(v.v.CHROM, newSeq[Variant]())
+    let x = added.hasKeyOrPut(v.v.CHROM, newSeq[int64]())
     var vs = added[v.v.CHROM]
 
     if len(vs) > 0:
-      var close = v.v.closest(vs).start
-      if $v.v.CHROM in ["chrY", "Y"]:
-        if (close - v.v.start).abs < 200:
+      let d = v.v.closest_dist(vs)
+      if chrom in ["chrY", "Y"]:
+        if d < 200:
           continue
-      elif $v.v.CHROM in ["chrX", "X"]:
-        if (close - v.v.start).abs < 1000:
+      elif chrom in ["chrX", "X"]:
+        if d < 1000:
           continue
-      elif (close - v.v.start).abs < snp_dist:
+      elif d < snp_dist:
         continue
 
     #discard wtr.write_variant(v.v)
-    if $v.v.CHROM in ["chrX", "X", "Y", "chrY"]:
+    if chrom in ["chrX", "X", "Y", "chrY"]:
       usedxy.add(v.v.copy())
     else:
-      vs.add(v.v.copy())
+      vs.add(v.v.start)
       used.add(v.v.copy())
 
     added[v.v.CHROM] = vs

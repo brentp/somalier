@@ -1,3 +1,7 @@
+v0.2.16
+=======
++ make find-sites more efficient and more robust (#96)
+
 v0.2.14
 =======
 + minor fixes to find-sites
