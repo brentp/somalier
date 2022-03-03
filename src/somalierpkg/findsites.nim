@@ -244,6 +244,8 @@ proc findsites_main*() =
   var used = newSeqOfCap[Variant](8192)
   var usedxy = newSeqOfCap[Variant](8192)
   var empty: seq[region]
+  var xcounts = 0 # prevent too many X
+  var ycounts = 0 # prevent too many y
 
   for v in saved:
     let chrom = $v.v.CHROM
@@ -268,6 +270,14 @@ proc findsites_main*() =
 
     #discard wtr.write_variant(v.v)
     if chrom in ["chrX", "X", "Y", "chrY"]:
+      if chrom in ["chrX", "X"]:
+          if xcounts > 10000:
+              continue
+          xcounts += 1
+      if chrom in ["chrY", "Y"]:
+          if ycounts > 5000:
+              continue
+          ycounts += 1
       usedxy.add(v.v.copy())
     else:
       vs.add(v.v.start)
@@ -275,7 +285,7 @@ proc findsites_main*() =
 
     added[v.v.CHROM] = vs
 
-  stderr.write_line &"sorted and filtered to {used.len} variants. now dropping INFOs and writing"
+  stderr.write_line &"sorted and filtered to {used.len} autosomal variants. now dropping INFOs and writing"
   if used.len.int > uint16.high.int:
     used = used[0..<uint16.high.int]
 
