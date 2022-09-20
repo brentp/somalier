@@ -10,7 +10,7 @@ license       = "MIT"
 # Dependencies
 
 requires "https://github.com/brentp/zip#dev"
-requires "nim >= 1.2.0", "hts >= 0.3.20", "https://github.com/brentp/pedfile >= 0.0.3", "https://github.com/brentp/hileup", "argparse == 0.10.1", "lapper", "arraymancer#head"
+requires "nim >= 1.2.0", "hts >= 0.3.20", "https://github.com/brentp/pedfile >= 0.0.3", "https://github.com/brentp/hileup", "argparse==0.10.1", "lapper", "arraymancer#head"
 requires "https://github.com/brentp/slivar#head"
 srcDir = "src"
 
