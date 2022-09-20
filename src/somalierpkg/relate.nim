@@ -595,14 +595,14 @@ proc remove_spurious_parent_ids(final:var relation_matrices, L:SampleLooker, sta
 proc add_siblings(final:var relation_matrices, stats: seq[Stat4], gt_counts: array[5, seq[uint16]], L:var SampleLooker) =
   for sample_name, sib_names in L.sib_pairs:
     let isample = L.sample_table[sample_name]
-    let iset = sib_names.toSet
+    let iset = sib_names.toHashSet
     let i = isample.i
     if i >= 0 and not gt_counts.high_quality(i): continue
     var ipids = [isample.paternal_id, isample.maternal_id]
     let parent_order = ["dad", "mom"]
     for sn in sib_names:
 
-      let jset = L.sib_pairs.getOrDefault(sn, @[]).toSet
+      let jset = L.sib_pairs.getOrDefault(sn, @[]).toHashSet
       # require that they share the same siblings
       if iset.symmetricDifference(jset).len != 2:
         continue
@@ -924,7 +924,7 @@ proc rel_main*() =
   opts.extracted.update_with_glob
 
   stderr.write_line &"[somalier] starting read of {opts.extracted.len} samples"
-  if opts.extracted.len == 0 or (opts.extracted.len == 1 and not existsFile(opts.extracted[0])):
+  if opts.extracted.len == 0 or (opts.extracted.len == 1 and not fileExists(opts.extracted[0])):
     echo p.help
     quit "[somalier] specify at least 1 extracted somalier file"
   var

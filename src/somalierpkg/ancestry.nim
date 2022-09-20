@@ -174,9 +174,9 @@ proc ancestry_main*() =
     t_proj = T * res.components
     X = ctx.variable t_proj
 
-  network ctx, AncestryNet:
+  network AncestryNet:
     layers:
-      x: Input([1, t_proj.shape[1]])
+      #x: Input([1, t_proj.shape[1]])
       fc1: Linear(t_proj.shape[1], nHidden)
       classifier: Linear(nHidden, nOut)
 
