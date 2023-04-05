@@ -78,6 +78,8 @@ proc findsites_main*() =
     option("--snp-dist", help="minimum distance between autosomal SNPs to avoid linkage", default="10000")
     option("--min-AN", help="minimum number of alleles (AN) at the site. (must be less than twice number of samples in the cohort)", default="115_000")
     option("--min-AF", help="minimum allele frequency for a site", default="0.15")
+    option("--AN-field", help="info field in the vcf that contains the allele number", default="AN")
+    option("--AF-field", help="info field in the vcf that contains the allele frequency", default="AF")
     arg("vcf", help="population VCF to use to find sites", nargs=1)
 
   var argv = commandLineParams()
@@ -96,6 +98,8 @@ proc findsites_main*() =
     snp_dist = parseInt(opts.snp_dist)
     min_AN = parseInt(opts.min_AN)
     min_AF = parseFloat(opts.min_AF)
+    field_AN = opts.AN_field
+    field_AF = opts.AF_field
     gno:Gnotater
 
   var exclude_regions = newTable[string, seq[region]]()
@@ -151,7 +155,7 @@ proc findsites_main*() =
     # stuff outside of PAR on human only.
     if $last_chrom in ["X", "chrX"] and (v.start < 2781479 or v.start > 154931044) : continue
 
-    if v.info.get("AF", afs) != Status.OK:
+    if v.info.get(field_AF, afs) != Status.OK:
       stderr.write_line "[somalier] af not found, using 0"
       afs = @[0'f32]
 
@@ -176,7 +180,7 @@ proc findsites_main*() =
       continue
 
     var info = v.info
-    if info.get("AN", ans) == Status.OK and (($v.CHROM notin ["chrX", "X", "chrY", "Y"]) and ans[0] < min_AN) :
+    if info.get(field_AN, ans) == Status.OK and (($v.CHROM notin ["chrX", "X", "chrY", "Y"]) and ans[0] < min_AN) :
       continue
     if $v.CHROM in ["chrY", "Y", "chrX", "X"]:
       if afs[0] < 0.04 or afs[0] > 0.96: continue
