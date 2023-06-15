@@ -17,6 +17,8 @@ import strformat
 import argparse
 import strutils
 
+const ENV_SAMPLE_NAME = "SOMALIER_SAMPLE_NAME"
+
 proc get_sample_name(bam:Bam): string =
     var txt = newString(bam.hdr.hdr.l_text)
     copyMem(txt[0].addr, bam.hdr.hdr.text, txt.len)
@@ -24,8 +26,16 @@ proc get_sample_name(bam:Bam): string =
       if line.startsWith("@RG") and "\tSM:" in line:
         result = line.split("\tSM:")[1].split("\t")[0].strip()
 
+    var env_name = getEnv(ENV_SAMPLE_NAME)
+    # if the result was already set, we warn.
+    if result.len != 0 and env_name.len != 0:
+      stderr.write_line &"[somalier] using sample name from ENV: {env_name}"
+    # always use env if it was given.
+    if env_name.len != 0:
+      result = env_name
+
     if result.len == 0:
-      raise newException(ValueError, "[somalier] no read-group in bam file")
+      raise newException(ValueError, &"[somalier] no read-group in bam file or given via '{ENV_SAMPLE_NAME}'")
 
 proc looks_like_gvcf_variant(v:Variant): bool {.inline.} =
   result = v.c.n_allele == 1
