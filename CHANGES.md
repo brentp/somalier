@@ -1,3 +1,7 @@
+v0.2.17
+=======
++ allow setting bam sample name via ENV when RG is missing (#115)
+
 v0.2.16
 =======
 + make find-sites more efficient and more robust (#96)
