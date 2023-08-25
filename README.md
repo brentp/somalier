@@ -37,10 +37,15 @@ The next step is to calculate relatedness on the extracted data:
 ```
 somalier relate --ped $pedigree extracted/*.somalier
 ```
-This will create text and interactive HTML output (similar to [peddy](https://github.com/brentp/peddy))
+This will create text and interactive HTML output
 that makes it fast and easy to detect mismatched samples and sample-swaps.
+The files created are:
++ `{output_prefix}.samples.tsv # creates a .ped like file with extra QC columns
++ `{output_prefix}.pairs.tsv # shows IBS for all possible sample pairs
++ `{output_prefix}.groups.tsv # shows pairs of samples above a certain relatedness
++ `{output_prefix}.html # interactive html
 
-Example output is [here](https://brentp.github.io/somalier/ex.html)
+Example html output is [here](https://brentp.github.io/somalier/ex.html)
 
 Note that the `somalier relate` command runs extremely quickly (< 2 seconds for 600 samples and ~1 minute for 4,500 samples) so it's possible
 to add/remove samples or adjust a pedigree file and re-run iteratively.
