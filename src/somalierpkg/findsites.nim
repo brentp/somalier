@@ -80,6 +80,7 @@ proc findsites_main*() =
     option("--min-AF", help="minimum allele frequency for a site", default="0.15")
     option("--AN-field", help="info field in the vcf that contains the allele number", default="AN")
     option("--AF-field", help="info field in the vcf that contains the allele frequency", default="AF")
+    option("--output-vcf", help="path to output vcf containing sites", default="sites.vcf.gz")
     arg("vcf", help="population VCF to use to find sites", nargs=1)
 
   var argv = commandLineParams()
@@ -89,7 +90,7 @@ proc findsites_main*() =
     argv = @["-h"]
   let opts = p.parse(argv)
   if opts.help:
-    stderr.write_line "this will write output sites to: ./sites.vcf.gz"
+    stderr.write_line &"this will write output sites to: ./{opts.output_vcf}"
     quit 0
 
   var
@@ -117,7 +118,7 @@ proc findsites_main*() =
   if not open(vcf, opts.vcf, threads=2):
     quit "couldn't open " & opts.vcf
   vcf.set_samples(@["^"])
-  var out_path = "sites.vcf.gz"
+  var out_path = opts.output_vcf
   if not open(wtr, out_path, mode="wz", threads=1):
     quit "couldn't open stdout for writing sites"
   wtr.header = vcf.header
@@ -133,10 +134,14 @@ proc findsites_main*() =
 
   var saved = newSeqOfCap[vf](100000)
   var ranksum = @[0'f32]
+  var error_count = 0
+  var total_count = 0
 
   for v in vcf:
     if v.c == nil: break
     if $v.CHROM notin ["chrY", "Y", "chrX", "X"] and v.REF == "C": continue
+    if v.ALT.len == 0: continue
+    total_count += 1
     if v.CHROM != last_chrom:
       last_chrom = v.CHROM
       stderr.write_line "on chrom:", last_chrom
@@ -156,7 +161,11 @@ proc findsites_main*() =
     if $last_chrom in ["X", "chrX"] and (v.start < 2781479 or v.start > 154931044) : continue
 
     if v.info.get(field_AF, afs) != Status.OK:
-      stderr.write_line "[somalier] af not found, using 0"
+      if error_count < 10:
+          stderr.write_line "[somalier] AF not found, using 0"
+      error_count += 1
+      if error_count == 10:
+          stderr.write_line "[somalier] not reporting further AF not found messages"
       afs = @[0'f32]
 
     if v.REF.len > 1 or v.ALT.len > 1 or v.ALT[0].len > 1:
@@ -237,6 +246,9 @@ proc findsites_main*() =
   var snp_lappers = newTable[string, Lapper[region]]()
   for k, vs in snps.mpairs:
     snp_lappers[k] = lapify(vs)
+
+  if error_count > 0:
+      stderr.write_line &"[somalier] found {error_count} variants out of {total_count} without allele frequency information"
 
 
   # Sort all variants by reverse AF, then write any variant that's

@@ -1,3 +1,8 @@
+v0.2.18
+=======
++ [find_sites] handle empty alternate alleles (#121)
++ [find_sites] add --output-vcf option 
+
 v0.2.17
 =======
 + allow setting bam sample name via ENV when RG is missing (#115)
