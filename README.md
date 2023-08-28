@@ -2,6 +2,8 @@
 
 [![Actions Status](https://github.com/brentp/somalier/workflows/Docker%20Image%20CI/badge.svg)](https://github.com/brentp/somalier/actions)
 [![Cite](https://img.shields.io/badge/cite-genome%20medicine-blue)](https://genomemedicine.biomedcentral.com/articles/10.1186/s13073-020-00761-2)
+[![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/somalier/README.html)
+
 ## Quick Start 
 `somalier` makes checking any number of samples for identity easy **directly from the alignments** or from jointly-called VCFs:
 
@@ -174,7 +176,9 @@ To create a set of new sites, use `somalier find-sites` on a population VCF. Mor
 
 ## Install
 
-get a static binary from [here](https://github.com/brentp/somalier/releases)
+Somalier is available via bioconda, see [here](https://bioconda.github.io/recipes/somalier/README.html).
+
+Alternatively, you can get a static binary from [here](https://github.com/brentp/somalier/releases).
 
 Users can also get a docker image [here](https://hub.docker.com/r/brentp/somalier/tags)
 which contains htslib and a somalier binary ready-for-use.
