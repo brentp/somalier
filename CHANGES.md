@@ -1,3 +1,7 @@
+v0.2.19
+=======
++ [relate/infer] fix check that would prevent some inference (#123)
+
 v0.2.18
 =======
 + [find_sites] handle empty alternate alleles (#121)

@@ -456,7 +456,10 @@ proc high_quality(gt_counts: array[5, seq[uint16]], i:int): bool {.inline.} =
   result = gt_counts[4][i].float / (gt_counts[0][i] + gt_counts[1][i] + gt_counts[2][i] + gt_counts[3][i] + gt_counts[4][i]).float < 0.06
   if not result:
     return false
-  result = gt_counts[2][i].float / gt_counts[1][i].float > 0.7
+
+  # should have fewer hom-alts[2] than hets[1]
+  result = gt_counts[2][i].float / gt_counts[1][i].float < 0.7
+
 
 proc samples_have_y_depth(stats: seq[Stat4]): bool =
   var n = 0
@@ -820,6 +823,7 @@ proc write_ped(fh:File, final: var relation_matrices, stats: seq[Stat4], gt_coun
   fh.write("original_pedigree_sex\tgt_depth_mean\tgt_depth_sd\tdepth_mean\tdepth_sd\tab_mean\tab_std\tn_hom_ref\tn_het\tn_hom_alt\tn_unknown\tp_middling_ab\t")
   fh.write("X_depth_mean\tX_n\tX_hom_ref\tX_het\tX_hom_alt\t")
   fh.write("Y_depth_mean\tY_n\n")
+
 
   if infer:
     final.remove_spurious_parent_ids(L, stats)
