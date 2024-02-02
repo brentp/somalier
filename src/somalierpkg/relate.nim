@@ -480,7 +480,7 @@ proc high_quality(gt_counts: array[5, seq[uint16]], i: int): bool {.inline.} =
     return false
 
   # should have fewer hom-alts[2] than hets[1]
-  result = gt_counts[2][i].float / gt_counts[1][i].float < 0.7
+  result = gt_counts[2][i].float / max(1, gt_counts[1][i].float) < 0.7
 
 
 proc samples_have_y_depth(stats: seq[Stat4]): bool =
