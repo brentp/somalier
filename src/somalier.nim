@@ -110,7 +110,7 @@ proc get_ref_alt_counts(ivcf:VCF, sites:seq[Site], fai:Fai=nil): seq[counts] =
     zeroMem(AD[0].addr, AD.len * sizeof(AD[0]))
     var v = ivcf.get_variant(site)
     # NOTE that if Status is OK, then we just fill AD
-    if v == nil or ($v.CHROM notin ["chrX", "X", "chrY", "Y"] and v.FILTER notin allowed_filters) or v.format.get("AD", AD) != Status.OK:
+    if v == nil or ($v.CHROM notin ["chrX", "NC_000023.10", "NC_000023.11", "X", "chrY", "NC_000024.9", "NC_000024.10", "Y"] and v.FILTER notin allowed_filters) or v.format.get("AD", AD) != Status.OK:
       AD.setLen(vcf_samples.len * 2)
       if v.ok and not has_AD:
         if AD.fill(v.format.genotypes(x).alts):
@@ -149,9 +149,9 @@ proc get_ref_alt_counts(ivcf:VCF, sites:seq[Site], fai:Fai=nil): seq[counts] =
         swap(ac.nref, ac.nalt)
 
       case site.chrom:
-        of ["X", "chrX"]:
+        of ["X", "chrX", "NC_000023.10", "NC_000023.11"]:
           result[j].x_sites.add(ac)
-        of ["Y", "chrY"]:
+        of ["Y", "chrY", "NC_000024.9", "NC_000024.10"]:
           result[j].y_sites.add(ac)
         else:
           result[j].sites.add(ac)
@@ -181,9 +181,9 @@ proc get_ref_alt_counts(ibam:Bam, sites:seq[Site], fai:Fai): counts =
         ac.nother.inc
 
     case site.chrom:
-      of ["X", "chrX"]:
+      of ["X", "chrX", "NC_000023.10", "NC_000023.11"]:
         result.x_sites.add(ac)
-      of ["Y", "chrY"]:
+      of ["Y", "chrY", "NC_000024.9", "NC_000024.10"]:
         result.y_sites.add(ac)
       else:
         result.sites.add(ac)

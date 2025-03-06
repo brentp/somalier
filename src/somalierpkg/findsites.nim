@@ -139,7 +139,7 @@ proc findsites_main*() =
 
   for v in vcf:
     if v.c == nil: break
-    if $v.CHROM notin ["chrY", "Y", "chrX", "X"] and v.REF == "C": continue
+    if $v.CHROM notin ["chrY", "NC_000024.9", "NC_000024.10", "Y", "chrX", "NC_000023.10", "NC_000023.11", "X"] and v.REF == "C": continue
     if v.ALT.len == 0: continue
     total_count += 1
     if v.CHROM != last_chrom:
@@ -158,7 +158,7 @@ proc findsites_main*() =
 
 
     # stuff outside of PAR on human only.
-    if $last_chrom in ["X", "chrX"] and (v.start < 2781479 or v.start > 154931044) : continue
+    if $last_chrom in ["X", "chrX", "NC_000023.10", "NC_000023.11"] and (v.start < 2781479 or v.start > 154931044) : continue
 
     if v.info.get(field_AF, afs) != Status.OK:
       if error_count < 10:
@@ -185,13 +185,13 @@ proc findsites_main*() =
       snps.mGetOrPut($v.CHROM, newSeq[region]()).add(r)
 
     # check exclude after putting into interval trees
-    if gno != nil and gno.contains(v) and $v.CHROM notin ["chrX", "X"]:
+    if gno != nil and gno.contains(v) and $v.CHROM notin ["chrX", "NC_000023.10", "NC_000023.11", "X"]:
       continue
 
     var info = v.info
-    if info.get(field_AN, ans) == Status.OK and (($v.CHROM notin ["chrX", "X", "chrY", "Y"]) and ans[0] < min_AN) :
+    if info.get(field_AN, ans) == Status.OK and (($v.CHROM notin ["chrX", "NC_000023.10", "NC_000023.11", "X", "chrY", "NC_000024.9", "NC_000024.10", "Y"]) and ans[0] < min_AN) :
       continue
-    if $v.CHROM in ["chrY", "Y", "chrX", "X"]:
+    if $v.CHROM in ["chrY", "NC_000024.9", "NC_000024.10", "Y", "chrX", "NC_000023.10", "NC_000023.11", "X"]:
       if afs[0] < 0.04 or afs[0] > 0.96: continue
     else:
       if afs[0] < min_AF or afs[0] > (1 - min_AF): continue
@@ -203,13 +203,13 @@ proc findsites_main*() =
     if info.get("OLD_VARIANT", oms) == Status.OK:
       continue
 
-    if $v.CHROM notin ["chrY", "Y"] and info.has_flag("segdup"):
+    if $v.CHROM notin ["chrY", "NC_000024.9", "NC_000024.10", "Y"] and info.has_flag("segdup"):
       continue
     if info.has_flag("lcr"):
       continue
 
     # BaseQRankSum=0.571;ClippingRankSum=0;MQRankSum=0.101;ReadPosRankSum
-    if $v.CHROM notin ["chrX", "X", "chrY", "Y"]:
+    if $v.CHROM notin ["chrX", "NC_000023.10", "NC_000023.11", "X", "chrY", "NC_000024.9", "NC_000024.10", "Y"]:
       var skip = false
       for rs in @["BaseQ", "MQ", "Clipping", "ReadPos"]:
         if info.get(rs & "RankSum", ranksum) == Status.OK and abs(ranksum[0]) > 2.4:
@@ -275,22 +275,22 @@ proc findsites_main*() =
 
     if len(vs) > 0:
       let d = v.v.closest_dist(vs)
-      if chrom in ["chrY", "Y"]:
+      if chrom in ["chrY", "NC_000024.9", "NC_000024.10", "Y"]:
         if d < 200:
           continue
-      elif chrom in ["chrX", "X"]:
+      elif chrom in ["chrX", "NC_000023.10", "NC_000023.11", "X"]:
         if d < 1000:
           continue
       elif d < snp_dist:
         continue
 
     #discard wtr.write_variant(v.v)
-    if chrom in ["chrX", "X", "Y", "chrY"]:
-      if chrom in ["chrX", "X"]:
+    if chrom in ["chrX", "NC_000023.10", "NC_000023.11", "X", "Y", "chrY", "NC_000024.9", "NC_000024.10"]:
+      if chrom in ["chrX", "NC_000023.10", "NC_000023.11", "X"]:
           if xcounts > 10000:
               continue
           xcounts += 1
-      if chrom in ["chrY", "Y"]:
+      if chrom in ["chrY", "NC_000024.9", "NC_000024.10", "Y"]:
           if ycounts > 5000:
               continue
           ycounts += 1
