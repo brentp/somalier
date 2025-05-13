@@ -1,0 +1,101 @@
+# Build stage
+FROM debian:bookworm-slim as build
+
+# Set up working directory for application builds
+WORKDIR /apps
+
+# Install essential build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    git \
+    curl \
+    ca-certificates \
+    libpcre3-dev \
+    zlib1g-dev \
+    libbz2-dev \
+    liblzma-dev \
+    autoconf \
+    automake \
+    libtool \
+    pkg-config \
+    libssl-dev \
+    libopenblas-dev
+
+# Install HTSlib
+RUN git clone https://github.com/samtools/htslib.git && \
+    cd htslib && \
+    git submodule update --init --recursive && \
+    autoreconf -i && \
+    ./configure && \
+    make && \
+    make install && \
+    ldconfig
+
+# Install Nim (version 1.6.10)
+# Nim is needed to compile somalier and its dependencies
+ENV NIM_VERSION="v1.6.10"
+RUN git clone -b ${NIM_VERSION} --depth 1 https://github.com/nim-lang/nim nim-${NIM_VERSION}/ && \
+    cd nim-${NIM_VERSION} && \
+    /bin/bash build_all.sh
+ENV PATH="/apps/nim-${NIM_VERSION}/bin:${PATH}"
+
+# Install hts-nim - nim wrapper for HTSlib
+WORKDIR /apps
+RUN git clone --depth 1 https://github.com/brentp/hts-nim.git && \
+    cd hts-nim && \
+    nimble install -y
+
+# Install slivar - somalier depends on this package for some functionality
+RUN git clone --depth 1 https://github.com/brentp/slivar.git
+
+# Architecture-specific fix for arm64 (aarch64)
+# The -mpopcnt flag is x86_64-specific and causes compilation errors on arm64
+# arm64 has native population count instructions that are used automatically
+RUN if [ "$(uname -m)" = "aarch64" ]; then \
+    find /apps/slivar -type f -name "*.nim" -exec sed -i '/-mpopcnt/d' {} \; && \
+    find /apps/slivar -type f -name "nimble" -exec sed -i '/-mpopcnt/d' {} \; && \
+    find /apps/slivar -type f -name "*.cfg" -exec sed -i '/-mpopcnt/d' {} \; || true; \
+    fi
+
+# Compile and install slivar
+RUN cd slivar && \
+    nimble install -y
+
+# Install somalier
+WORKDIR /apps
+RUN git clone --depth 1 https://github.com/brentp/somalier.git
+
+# Architecture-specific fixes for arm64 (aarch64)
+# 1. Remove x86_64-specific -mpopcnt compiler flag
+# 2. Remove slivar dependency from nimble file (we've installed it separately)
+RUN if [ "$(uname -m)" = "aarch64" ]; then \
+    find /apps/somalier -type f -name "*.nim" -exec sed -i '/-mpopcnt/d' {} \; && \
+    find /apps/somalier -type f -name "nimble" -exec sed -i '/-mpopcnt/d' {} \; && \
+    find /apps/somalier -type f -name "*.cfg" -exec sed -i '/-mpopcnt/d' {} \; && \
+    # Remove slivar dependency from somalier.nimble because for arm64 we have already installed it.
+    sed -i '/slivar/d' /apps/somalier/somalier.nimble || true; \
+    fi
+
+# Compile and install Somalier
+RUN cd somalier && \
+    nimble install -d -y && \
+    nim c -d:danger -d:nsb_static -d:release -d:nimDebugDlOpen -d:openmp -d:blas=openblas -d:lapack=openblas -o:/usr/bin/somalier src/somalier
+
+# Final stage
+FROM debian:bookworm-slim
+
+# Install minimal runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    procps \
+    libopenblas-dev \
+    libgomp1
+
+# Copy the HTSlib shared library from the build stage
+COPY --from=build /usr/local/lib/libhts.so* /lib/
+COPY --from=build /apps/htslib/libhts.so* /lib/
+RUN ldconfig
+
+COPY --from=build /usr/bin/somalier /usr/bin/somalier
+COPY --from=build /apps/somalier/scripts/ancestry-labels-1kg.tsv /
+
+ENV somalier_ancestry_labels=/ancestry_labels-1kg.tsv
