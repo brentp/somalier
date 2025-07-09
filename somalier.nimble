@@ -1,6 +1,6 @@
 #import somalierpkg/version as _
 
-version       = "0.2.19" #somalierVersion
+version       = "0.3.0" #somalierVersion
 author        = "Brent Pedersen"
 description   = "sample-swap checking directly on BAMs/CRAMs for cancer data"
 license       = "MIT"

@@ -1,3 +1,7 @@
+v0.3.0
+======
++ fix compilation with nim > 2 and some sex inference stuff
+
 v0.2.19
 =======
 + [relate/infer] fix check that would prevent some inference (#123)
