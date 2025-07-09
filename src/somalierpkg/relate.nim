@@ -32,7 +32,7 @@ type Stat4 = object
   y_dp: RunningStat
 
 
-type relation_matrices = object {.shallow.}
+type relation_matrices = object
   sites_tested: int
   ibs: seq[uint16]
   n: seq[uint16]
@@ -472,15 +472,17 @@ proc read_extracted*(paths: seq[string], min_ab: float, min_depth: int,
 
 const missing = [".", "0", "-9", ""]
 
-proc high_quality(gt_counts: array[5, seq[uint16]], i: int): bool {.inline.} =
+proc high_quality(gt_counts: array[5, seq[uint16]], i: int,
+    check_hom_alts: bool): bool {.inline.} =
   # less than 3% of sites with allele balance outside of 0.1 .. 0.9
   result = gt_counts[4][i].float / (gt_counts[0][i] + gt_counts[1][i] +
       gt_counts[2][i] + gt_counts[3][i] + gt_counts[4][i]).float < 0.06
   if not result:
     return false
 
-  # should have fewer hom-alts[2] than hets[1]
-  result = gt_counts[2][i].float / max(1, gt_counts[1][i].float) < 0.7
+  if check_hom_alts:
+    # should have fewer hom-alts[2] than hets[1]
+    result = gt_counts[2][i].float / max(1, gt_counts[1][i].float) < 0.7
 
 
 proc samples_have_y_depth(stats: seq[Stat4]): bool =
@@ -534,9 +536,10 @@ proc related(final: var relation_matrices, L: SampleLooker,
 
 
 proc add_parents_and_check_sex(final: var relation_matrices, stats: seq[Stat4],
-    gt_counts: array[5, seq[uint16]], i: int, L: var SampleLooker) =
+    gt_counts: array[5, seq[uint16]], i: int, L: var SampleLooker,
+        check_hom_alts: bool) =
   # first pass here updates sample parents as needed.
-  if not gt_counts.high_quality(i):
+  if not gt_counts.high_quality(i, check_hom_alts):
     return
   let sample_name = L.sample_names[i]
   var sample = L.sample_table.getOrDefault(sample_name, Sample(id: sample_name,
@@ -548,6 +551,7 @@ proc add_parents_and_check_sex(final: var relation_matrices, stats: seq[Stat4],
       if sample.sex == 2:
         stderr.write_line &"[somalier] setting sex to male for {sample.id}"
       sample.sex = 1
+      assert sample.sex == 1
   elif stats[i].x_het / stats[i].x_hom_alt > 0.4 and stats[i].x_dp.n > 10:
     if sample.sex != 2:
       if sample.sex == 1:
@@ -574,6 +578,7 @@ proc add_parents_and_check_sex(final: var relation_matrices, stats: seq[Stat4],
     if sample.maternal_id != possible_parents[1]:
       stderr.write_line &"[somalier] NOTE: updating maternal_id for {sample.id} to {possible_parents[1]}"
       sample.maternal_id = possible_parents[1]
+  echo "sample:", $sample
   L.sample_table[sample.id] = sample
 
 proc add_parent_to_sibs(final: var relation_matrices, stats: seq[Stat4],
@@ -631,12 +636,13 @@ proc remove_spurious_parent_ids(final: var relation_matrices, L: SampleLooker,
 
 
 proc add_siblings(final: var relation_matrices, stats: seq[Stat4],
-    gt_counts: array[5, seq[uint16]], L: var SampleLooker) =
+    gt_counts: array[5, seq[uint16]], L: var SampleLooker,
+        check_hom_alts: bool) =
   for sample_name, sib_names in L.sib_pairs:
     let isample = L.sample_table[sample_name]
     let iset = sib_names.toHashSet
     let i = isample.i
-    if i >= 0 and not gt_counts.high_quality(i): continue
+    if i >= 0 and not gt_counts.high_quality(i, check_hom_alts): continue
     var ipids = [isample.paternal_id, isample.maternal_id]
     let parent_order = ["dad", "mom"]
     for sn in sib_names:
@@ -653,7 +659,7 @@ proc add_siblings(final: var relation_matrices, stats: seq[Stat4],
         j = jsample.i
       except KeyError:
         continue
-      if j >= 0 and not gt_counts.high_quality(j): continue
+      if j >= 0 and not gt_counts.high_quality(j, check_hom_alts): continue
       #if isample.paternal_id notin missing and isample.maternal_id notin missing and isample.paternal_id == jsample.paternal_id and isample.maternal_id == jsample.maternal_id: continue
       ## TODO: some logic problems below. check in CEPH
       var jpids = [jsample.paternal_id, jsample.maternal_id]
@@ -740,14 +746,15 @@ proc add_siblings(final: var relation_matrices, stats: seq[Stat4],
 
 
 proc update_family_ids(final: relation_matrices, stats: seq[Stat4],
-    gt_counts: array[5, seq[uint16]], i: int, L: var SampleLooker) =
+    gt_counts: array[5, seq[uint16]], i: int, L: var SampleLooker,
+        check_hom_alts: bool) =
   # 2nd pass here updates family ids
   let sample_name = L.sample_names[i]
   if sample_name notin L.sample_table:
     let s = Sample(id: sample_name, family_id: sample_name, sex: -9,
         phenotype: "-9", maternal_id: "-9", paternal_id: "-9")
   var sample = L.sample_table[sample_name]
-  if not gt_counts.high_quality(i): return
+  if not gt_counts.high_quality(i, check_hom_alts): return
 
   let pids = [sample.paternal_id, sample.maternal_id]
   for pid in pids:
@@ -785,6 +792,7 @@ proc write_sample(fh: File, stats: seq[Stat4], gt_counts: array[5, seq[uint16]],
   var sample = L.sample_table.getOrDefault(sample_name, Sample(id: sample_name,
       family_id: sample_name, sex: -9, phenotype: "-9", maternal_id: "-9",
       paternal_id: "-9"))
+  echo "sample final:", $sample, " sex:", sample.sex
   fh.write(&"{sample.family_id}\t{sample.id}\t{sample.paternal_id}\t{sample.maternal_id}\t{sample.sex}\t{sample.phenotype}\t")
   fh.write(&"{L.sample_sex.getOrDefault(sample.id, \"-9\")}\t")
   fh.write(&"{stats[i].gtdp.mean:.1f}\t{stats[i].gtdp.standard_deviation():.1f}\t")
@@ -880,15 +888,16 @@ proc write_ped(fh: File, final: var relation_matrices, stats: seq[Stat4],
 
 
   if infer:
+    let check_hom_alts = getEnv("SOMALIER_CHECK_HOM_ALTS") != ""
     final.remove_spurious_parent_ids(L, stats)
     for i, sample_name in L.sample_names:
-      add_parents_and_check_sex(final, stats, gt_counts, i, L)
-    add_siblings(final, stats, gt_counts, L)
+      add_parents_and_check_sex(final, stats, gt_counts, i, L, check_hom_alts)
+    add_siblings(final, stats, gt_counts, L, check_hom_alts)
 
     add_parent_to_sibs(final, stats, gt_counts, L)
 
     for i, sample_name in L.sample_names:
-      update_family_ids(final, stats, gt_counts, i, L)
+      update_family_ids(final, stats, gt_counts, i, L, check_hom_alts)
     final.remove_spurious_parent_ids(L, stats)
 
   for i, sample_name in L.sample_names:
@@ -1037,6 +1046,8 @@ proc rel_main*() =
 
   t0 = cpuTime()
 
+  let check_hom_alts = getEnv("SOMALIER_CHECK_HOM_ALTS") != ""
+
   var tmpls = tmpl_html.split("<INPUT_JSON>")
   fh_html.write(tmpls[0].replace("<SAMPLE_JSON>", toj(final.samples,
       final.stats, final.gt_counts, samples.to_sex_lookup)))
@@ -1092,8 +1103,8 @@ proc rel_main*() =
           stderr.write_line &"[somalier] apparent identical twins or sample duplicate found with {rel.sample_a} and {rel.sample_b} assuming siblings as these were specified as such in the pedigree file"
           sib_pairs.mgetOrPut(rel.sample_a, @[]).add(rel.sample_b)
           sib_pairs.mgetOrPut(rel.sample_b, @[]).add(rel.sample_a)
-    elif rr > 0.2 and final.gt_counts.high_quality(T.i) and
-        final.gt_counts.high_quality(T.j):
+    elif rr > 0.2 and final.gt_counts.high_quality(T.i, check_hom_alts) and
+        final.gt_counts.high_quality(T.j, check_hom_alts):
       relGt0p2.mgetOrPut(rel.sample_a, @[]).add(rel.sample_b)
       relGt0p2.mgetOrPut(rel.sample_b, @[]).add(rel.sample_a)
 
