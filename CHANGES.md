@@ -1,3 +1,7 @@
+v0.3.1
+======
++ add new `pedrel` command to report kinship value for samples from a pedigree file
+
 v0.3.0
 ======
 + fix compilation with nim > 2 and some sex inference stuff
