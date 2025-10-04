@@ -2,13 +2,35 @@ import strutils
 import strformat
 import argparse
 import pedfile
-import sequtils
-import algorithm
+
+proc formatFloatClean*(f: float32): string =
+  ## Format a float32 as string, removing trailing zeros after decimal point
+  ## but keeping at least one zero if the number is whole (e.g., "1.0" not "1.")
+  # Use precision=6 to avoid floating-point precision artifacts
+  let formatted = formatFloat(f, ffDecimal, precision=6)
+
+  # Find the decimal point
+  let decimalPos = formatted.find('.')
+  if decimalPos == -1:
+    return formatted  # No decimal point, return as is
+
+  # Remove trailing zeros from the decimal part
+  var cleaned = formatted
+  while cleaned.len > decimalPos + 1 and cleaned[^1] == '0':
+    cleaned = cleaned[0..^2]  # Remove last character
+
+  # If we removed all decimal digits, add one back to keep "1.0" format
+  if cleaned[^1] == '.':
+    cleaned &= "0"
+
+  return cleaned
 
 proc pedrel_main*() =
   var argv = commandLineParams()
   if argv[0] == "pedrel":
     argv = argv[1..argv.high]
+  if len(argv) == 0:
+    argv = @["-h"]
 
   var p = newParser("somalier pedrel"):
     help("report pairwise relationships from pedigree file")
@@ -47,13 +69,14 @@ proc pedrel_main*() =
       let sampleB = samples[j]
       let rel = sampleA.relatedness(sampleB)
 
-      if rel > min_rel:
+      if rel >= min_rel:
         # Ensure consistent ordering (alphabetical by sample ID)
         let (sample1, sample2) = if sampleA.id < sampleB.id:
                                   (sampleA.id, sampleB.id)
                                 else:
                                   (sampleB.id, sampleA.id)
-        output_file.write_line(&"{sample1}\t{sample2}\t{rel:.6f}")
+        let relf = formatFloatClean(rel)
+        output_file.write_line(&"{sample1}\t{sample2}\t{relf}")
 
   if opts.output != "stdout":
     output_file.close()

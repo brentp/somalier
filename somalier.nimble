@@ -18,4 +18,5 @@ bin = @["somalier"]
 
 task test, "run the tests":
   exec "nim c  -d:useSysAssert -d:useGcAssert --lineDir:on --debuginfo -r tests/test_groups"
+  exec "nim c  -d:useSysAssert -d:useGcAssert --lineDir:on --debuginfo -r tests/test_format_float_clean"
   exec "bash tests/functional-tests.sh"
