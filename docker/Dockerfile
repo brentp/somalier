@@ -21,8 +21,9 @@ RUN cd / &&    \
     nimble install -y arraymancer@0.7.32 && \
     /root/.nimble/bin/nimble install -d -y
 
-RUN cd /somalier &&  \
-    nsb -n somalier.nimble -s src/somalier  -- -d:danger -d:nsb_static -d:release -d:blas=openblas -d:lapack=openblas -o:/usr/bin/somalier
+# nsb writes to /load assuming it was in docker run -v $(pwd):/load
+RUN cd /somalier && mkdir -p /load && \
+    nsb -n somalier.nimble -s src/somalier.nim  -- -d:danger -d:nsb_static -d:release -d:blas=openblas -d:lapack=openblas
 
 FROM alpine:3.21
 
@@ -37,7 +38,7 @@ COPY --from=build /usr/lib /usr/lib
 # Update dynamic linker cache
 RUN ldconfig /usr/local/lib /usr/local/lib64 /usr/lib || true
 
-COPY --from=build /usr/bin/somalier /usr/bin/somalier
+COPY --from=build /load/somalier /usr/bin/somalier
 COPY --from=build /somalier/scripts/ancestry-labels-1kg.tsv /
 
 ENV somalier_ancestry_labels=/ancestry_labels-1kg.tsv
