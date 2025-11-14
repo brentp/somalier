@@ -22,7 +22,7 @@ RUN cd / &&    \
     /root/.nimble/bin/nimble install -d -y
 
 RUN cd /somalier &&  \
-    nim c -d:danger -d:nsb_static -d:release -d:blas=openblas -d:lapack=openblas -o:/usr/bin/somalier src/somalier
+    nsb -n somalier.nimble -s src/somalier  -- -d:danger -d:nsb_static -d:release -d:blas=openblas -d:lapack=openblas -o:/usr/bin/somalier
 
 FROM alpine:3.21
 
