@@ -1,4 +1,6 @@
-{.passC:"-mpopcnt".}
+when defined(amd64) or defined(i386):
+  {.passC: "-mpopcnt".}
+
 import bitops
 
 type bitset* = seq[uint64]
