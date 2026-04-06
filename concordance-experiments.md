@@ -87,20 +87,79 @@
   - Result: `pos < 0.9 = 5`, `neg > 0.4 = 4`, `pos < 0.8 = 3`, `pos < 0.7 = 3`
   - Conclusion: stronger amplifier fixes negatives, but harms positives more than Experiment 10.
 
+## Five More Experiments Again
+
+- Experiment 12: `base` only, no penalty and no stretch.
+  - Result: `pos < 0.6 = 0`, `neg > 0.4 = 3622`
+  - Conclusion: unusable because every unrelated pair stays high.
+- Experiment 13: threshold `0.75`, amplifier `10`, no stretch.
+  - Result: `pos < 0.6 = 3`, `neg > 0.4 = 4`, `pos < 0.7 = 4`, `pos < 0.8 = 6`
+  - Conclusion: the simplest viable metric so far, but it loses one extra hard positive relative to the current version.
+- Experiment 14: threshold `0.70`, amplifier `10`, no stretch.
+  - Result: `pos < 0.6 = 2`, `neg > 0.4 = 6`, `pos < 0.7 = 3`, `pos < 0.8 = 4`
+  - Conclusion: too permissive for negatives.
+- Experiment 15: threshold `0.75`, amplifier `10`, square-root stretch.
+  - Result: `pos < 0.6 = 2`, `neg > 0.4 = 4`, `pos < 0.7 = 3`, `pos < 0.8 = 4`
+  - Conclusion: a good simple runner-up, but still worse than cube root on the hardest positives.
+- Experiment 16: `min(base, hom_alt)`, no stretch.
+  - Result: `pos < 0.6 = 5`, `neg > 0.4 = 5`, `pos < 0.7 = 12`, `pos < 0.8 = 32`
+  - Conclusion: too aggressive and not competitive.
+
+## Ten More Experiments
+
+- Experiment 17: threshold `0.70`, amplifier `5`, no stretch.
+  - Result: `pos < 0.6 = 2`, `neg > 0.4 = 7`, `pos < 0.7 = 3`
+  - Conclusion: not enough negative suppression.
+- Experiment 18: threshold `0.75`, amplifier `10`, no stretch.
+  - Result: `pos < 0.6 = 3`, `neg > 0.4 = 4`, `pos < 0.7 = 4`
+  - Conclusion: viable, but loses extra positives.
+- Experiment 19: threshold `0.70`, amplifier `15`, square-root stretch.
+  - Result: `pos < 0.6 = 2`, `neg > 0.4 = 4`, `pos < 0.7 = 3`
+  - Conclusion: a decent simple fallback, but still weaker than cube root.
+- Experiment 20: threshold `0.75`, amplifier `10`, square-root stretch.
+  - Result: `pos < 0.6 = 2`, `neg > 0.4 = 4`, `pos < 0.7 = 3`
+  - Conclusion: also viable, but not the best positive recovery.
+- Experiment 21: threshold `0.70`, amplifier `5`, cube-root stretch.
+  - Result: `pos < 0.6 = 0`, `neg > 0.4 = 7`, `pos < 0.7 = 0`
+  - Conclusion: best positive recovery, but too many negatives remain above `0.4`.
+- Experiment 22: threshold `0.70`, amplifier `10`, cube-root stretch.
+  - Result: `pos < 0.6 = 1`, `neg > 0.4 = 6`, `pos < 0.7 = 1`
+  - Conclusion: close, but still worse than the best balanced candidates.
+- Experiment 23: threshold `0.70`, amplifier `15`, cube-root stretch.
+  - Grid result: `pos < 0.6 = 1`, `neg > 0.4 = 4`, `pos < 0.7 = 2`
+  - Real eval result: `pos < 0.6 = 1`, `neg > 0.4 = 4`, `pos < 0.7 = 2`
+  - Conclusion: best simple-number candidate so far.
+- Experiment 24: threshold `0.75`, amplifier `5`, cube-root stretch.
+  - Result: `pos < 0.6 = 0`, `neg > 0.4 = 7`, `pos < 0.7 = 1`
+  - Conclusion: same issue as Experiment 21; too permissive for negatives.
+- Experiment 25: threshold `0.70`, amplifier `15`, simple linear stretch with slope `1.5`.
+  - Result: `pos < 0.6 = 2`, `neg > 0.4 = 4`, `pos < 0.7 = 3`
+  - Conclusion: understandable, but weaker than cube root.
+- Experiment 26: threshold `0.75`, amplifier `10`, simple linear stretch with slope `1.5`.
+  - Result: `pos < 0.6 = 3`, `neg > 0.4 = 4`, `pos < 0.7 = 3`
+  - Conclusion: not competitive with the better simple candidates.
+
+## Simpler Penalty
+
+- Additive penalty instead of multiplicative penalty:
+  - Formula: `penalty = max(0, 0.70 - hom_alt + 2 * p_middling_ab)`
+  - Real eval result: `pos < 0.6 = 0`, `pos < 0.7 = 0`, `pos < 0.8 = 2`, `neg > 0.4 = 6`
+  - Conclusion: this is meaningfully simpler and still acceptable under the relaxed budget, even though it allows two more negatives above `0.4`.
+
 ## Implemented Candidate
 
 - Current implemented formula:
   - `base = inferred_hom_concordance`
   - `hom_alt = clip(raw_hom_alt_concordance, 0, 1)`
   - `pm = mean(sample_a.p_middling_ab, sample_b.p_middling_ab)`
-  - `penalized = clip(base - max(0, 0.75 - hom_alt) * (1 + 10 * pm), 0, 1)`
+  - `penalized = clip(base - max(0, 0.70 - hom_alt + 2 * pm), 0, 1)`
   - `concordance = penalized` for `penalized <= 0.4`
   - `concordance = 0.4 + 0.6 * cbrt((penalized - 0.4) / 0.6)` for `penalized > 0.4`
 - Reason:
   - Preserves the current interpretation of the low-concordance region.
   - Uses `p_middling_ab` as a knob only when hom-alt concordance is suspiciously low.
   - Removes the relatedness term entirely, which makes the metric simpler.
-  - Uses simple, defensible constants: `0.75`, `10`, and cube root.
+  - Uses simple, defensible constants: `0.70`, `2`, and cube root.
   - Lifts the compressed upper range so true matches land closer to `1.0`.
 
 ## Current Result
@@ -109,21 +168,21 @@
   - `bash eval.sh`
   - `python3 scripts/evaluate_concordance.py isabl-test.pairs.tsv`
 - Result after the anchored upper-range stretch:
-  - `AUROC`: `0.999805`
-  - `expected_relatedness == 1.0`: mean `0.9834`, median `1.0`
-  - `expected_relatedness == -1.0`: mean `0.00140`, median `0.0`
-  - `pos < 0.99`: `16 / 119`
+  - `AUROC`: `0.999819`
+  - `expected_relatedness == 1.0`: mean `0.9906`, median `1.0`
+  - `expected_relatedness == -1.0`: mean `0.00328`, median `0.0`
+  - `pos < 0.99`: `15 / 119`
   - `pos < 0.9`: `4 / 119`
-  - `pos < 0.8`: `3 / 119`
-  - `pos < 0.7`: `2 / 119`
-  - `neg < 0.4`: `3618 / 3622`
-  - `neg > 0.4`: `4 / 3622`
+  - `pos < 0.8`: `2 / 119`
+  - `pos < 0.7`: `0 / 119`
+  - `pos < 0.6`: `0 / 119`
+  - `neg < 0.4`: `3616 / 3622`
+  - `neg > 0.4`: `6 / 3622`
 - Comparison to the previous implemented version:
-  - `pos < 0.9` stayed at `4 / 119`
-  - `neg > 0.4` stayed at `4 / 3622`
-  - `pos < 0.8` stayed at `3 / 119`
-  - `pos < 0.7` is now explicitly `2 / 119`
-  - `pos < 0.99` is slightly worse than the prior non-round-number version, but the formula is simpler and uses defensible constants.
+  - `neg > 0.4` increased from `4` to `6`
+  - `pos < 0.7` improved from `2` to `0`
+  - `pos < 0.6` improved from `1` to `0`
+  - This is a deliberate tradeoff in favor of a much simpler penalty.
 
 ## Notes
 

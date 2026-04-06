@@ -71,6 +71,7 @@ def main():
     print(f"pos<0.9={sum(v < 0.9 for v in pos)}")
     print(f"pos<0.8={sum(v < 0.8 for v in pos)}")
     print(f"pos<0.7={sum(v < 0.7 for v in pos)}")
+    print(f"pos<0.6={sum(v < 0.6 for v in pos)}")
     print(f"neg<0.4={sum(v < 0.4 for v in neg)}")
     print(f"neg>0.4={sum(v > 0.4 for v in neg)}")
     print(f"pos_summary={summarize(pos)}")

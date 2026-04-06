@@ -103,6 +103,10 @@ proc p_middling_ab(rm: relation_matrices, i: int): float32 {.inline.} =
       rm.gt_counts[2][i] + rm.gt_counts[3][i] + rm.gt_counts[4][i]).float32
   result = rm.gt_counts[4][i].float32 / total
 
+## Estimate pairwise genotype concordance from homozygous marker agreement.
+## This stays useful for noisy tumor/RNA comparisons by restricting the denominator
+## to homozygous sites that are callable in both samples, so missingness and
+## heterozygous dropout do not dominate the score.
 proc inferred_hom_concordance(rm: relation_matrices, j: int, k: int): float32 {.inline.} =
   let gj = rm.genotypes[j]
   let gk = rm.genotypes[k]
@@ -114,8 +118,11 @@ proc inferred_hom_concordance(rm: relation_matrices, j: int, k: int): float32 {.
     let k_known = gk.hom_ref[idx] or gk.het[idx] or gk.hom_alt[idx]
     let j_hom = gj.hom_ref[idx] or gj.hom_alt[idx]
     let k_hom = gk.hom_ref[idx] or gk.hom_alt[idx]
+    # Count homozygous sites in each sample only when the other sample is callable there.
+    # The denominator later uses the smaller callable-homozygous set to stay symmetric.
     j_ref_sites += countSetBits(j_hom and k_known).int
     k_ref_sites += countSetBits(k_hom and j_known).int
+    # A concordant site is a matching homozygous state, either ref/ref or alt/alt.
     matches += countSetBits((gj.hom_ref[idx] and gk.hom_ref[idx]) or
         (gj.hom_alt[idx] and gk.hom_alt[idx])).int
   let denom = max(1, min(j_ref_sites, k_ref_sites))
@@ -130,8 +137,11 @@ proc adjusted_concordance(rm: relation_matrices, rel: relation, j: int,
   let base = rm.inferred_hom_concordance(j, k)
   let hom_alt = clamp01(rel.raw_hom_alt_concordance)
   let pm = (rm.p_middling_ab(j) + rm.p_middling_ab(k)) / 2'f32
-  let low_hom_alt_penalty = max(0'f32, 0.75'f32 - hom_alt) * (1'f32 + 10'f32 *
-      pm)
+  # Low hom-alt concordance is a useful discordance signal, and p_middling_ab
+  # captures noisy allele balances that often accompany problematic tumor/RNA pairs.
+  let low_hom_alt_penalty = max(0'f32, 0.70'f32 - hom_alt + 2'f32 * pm)
+  # Stretch only the upper range so clearly matching pairs cluster near 1.0 while
+  # leaving the low-concordance region anchored around the 0.4 cutoff.
   result = stretch_concordance(clamp01(base - low_hom_alt_penalty))
 
 proc add*(rt: var seq[relations], rel: relation, expected_relatedness: float) =
