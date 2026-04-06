@@ -1,6 +1,7 @@
 import os
 import strformat
 import random
+import bitops
 import bitset
 import times
 import streams
@@ -51,6 +52,7 @@ type relation_matrices = object
 type relation = object
   sample_a: string
   sample_b: string
+  concordance: float32
   hets_a: uint16
   hets_b: uint16
   hom_alts_a: uint16
@@ -82,13 +84,55 @@ type relations = object
   relatedness: seq[float32]
   n: seq[uint16]
 
-proc hom_alt_concordance(r: relation): float64 {.inline.} =
-  return (r.shared_hom_alts.float64 - 2 * r.ibs0.float64) / max(1'u16, min(
-      r.hom_alts_a, r.hom_alts_b)).float64
+proc clamp01(x: float32): float32 {.inline.} =
+  result = max(0'f32, min(1'f32, x))
+
+proc stretch_concordance(x: float32): float32 {.inline.} =
+  const anchor = 0.4'f32
+  if x <= anchor:
+    return x
+  let scaled = (x - anchor) / (1'f32 - anchor)
+  result = anchor + (1'f32 - anchor) * cbrt(scaled)
+
+proc raw_hom_alt_concordance(r: relation): float32 {.inline.} =
+  result = (r.shared_hom_alts.float32 - 2'f32 * r.ibs0.float32) / max(1'u16,
+      min(r.hom_alts_a, r.hom_alts_b)).float32
+
+proc p_middling_ab(rm: relation_matrices, i: int): float32 {.inline.} =
+  let total = max(1'u16, rm.gt_counts[0][i] + rm.gt_counts[1][i] +
+      rm.gt_counts[2][i] + rm.gt_counts[3][i] + rm.gt_counts[4][i]).float32
+  result = rm.gt_counts[4][i].float32 / total
+
+proc inferred_hom_concordance(rm: relation_matrices, j: int, k: int): float32 {.inline.} =
+  let gj = rm.genotypes[j]
+  let gk = rm.genotypes[k]
+  var j_ref_sites = 0
+  var k_ref_sites = 0
+  var matches = 0
+  for idx in 0..gj.hom_ref.high:
+    let j_known = gj.hom_ref[idx] or gj.het[idx] or gj.hom_alt[idx]
+    let k_known = gk.hom_ref[idx] or gk.het[idx] or gk.hom_alt[idx]
+    let j_hom = gj.hom_ref[idx] or gj.hom_alt[idx]
+    let k_hom = gk.hom_ref[idx] or gk.hom_alt[idx]
+    j_ref_sites += countSetBits(j_hom and k_known).int
+    k_ref_sites += countSetBits(k_hom and j_known).int
+    matches += countSetBits((gj.hom_ref[idx] and gk.hom_ref[idx]) or
+        (gj.hom_alt[idx] and gk.hom_alt[idx])).int
+  let denom = max(1, min(j_ref_sites, k_ref_sites))
+  result = matches.float32 / denom.float32
 
 proc rel(r: relation): float64 {.inline.} =
   return 2 * (r.shared_hets.float64 - 2 * r.ibs0.float64) / max(1,
       r.het_ab.float64)
+
+proc adjusted_concordance(rm: relation_matrices, rel: relation, j: int,
+    k: int): float32 {.inline.} =
+  let base = rm.inferred_hom_concordance(j, k)
+  let hom_alt = clamp01(rel.raw_hom_alt_concordance)
+  let pm = (rm.p_middling_ab(j) + rm.p_middling_ab(k)) / 2'f32
+  let low_hom_alt_penalty = max(0'f32, 0.75'f32 - hom_alt) * (1'f32 + 10'f32 *
+      pm)
+  result = stretch_concordance(clamp01(base - low_hom_alt_penalty))
 
 proc add*(rt: var seq[relations], rel: relation, expected_relatedness: float) =
 
@@ -102,7 +146,7 @@ proc add*(rt: var seq[relations], rel: relation, expected_relatedness: float) =
       r.ibs2.add(rel.ibs2)
       r.shared_hets.add(rel.shared_hets)
       r.shared_hom_alts.add(rel.shared_hom_alts)
-      r.concordance.add(rel.hom_alt_concordance)
+      r.concordance.add(rel.concordance)
       r.relatedness.add(rel.rel)
       r.n.add(rel.n)
       added = true
@@ -116,10 +160,10 @@ proc add*(rt: var seq[relations], rel: relation, expected_relatedness: float) =
     rt.add(rel, expected_relatedness)
 
 
-const header = "$sample_a\t$sample_b\t$relatedness\t$ibs0\t$ibs2\t$hom_concordance\t$hets_a\t$hets_b\t$hets_ab\t$shared_hets\t$hom_alts_a\t$hom_alts_b\t$shared_hom_alts\t$n\t$x_ibs0\t$x_ibs2\t$expected_relatedness"
+const header = "$sample_a\t$sample_b\t$relatedness\t$ibs0\t$ibs2\t$concordance\t$hets_a\t$hets_b\t$hets_ab\t$shared_hets\t$hom_alts_a\t$hom_alts_b\t$shared_hom_alts\t$n\t$x_ibs0\t$x_ibs2\t$expected_relatedness"
 
 proc tsv(r: relation, expected_relatedness: float = -1.0): string =
-  result = &"{r.sample_a}\t{r.sample_b}\t{r.rel:.3f}\t{r.ibs0}\t{r.ibs2}\t{r.hom_alt_concordance:.3f}\t{r.hets_a}\t{r.hets_b}\t{r.het_ab}\t{r.shared_hets}\t{r.hom_alts_a}\t{r.hom_alts_b}\t{r.shared_hom_alts}\t{r.n}\t{r.x_ibs0}\t{r.xibs2}\t{expected_relatedness}"
+  result = &"{r.sample_a}\t{r.sample_b}\t{r.rel:.3f}\t{r.ibs0}\t{r.ibs2}\t{r.concordance:.3f}\t{r.hets_a}\t{r.hets_b}\t{r.het_ab}\t{r.shared_hets}\t{r.hom_alts_a}\t{r.hom_alts_b}\t{r.shared_hom_alts}\t{r.n}\t{r.x_ibs0}\t{r.xibs2}\t{expected_relatedness}"
 
 
 proc to_sex_lookup(samples: seq[Sample]): TableRef[string, string] =
@@ -282,12 +326,13 @@ iterator relatedness(r: var relation_matrices, grouped: var seq[pair]): tuple[
   for j in 0..<r.genotypes.high:
     let sample_a = sample_names[j]
     for k in (j + 1) .. r.genotypes.high:
-      var r = r.relatedness(j, k)
-      r.sample_a = sample_a
-      r.sample_b = sample_names[k]
-      if r.rel > 0.125:
-        grouped.add((r.sample_a, r.sample_b, r.rel))
-      yield (r, j, k)
+      var rel = r.relatedness(j, k)
+      rel.sample_a = sample_a
+      rel.sample_b = sample_names[k]
+      rel.concordance = r.adjusted_concordance(rel, j, k)
+      if rel.rel > 0.125:
+        grouped.add((rel.sample_a, rel.sample_b, rel.rel))
+      yield (rel, j, k)
 
 
 template proportion_other(c: allele_count): float =
@@ -792,7 +837,6 @@ proc write_sample(fh: File, stats: seq[Stat4], gt_counts: array[5, seq[uint16]],
   var sample = L.sample_table.getOrDefault(sample_name, Sample(id: sample_name,
       family_id: sample_name, sex: -9, phenotype: "-9", maternal_id: "-9",
       paternal_id: "-9"))
-  echo "sample final:", $sample, " sex:", sample.sex
   fh.write(&"{sample.family_id}\t{sample.id}\t{sample.paternal_id}\t{sample.maternal_id}\t{sample.sex}\t{sample.phenotype}\t")
   fh.write(&"{L.sample_sex.getOrDefault(sample.id, \"-9\")}\t")
   fh.write(&"{stats[i].gtdp.mean:.1f}\t{stats[i].gtdp.standard_deviation():.1f}\t")
