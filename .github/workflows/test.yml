@@ -1,0 +1,51 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            autoconf \
+            automake \
+            build-essential \
+            ca-certificates \
+            curl \
+            libbz2-dev \
+            libcurl4-openssl-dev \
+            liblzma-dev \
+            libopenblas-dev \
+            libssl-dev \
+            libtool \
+            pkg-config \
+            zlib1g-dev
+
+      - name: Build HTSlib
+        run: |
+          git clone --depth 1 https://github.com/samtools/htslib.git
+          cd htslib
+          git submodule update --init --recursive
+          autoreconf -i
+          ./configure
+          make -j"$(nproc)"
+          sudo make install
+          sudo ldconfig
+
+      - name: Setup Nim
+        uses: jiro4989/setup-nim-action@v2
+        with:
+          nim-version: "2.2.4"
+
+      - name: Run Tests
+        env:
+          LD_LIBRARY_PATH: /usr/local/lib
+        run: nimble test -y
