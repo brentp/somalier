@@ -17,6 +17,8 @@ import math
 import pedfile
 import ./results_html
 import ./common
+import ./charr
+import ./pedrel
 import ./estimate_contamination
 
 type Stat4 = object
@@ -842,7 +844,7 @@ proc update_family_ids(final: relation_matrices, stats: seq[Stat4],
 
 
 proc write_sample(fh: File, stats: seq[Stat4], gt_counts: array[5, seq[uint16]],
-    i: int, L: SampleLooker) =
+    charr_stats: seq[CharrStats], i: int, L: SampleLooker) =
   let sample_name = L.sample_names[i]
   var sample = L.sample_table.getOrDefault(sample_name, Sample(id: sample_name,
       family_id: sample_name, sex: -9, phenotype: "-9", maternal_id: "-9",
@@ -853,6 +855,9 @@ proc write_sample(fh: File, stats: seq[Stat4], gt_counts: array[5, seq[uint16]],
   fh.write(&"{stats[i].dp.mean:.1f}\t{stats[i].dp.standard_deviation():.1f}\t")
   fh.write(&"{stats[i].ab.mean:.2f}\t{stats[i].ab.standard_deviation():.2f}\t{gt_counts[0][i]}\t{gt_counts[1][i]}\t{gt_counts[2][i]}\t{gt_counts[3][i]}\t")
   fh.write(&"{gt_counts[4][i].float / (gt_counts[0][i] + gt_counts[1][i] + gt_counts[2][i] + gt_counts[3][i] + gt_counts[4][i]).float:.3f}\t")
+  let charr_str = if charr_stats[i].contamination.classify == fcNan: "NaN" else:
+      formatFloatClean(charr_stats[i].contamination.float32)
+  fh.write(&"{charr_str}\t{charr_stats[i].n_sites_usable}\t")
   fh.write(&"{stats[i].x_dp.mean:.2f}\t{stats[i].x_dp.n}\t{stats[i].x_hom_ref}\t{stats[i].x_het}\t{stats[i].x_hom_alt}\t")
   fh.write(&"{stats[i].y_dp.mean:.2f}\t{stats[i].y_dp.n}\n")
 
@@ -933,10 +938,11 @@ proc look(final: relation_matrices, samples: var seq[Sample], stats: seq[Stat4],
 
 
 proc write_ped(fh: File, final: var relation_matrices, stats: seq[Stat4],
-    gt_counts: array[5, seq[uint16]], L: var SampleLooker, infer: bool) =
+    gt_counts: array[5, seq[uint16]], charr_stats: seq[CharrStats],
+    L: var SampleLooker, infer: bool) =
   #var L = final.look(samples, stats, parent_child_pairs, sib_pairs)
   fh.write("#family_id\tsample_id\tpaternal_id\tmaternal_id\tsex\tphenotype\t")
-  fh.write("original_pedigree_sex\tgt_depth_mean\tgt_depth_sd\tdepth_mean\tdepth_sd\tab_mean\tab_std\tn_hom_ref\tn_het\tn_hom_alt\tn_unknown\tp_middling_ab\t")
+  fh.write("original_pedigree_sex\tgt_depth_mean\tgt_depth_sd\tdepth_mean\tdepth_sd\tab_mean\tab_std\tn_hom_ref\tn_het\tn_hom_alt\tn_unknown\tp_middling_ab\tcontamination_charr\tcontamination_charr_n_sites\t")
   fh.write("X_depth_mean\tX_n\tX_hom_ref\tX_het\tX_hom_alt\t")
   fh.write("Y_depth_mean\tY_n\n")
 
@@ -955,11 +961,11 @@ proc write_ped(fh: File, final: var relation_matrices, stats: seq[Stat4],
     final.remove_spurious_parent_ids(L, stats)
 
   for i, sample_name in L.sample_names:
-    fh.write_sample(stats, gt_counts, i, L)
+    fh.write_sample(stats, gt_counts, charr_stats, i, L)
   fh.close()
 
 proc toj(sample_names: seq[string], stats: seq[Stat4], gt_counts: array[5, seq[
-    uint16]], sample_sex: TableRef[string, string]): string =
+    uint16]], charr_stats: seq[CharrStats], sample_sex: TableRef[string, string]): string =
   result = newStringOfCap(10000)
   result.add("[")
   for i, s in sample_names:
@@ -981,6 +987,8 @@ proc toj(sample_names: seq[string], stats: seq[Stat4], gt_counts: array[5, seq[
       "n_known": gt_counts[0][i] + gt_counts[1][i] + gt_counts[2][i],
       "p_middling_ab": gt_counts[4][i].float / (gt_counts[0][i] + gt_counts[1][
           i] + gt_counts[2][i] + gt_counts[3][i] + gt_counts[4][i]).float,
+      "contamination_charr": charr_stats[i].contamination,
+      "contamination_charr_n_sites": charr_stats[i].n_sites_usable,
 
       "x_depth_mean": 2 * stats[i].x_dp.mean / stats[i].gtdp.mean,
       "x_hom_ref": stats[i].x_hom_ref,
@@ -1018,6 +1026,23 @@ proc add_prefixed_samples(groups: var seq[pair], samples: seq[string],
         else:
           groups.add((B, A, 1.0))
 
+proc compute_charr_stats(sample_names: seq[string], allele_counts: seq[seq[allele_count]],
+    sites_path: string, min_depth: int, hom_minor_rate: float,
+    hom_alpha: float): seq[CharrStats] =
+  result = newSeq[CharrStats](sample_names.len)
+  if sites_path == "":
+    stderr.write_line "[somalier] WARNING: no --sites given to relate; contamination_charr will be NaN in samples output"
+    for i in 0..<result.len:
+      result[i].contamination = NaN
+    return
+
+  let site_data = readSitesWithAF(sites_path)
+  if allele_counts.len > 0 and allele_counts[0].len != site_data.pop_afs.len:
+    quit &"[somalier] extracted inputs have {allele_counts[0].len} autosomal sites, expected {site_data.pop_afs.len} from --sites"
+  for i in 0..<sample_names.len:
+    result[i] = estimate_charr(allele_counts[i], site_data.pop_afs, min_depth,
+        hom_minor_rate, hom_alpha)
+
 proc rel_main*() =
   ## need to track samples names from bams first, then vcfs since
   ## thats the order for the alts array.
@@ -1027,6 +1052,8 @@ proc rel_main*() =
 
   var p = newParser("somalier relate"):
     help("calculate relatedness among samples from extracted, genotype-like information")
+    option("-s", "--sites",
+        help = "optional sites VCF with AF in INFO; when provided, contamination_charr is added to samples output")
     option("-g", "--groups", help = """optional path  to expected groups of samples (e.g. tumor normal pairs).
                              A group file is specified as comma-separated groups per line e.g.:
                                  normal1,tumor1a,tumor1b
@@ -1037,6 +1064,10 @@ proc rel_main*() =
     option("-d", "--min-depth", default = "7",
         help = "only genotype sites with at least this depth.")
     option("--min-ab", default = "0.3", help = "hets sites must be between min-ab and 1 - min_ab. set this to 0.2 for RNA-Seq data")
+    option("--charr-hom-rate", default = $defaultCharrHomRate,
+        help = "tolerated minor-allele rate under the homozygous-like CHARR null model")
+    option("--charr-hom-alpha", default = $defaultCharrHomAlpha,
+        help = "minimum binomial tail probability required to keep a site as homozygous-like for CHARR")
     flag("-u", "--unknown", help = "set unknown genotypes to hom-ref. it is often preferable to use this with VCF samples that were not jointly called")
     flag("-i", "--infer", help = "infer relationships (https://github.com/brentp/somalier/wiki/pedigree-inference)")
     option("-o", "--output-prefix", help = "output prefix for results.",
@@ -1055,12 +1086,29 @@ proc rel_main*() =
       opts.extracted[0])):
     echo p.help
     quit "[somalier] specify at least 1 extracted somalier file"
+  if opts.sites != "" and not fileExists(opts.sites):
+    quit "[somalier] unable to open sites file: " & opts.sites
   var
     groups: seq[pair]
     samples: seq[Sample]
     min_depth = parseInt(opts.min_depth)
     min_ab = parseFloat(opts.min_ab)
+    charr_hom_rate: float
+    charr_hom_alpha: float
     unk2hr = opts.unknown
+
+  try:
+    charr_hom_rate = parseFloat(opts.charr_hom_rate)
+  except ValueError:
+    quit "[somalier] --charr-hom-rate must be a number"
+  if charr_hom_rate <= 0 or charr_hom_rate >= 0.5:
+    quit "[somalier] --charr-hom-rate must be greater than 0 and less than 0.5"
+  try:
+    charr_hom_alpha = parseFloat(opts.charr_hom_alpha)
+  except ValueError:
+    quit "[somalier] --charr-hom-alpha must be a number"
+  if charr_hom_alpha <= 0 or charr_hom_alpha >= 1:
+    quit "[somalier] --charr-hom-alpha must be greater than 0 and less than 1"
 
   if not opts.output_prefix.endswith(".") or opts.output_prefix.endswith("/"):
     opts.output_prefix &= '.'
@@ -1069,6 +1117,8 @@ proc rel_main*() =
 
   var t0 = cpuTime()
   var final = read_extracted(opts.extracted, min_ab, min_depth, unk2hr)
+  let charr_stats = compute_charr_stats(final.samples, final.allele_counts,
+      opts.sites, min_depth, charr_hom_rate, charr_hom_alpha)
   var n_samples = final.samples.len
   stderr.write_line &"[somalier] time to read files and get per-sample stats for {n_samples} samples: {cpuTime() - t0:.2f}"
   t0 = cpuTime()
@@ -1104,7 +1154,7 @@ proc rel_main*() =
 
   var tmpls = tmpl_html.split("<INPUT_JSON>")
   fh_html.write(tmpls[0].replace("<SAMPLE_JSON>", toj(final.samples,
-      final.stats, final.gt_counts, samples.to_sex_lookup)))
+      final.stats, final.gt_counts, charr_stats, samples.to_sex_lookup)))
 
   var rels: seq[relations]
 
@@ -1181,7 +1231,7 @@ proc rel_main*() =
       opts.output_prefix & "html")
 
   var L = final.look(samples, final.stats, parent_child_pair, sib_pairs, relGt0p2)
-  fh_samples.write_ped(final, final.stats, final.gt_counts, L, opts.infer)
+  fh_samples.write_ped(final, final.stats, final.gt_counts, charr_stats, L, opts.infer)
 
   fh_tsv.close()
   grouped.write(opts.output_prefix)
