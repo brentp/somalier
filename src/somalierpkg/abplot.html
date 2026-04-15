@@ -45,11 +45,11 @@
       trace.name.replace(/ (depth|AB)$/, "")
     ))).sort();
 
-    for (const sample of sampleNames) {
+    for (const [idx, sample] of sampleNames.entries()) {
       const option = document.createElement("option");
       option.value = sample;
       option.textContent = sample;
-      option.selected = true;
+      option.selected = idx === 0;
       sampleSelect.appendChild(option);
     }
 
