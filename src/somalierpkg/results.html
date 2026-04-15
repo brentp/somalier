@@ -167,6 +167,7 @@
 
             <li><a href="javascript:set_plotb('x_depth_mean', 'y_depth_mean')">Sex ploidy QC: Scaled mean depth on chrX vs. chrY</a></li>
             <li><a href="javascript:set_plotb('n_unknown', 'p_middling_ab')">General QC: number of sites with unknown genotype vs. proportion of hets with allele balance outside of 0.1 - 0.9</a></li>
+            <li><a href="javascript:set_plotb('contamination_charr', 'p_middling_ab')">Contamination QC: CHARR contamination estimate vs. proportion of hets with allele balance outside of 0.1 - 0.9</a></li>
             <li><a href="javascript:set_plotb('gt_depth_mean', 'ab_mean')">Depth and allele QC: mean depth vs. mean het allele-balance</a></li>
             </ul>
         </div>
@@ -292,7 +293,7 @@ var layout_b = {
     },
 }
 
-input.push({mode:"markers", type:'scattergl', hoverinfo:'text+x+y', showlegend:false, name:'hovered', x:[], y:[], hovertext:[], marker:{size:size+3, opacity: 1, color:'#000000'}})
+input.push({mode:"markers", type:'scattergl', hoverinfo:'text+x+y', showlegend:false, name:'hovered', x:[], y:[], hovertext:[], marker:{size:size+3, opacity: 1, color:'#000000', line:{color: [], width: []}}})
 set_xy_data_by_group(input, jQuery('#plotax_select').val(), true, false)
 set_xy_data_by_group(input, jQuery('#plotay_select').val(), false, false)
 
@@ -372,6 +373,7 @@ function pa_hover(sample) {
     var ht = []
     var xs = []
     var ys = []
+    var border_colors = []
     if (sample) {
         var left = sample + "<br>"
         var right = "<br>" + sample
@@ -384,6 +386,7 @@ function pa_hover(sample) {
                     xs.push(otr.x[k])
                     ys.push(otr.y[k])
                     ht.push(otr.text[k])
+                    border_colors.push(otr.marker.color)
                 }
             }
         }
@@ -393,6 +396,8 @@ function pa_hover(sample) {
     input[input.length-1].y = ys
     input[input.length-1].hovertext = ht
     input[input.length-1].marker.opacity = 1
+    input[input.length-1].marker.line.color = border_colors
+    input[input.length-1].marker.line.width = border_colors.map(function() { return 2 })
 
     // remove all existing markers so highlights will be drawn on top
     //Plotly.purge(pa)
@@ -448,6 +453,8 @@ function init_depth_metrics_plot() {
         input[input.length-1].x = [];
         input[input.length-1].y = [];
         input[input.length-1].hovertext = [];
+        input[input.length-1].marker.line.color = [];
+        input[input.length-1].marker.line.width = [];
         for(j = 0; j < input.length-1; j++){
             input[j].marker.opacity = 1
         }

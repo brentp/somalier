@@ -19,7 +19,6 @@ import ./results_html
 import ./common
 import ./charr
 import ./pedrel
-import ./estimate_contamination
 
 type Stat4 = object
   dp: RunningStat

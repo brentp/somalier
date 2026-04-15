@@ -65,11 +65,13 @@ suite "CHARR estimator":
     check stats.n_sites_usable == 0
 
 suite "Exact pairwise helpers":
-  test "anchor hom-ref site uses alpha times population AF":
-    check abs(anchor_expected_alt_prob(0'i8, 0.2, 0.25) - 0.05) < 1e-12
+  test "clean hom-ref plus hom-alt contaminant respects alpha and error":
+    check abs(observed_alt_prob(0'i8, 2'i8, 0.2, 0.0) - 0.2) < 1e-12
+    check abs(observed_alt_prob(0'i8, 2'i8, 0.2, 0.002) - 0.2012) < 1e-12
 
-  test "anchor hom-alt site uses one minus alpha times ref AF":
-    check abs(anchor_expected_alt_prob(2'i8, 0.2, 0.25) - 0.85) < 1e-12
+  test "clean hom-alt plus hom-ref contaminant respects alpha and error":
+    check abs(observed_alt_prob(2'i8, 0'i8, 0.2, 0.0) - 0.8) < 1e-12
+    check abs(observed_alt_prob(2'i8, 0'i8, 0.2, 0.002) - 0.7988) < 1e-12
 
   test "site_log_likelihood clamps probabilities away from zero and one":
     let hom_ref = site_log_likelihood(100, 0, 0.0)
@@ -174,7 +176,11 @@ suite "Contamination outputs":
 
     let loaded = load_contamination_inputs(@[s1_path, s2_path], sites_path)
     let sample_rows = charr_rows(loaded.sketches, loaded.pop_afs, 7, 0.10, 0.001)
-    let pairs = pair_rows(loaded.sketches, loaded.pop_afs)
+    let pairs = pair_rows(loaded.sketches, loaded.log_priors, defaultExactErrorRate)
+    check loaded.log_priors.len == 2
+    check abs(loaded.log_priors[0][0] - ln(0.75 * 0.75)) < 1e-12
+    check abs(loaded.log_priors[0][1] - ln(2.0 * 0.25 * 0.75)) < 1e-12
+    check abs(loaded.log_priors[0][2] - ln(0.25 * 0.25)) < 1e-12
     check sample_rows.len == 2
     check sample_rows[0].sample_name == "sample1"
     check sample_rows[1].sample_name == "sample2"
@@ -201,6 +207,67 @@ suite "Contamination outputs":
     check pair_lines[0] == "#sample_name\tanchor_sample\tn_sites_usable\tcontamination_mle"
     check pair_lines[1].startsWith("sample1\tsample2\t")
     check pair_lines[2].startsWith("sample2\tsample1\t")
+
+  test "tumor-normal pair mode emits a single tumor-target normal-reference row":
+    let
+      workdir = "tests/_contam_pair_mode"
+      sites_path = workdir / "sites.vcf"
+      tumor_path = workdir / "tumor.somalier"
+      normal_path = workdir / "normal.somalier"
+    createDir(workdir)
+    defer:
+      for path in [tumor_path, normal_path, sites_path]:
+        if fileExists(path):
+          removeFile(path)
+      if dirExists(workdir):
+        removeDir(workdir)
+
+    write_sites(sites_path, @[
+      "1\t101\t.\tA\tC\t.\tPASS\tAF=0.25",
+      "1\t201\t.\tG\tT\t.\tPASS\tAF=0.75"
+    ])
+
+    write_counts(counts(sample_name: "tumor",
+      sites: @[ac(160, 40, 0), ac(40, 160, 0)],
+      x_sites: @[],
+      y_sites: @[]), "tumor", tumor_path)
+    write_counts(counts(sample_name: "normal",
+      sites: @[ac(200, 0, 0), ac(0, 200, 0)],
+      x_sites: @[],
+      y_sites: @[]), "normal", normal_path)
+
+    let loaded = load_contamination_inputs(@[tumor_path, normal_path], sites_path)
+    let row = tumor_normal_pair_row(loaded, defaultExactErrorRate)
+    check row.sample_name == "tumor"
+    check row.anchor_sample == "normal"
+    check row.stats.n_sites_usable == 2
+    check pair_row_line(row).startsWith("tumor\tnormal\t2\t")
+    check row.stats.contamination > 0.10
+
+  test "tumor-normal pair flag uses exactly two extracted inputs in order":
+    let
+      workdir = "tests/_contam_pair_args"
+      tumor_path = workdir / "tumor.somalier"
+      normal_path = workdir / "normal.somalier"
+    createDir(workdir)
+    defer:
+      for path in [tumor_path, normal_path]:
+        if fileExists(path):
+          removeFile(path)
+      if dirExists(workdir):
+        removeDir(workdir)
+
+    writeFile(tumor_path, "")
+    writeFile(normal_path, "")
+    let cfg = parse_contamination_args(@[
+      "contamination",
+      "-s", "tests/test_sites.vcf",
+      "-p",
+      tumor_path,
+      normal_path
+    ])
+    check cfg.tumor_normal_pair_mode
+    check cfg.extracted == @[tumor_path, normal_path]
 
   test "output prefix strips tsv suffix and falls back to default":
     check normalize_output_prefix("cont.tsv") == "cont"

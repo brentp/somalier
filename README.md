@@ -118,6 +118,7 @@ Commands:
   extract      :   extract genotype-like information for a single sample from VCF/BAM/CRAM.
   relate       :   aggregate `extract`ed information and calculate relatedness among samples.
   ancestry     :   perform ancestry prediction on a set of samples, given a set of labeled samples
+  AB_plot      :   make an html plot of autosomal allele balance and depth across sites.
   find-sites   :   create a new sites.vcf.gz file from a population VCF (this is rarely needed).
 ```
 ### somalier extract
@@ -173,6 +174,16 @@ value, e.g. `export SOMALIER_REPORT_ALL_PAIRS=1`
 ## find-sites
 
 To create a set of new sites, use `somalier find-sites` on a population VCF. More info on this tool is available in [the wiki](https://github.com/brentp/somalier/wiki/find-sites)
+
+## AB_plot
+
+To inspect allele balance and depth along the autosomal sites in the sites file, run:
+
+```
+somalier AB_plot --sites sites.hg38.vcf.gz extracted/*.somalier
+```
+
+This creates an HTML page with a Plotly plot where the x-axis is the autosomal site index from the sites file, the left y-axis is allele balance, and the right y-axis is depth.
 
 ## Install
 

@@ -4,9 +4,9 @@ import ./common
 
 const
   maxOtherFraction* = 0.04
-  defaultCharrHomRate* = 0.20
-  defaultCharrHomAlpha* = 0.001
-  minContamAlleleAf = 1e-6'f64
+  defaultCharrHomRate* = 0.12
+  defaultCharrHomAlpha* = 0.002
+  minContamAlleleAf = 1e-5'f64
 
 type CharrStats* = object
   contamination*: float64
