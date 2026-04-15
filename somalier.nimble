@@ -20,4 +20,6 @@ task test, "run the tests":
   exec "nim c  -d:useSysAssert -d:useGcAssert --lineDir:on --debuginfo -r tests/test_groups"
   exec "nim c  -d:useSysAssert -d:useGcAssert --lineDir:on --debuginfo -r tests/test_format_float_clean"
   exec "nim c  -d:useSysAssert -d:useGcAssert --lineDir:on --debuginfo -r tests/test_concordance.nim"
+  exec "nim c  -d:useSysAssert -d:useGcAssert --lineDir:on --debuginfo tests/test_contamination.nim"
+  exec "DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib ./tests/test_contamination"
   exec "bash tests/functional-tests.sh"

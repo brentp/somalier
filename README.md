@@ -110,6 +110,10 @@ Note that if a new sample is added to the cohort, it's only necessary to perform
 the `extract` step on that sample and then run the (fast) `relate` step again with all
 of the extracted files.
 
+For cancer cohorts, tumor-normal QC, CNV-robust concordance, and the
+`somalier contamination` workflow, see
+[Cancer, Concordance, Contamination](cancer-concordance-contamination.md).
+
 ## Extended Usage
 For each command of somalier, extended parameters are listed in `--help` of each subcommand.
 ```
