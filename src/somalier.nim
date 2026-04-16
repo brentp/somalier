@@ -13,7 +13,9 @@ import ./somalierpkg/relate
 import ./somalierpkg/findsites
 import ./somalierpkg/ancestry
 import ./somalierpkg/depthview
+import ./somalierpkg/abplot
 import ./somalierpkg/pedrel
+import ./somalierpkg/contamination
 import strformat
 import argparse
 import strutils
@@ -253,6 +255,8 @@ proc main() =
     "extract": pair(f:extract_main, description: "extract genotype-like information for a single sample from VCF/BAM/CRAM."),
     "relate": pair(f:rel_main, description: "aggregate `extract`ed information and calculate relatedness among samples."),
     "ancestry": pair(f:ancestry_main, description: "perform ancestry prediction on a set of samples, given a set of labeled samples"),
+    "AB_plot": pair(f:AB_plot_main, description: "make an html plot of autosomal allele balance and depth across sites."),
+    "contamination": pair(f:contamination_main, description: "estimate contamination with CHARR sample summaries and exact anchored ordered-pair MLEs."),
     #"depthview": pair(f:depth_main, description: "plot per-chromosome depth for each sample for quick quality-control"),
     "find-sites": pair(f:findsites_main, description: "create a new sites.vcf.gz file from a population VCF (this is rarely needed)."),
     "pedrel": pair(f:pedrel_main, description: "report kinship calculated from a pedigree file."),

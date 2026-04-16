@@ -110,6 +110,10 @@ Note that if a new sample is added to the cohort, it's only necessary to perform
 the `extract` step on that sample and then run the (fast) `relate` step again with all
 of the extracted files.
 
+For cancer cohorts, tumor-normal QC, CNV-robust concordance, and the
+`somalier contamination` workflow, see
+[Cancer, Concordance, Contamination](cancer-concordance-contamination.md).
+
 ## Extended Usage
 For each command of somalier, extended parameters are listed in `--help` of each subcommand.
 ```
@@ -118,6 +122,8 @@ Commands:
   extract      :   extract genotype-like information for a single sample from VCF/BAM/CRAM.
   relate       :   aggregate `extract`ed information and calculate relatedness among samples.
   ancestry     :   perform ancestry prediction on a set of samples, given a set of labeled samples
+  AB_plot      :   make an html plot of autosomal allele balance and depth across sites.
+  contamination :   estimate contamination from extracted somalier files.
   find-sites   :   create a new sites.vcf.gz file from a population VCF (this is rarely needed).
 ```
 ### somalier extract
@@ -170,9 +176,27 @@ balloon the size of the output. By default, pairs that are expected to be unrela
 If you wish to force all samples to be reported, then set the environment variable `SOMALIER_REPORT_ALL_PAIRS` to any non-empty
 value, e.g. `export SOMALIER_REPORT_ALL_PAIRS=1`
 
+### somalier contamination
+
+estimate contamination from extracted `.somalier` files.
+
+For tumor-normal use, CNV-robust concordance, CHARR, and the paired
+`somalier contamination` workflow, see
+[Cancer, Concordance, Contamination](cancer-concordance-contamination.md).
+
 ## find-sites
 
 To create a set of new sites, use `somalier find-sites` on a population VCF. More info on this tool is available in [the wiki](https://github.com/brentp/somalier/wiki/find-sites)
+
+## AB_plot
+
+To inspect allele balance and depth along the autosomal sites in the sites file, run:
+
+```
+somalier AB_plot --sites sites.hg38.vcf.gz extracted/*.somalier
+```
+
+This creates an HTML page with a Plotly plot where the x-axis is the autosomal site index from the sites file, the left y-axis is allele balance, and the right y-axis is depth.
 
 ## Install
 

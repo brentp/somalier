@@ -1,6 +1,6 @@
 #import somalierpkg/version as _
 
-version       = "0.3.1" #somalierVersion
+version       = "0.3.2" #somalierVersion
 author        = "Brent Pedersen"
 description   = "sample-swap checking directly on BAMs/CRAMs for cancer data"
 license       = "MIT"
@@ -19,4 +19,7 @@ bin = @["somalier"]
 task test, "run the tests":
   exec "nim c  -d:useSysAssert -d:useGcAssert --lineDir:on --debuginfo -r tests/test_groups"
   exec "nim c  -d:useSysAssert -d:useGcAssert --lineDir:on --debuginfo -r tests/test_format_float_clean"
+  exec "nim c  -d:useSysAssert -d:useGcAssert --lineDir:on --debuginfo -r tests/test_concordance.nim"
+  exec "nim c  -d:useSysAssert -d:useGcAssert --lineDir:on --debuginfo tests/test_contamination.nim"
+  exec "DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib ./tests/test_contamination"
   exec "bash tests/functional-tests.sh"

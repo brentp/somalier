@@ -1,6 +1,7 @@
 import os
 import strformat
 import random
+import bitops
 import bitset
 import times
 import streams
@@ -16,7 +17,8 @@ import math
 import pedfile
 import ./results_html
 import ./common
-import ./estimate_contamination
+import ./charr
+import ./pedrel
 
 type Stat4 = object
   dp: RunningStat
@@ -51,6 +53,7 @@ type relation_matrices = object
 type relation = object
   sample_a: string
   sample_b: string
+  concordance: float32
   hets_a: uint16
   hets_b: uint16
   hom_alts_a: uint16
@@ -82,13 +85,65 @@ type relations = object
   relatedness: seq[float32]
   n: seq[uint16]
 
-proc hom_alt_concordance(r: relation): float64 {.inline.} =
-  return (r.shared_hom_alts.float64 - 2 * r.ibs0.float64) / max(1'u16, min(
-      r.hom_alts_a, r.hom_alts_b)).float64
+proc clamp01(x: float32): float32 {.inline.} =
+  result = max(0'f32, min(1'f32, x))
+
+proc stretch_concordance(x: float32): float32 {.inline.} =
+  const anchor = 0.4'f32
+  if x <= anchor:
+    return x
+  let scaled = (x - anchor) / (1'f32 - anchor)
+  result = anchor + (1'f32 - anchor) * cbrt(scaled)
+
+proc raw_hom_alt_concordance(r: relation): float32 {.inline.} =
+  result = (r.shared_hom_alts.float32 - 2'f32 * r.ibs0.float32) / max(1'u16,
+      min(r.hom_alts_a, r.hom_alts_b)).float32
+
+proc p_middling_ab(rm: relation_matrices, i: int): float32 {.inline.} =
+  let total = max(1'u16, rm.gt_counts[0][i] + rm.gt_counts[1][i] +
+      rm.gt_counts[2][i] + rm.gt_counts[3][i] + rm.gt_counts[4][i]).float32
+  result = rm.gt_counts[4][i].float32 / total
+
+## Estimate pairwise genotype concordance from homozygous marker agreement.
+## This stays useful for noisy tumor/RNA comparisons by restricting the denominator
+## to homozygous sites that are callable in both samples, so missingness and
+## heterozygous dropout do not dominate the score.
+proc inferred_hom_concordance(rm: relation_matrices, j: int, k: int): float32 {.inline.} =
+  let gj = rm.genotypes[j]
+  let gk = rm.genotypes[k]
+  var j_ref_sites = 0
+  var k_ref_sites = 0
+  var matches = 0
+  for idx in 0..gj.hom_ref.high:
+    let j_known = gj.hom_ref[idx] or gj.het[idx] or gj.hom_alt[idx]
+    let k_known = gk.hom_ref[idx] or gk.het[idx] or gk.hom_alt[idx]
+    let j_hom = gj.hom_ref[idx] or gj.hom_alt[idx]
+    let k_hom = gk.hom_ref[idx] or gk.hom_alt[idx]
+    # Count homozygous sites in each sample only when the other sample is callable there.
+    # The denominator later uses the smaller callable-homozygous set to stay symmetric.
+    j_ref_sites += countSetBits(j_hom and k_known).int
+    k_ref_sites += countSetBits(k_hom and j_known).int
+    # A concordant site is a matching homozygous state, either ref/ref or alt/alt.
+    matches += countSetBits((gj.hom_ref[idx] and gk.hom_ref[idx]) or
+        (gj.hom_alt[idx] and gk.hom_alt[idx])).int
+  let denom = max(1, min(j_ref_sites, k_ref_sites))
+  result = matches.float32 / denom.float32
 
 proc rel(r: relation): float64 {.inline.} =
   return 2 * (r.shared_hets.float64 - 2 * r.ibs0.float64) / max(1,
       r.het_ab.float64)
+
+proc adjusted_concordance(rm: relation_matrices, rel: relation, j: int,
+    k: int): float32 {.inline.} =
+  let base = rm.inferred_hom_concordance(j, k)
+  let hom_alt = clamp01(rel.raw_hom_alt_concordance)
+  let pm = (rm.p_middling_ab(j) + rm.p_middling_ab(k)) / 2'f32
+  # Low hom-alt concordance is a useful discordance signal, and p_middling_ab
+  # captures noisy allele balances that often accompany problematic tumor/RNA pairs.
+  let low_hom_alt_penalty = max(0'f32, 0.70'f32 - hom_alt + 2'f32 * pm)
+  # Stretch only the upper range so clearly matching pairs cluster near 1.0 while
+  # leaving the low-concordance region anchored around the 0.4 cutoff.
+  result = stretch_concordance(clamp01(base - low_hom_alt_penalty))
 
 proc add*(rt: var seq[relations], rel: relation, expected_relatedness: float) =
 
@@ -102,7 +157,7 @@ proc add*(rt: var seq[relations], rel: relation, expected_relatedness: float) =
       r.ibs2.add(rel.ibs2)
       r.shared_hets.add(rel.shared_hets)
       r.shared_hom_alts.add(rel.shared_hom_alts)
-      r.concordance.add(rel.hom_alt_concordance)
+      r.concordance.add(rel.concordance)
       r.relatedness.add(rel.rel)
       r.n.add(rel.n)
       added = true
@@ -116,10 +171,10 @@ proc add*(rt: var seq[relations], rel: relation, expected_relatedness: float) =
     rt.add(rel, expected_relatedness)
 
 
-const header = "$sample_a\t$sample_b\t$relatedness\t$ibs0\t$ibs2\t$hom_concordance\t$hets_a\t$hets_b\t$hets_ab\t$shared_hets\t$hom_alts_a\t$hom_alts_b\t$shared_hom_alts\t$n\t$x_ibs0\t$x_ibs2\t$expected_relatedness"
+const header = "$sample_a\t$sample_b\t$relatedness\t$ibs0\t$ibs2\t$concordance\t$hets_a\t$hets_b\t$hets_ab\t$shared_hets\t$hom_alts_a\t$hom_alts_b\t$shared_hom_alts\t$n\t$x_ibs0\t$x_ibs2\t$expected_relatedness"
 
 proc tsv(r: relation, expected_relatedness: float = -1.0): string =
-  result = &"{r.sample_a}\t{r.sample_b}\t{r.rel:.3f}\t{r.ibs0}\t{r.ibs2}\t{r.hom_alt_concordance:.3f}\t{r.hets_a}\t{r.hets_b}\t{r.het_ab}\t{r.shared_hets}\t{r.hom_alts_a}\t{r.hom_alts_b}\t{r.shared_hom_alts}\t{r.n}\t{r.x_ibs0}\t{r.xibs2}\t{expected_relatedness}"
+  result = &"{r.sample_a}\t{r.sample_b}\t{r.rel:.3f}\t{r.ibs0}\t{r.ibs2}\t{r.concordance:.3f}\t{r.hets_a}\t{r.hets_b}\t{r.het_ab}\t{r.shared_hets}\t{r.hom_alts_a}\t{r.hom_alts_b}\t{r.shared_hom_alts}\t{r.n}\t{r.x_ibs0}\t{r.xibs2}\t{expected_relatedness}"
 
 
 proc to_sex_lookup(samples: seq[Sample]): TableRef[string, string] =
@@ -282,12 +337,13 @@ iterator relatedness(r: var relation_matrices, grouped: var seq[pair]): tuple[
   for j in 0..<r.genotypes.high:
     let sample_a = sample_names[j]
     for k in (j + 1) .. r.genotypes.high:
-      var r = r.relatedness(j, k)
-      r.sample_a = sample_a
-      r.sample_b = sample_names[k]
-      if r.rel > 0.125:
-        grouped.add((r.sample_a, r.sample_b, r.rel))
-      yield (r, j, k)
+      var rel = r.relatedness(j, k)
+      rel.sample_a = sample_a
+      rel.sample_b = sample_names[k]
+      rel.concordance = r.adjusted_concordance(rel, j, k)
+      if rel.rel > 0.125:
+        grouped.add((rel.sample_a, rel.sample_b, rel.rel))
+      yield (rel, j, k)
 
 
 template proportion_other(c: allele_count): float =
@@ -787,18 +843,20 @@ proc update_family_ids(final: relation_matrices, stats: seq[Stat4],
 
 
 proc write_sample(fh: File, stats: seq[Stat4], gt_counts: array[5, seq[uint16]],
-    i: int, L: SampleLooker) =
+    charr_stats: seq[CharrStats], i: int, L: SampleLooker) =
   let sample_name = L.sample_names[i]
   var sample = L.sample_table.getOrDefault(sample_name, Sample(id: sample_name,
       family_id: sample_name, sex: -9, phenotype: "-9", maternal_id: "-9",
       paternal_id: "-9"))
-  echo "sample final:", $sample, " sex:", sample.sex
   fh.write(&"{sample.family_id}\t{sample.id}\t{sample.paternal_id}\t{sample.maternal_id}\t{sample.sex}\t{sample.phenotype}\t")
   fh.write(&"{L.sample_sex.getOrDefault(sample.id, \"-9\")}\t")
   fh.write(&"{stats[i].gtdp.mean:.1f}\t{stats[i].gtdp.standard_deviation():.1f}\t")
   fh.write(&"{stats[i].dp.mean:.1f}\t{stats[i].dp.standard_deviation():.1f}\t")
   fh.write(&"{stats[i].ab.mean:.2f}\t{stats[i].ab.standard_deviation():.2f}\t{gt_counts[0][i]}\t{gt_counts[1][i]}\t{gt_counts[2][i]}\t{gt_counts[3][i]}\t")
   fh.write(&"{gt_counts[4][i].float / (gt_counts[0][i] + gt_counts[1][i] + gt_counts[2][i] + gt_counts[3][i] + gt_counts[4][i]).float:.3f}\t")
+  let charr_str = if charr_stats[i].contamination.classify == fcNan: "NaN" else:
+      formatFloatClean(charr_stats[i].contamination.float32)
+  fh.write(&"{charr_str}\t{charr_stats[i].n_sites_usable}\t")
   fh.write(&"{stats[i].x_dp.mean:.2f}\t{stats[i].x_dp.n}\t{stats[i].x_hom_ref}\t{stats[i].x_het}\t{stats[i].x_hom_alt}\t")
   fh.write(&"{stats[i].y_dp.mean:.2f}\t{stats[i].y_dp.n}\n")
 
@@ -879,10 +937,11 @@ proc look(final: relation_matrices, samples: var seq[Sample], stats: seq[Stat4],
 
 
 proc write_ped(fh: File, final: var relation_matrices, stats: seq[Stat4],
-    gt_counts: array[5, seq[uint16]], L: var SampleLooker, infer: bool) =
+    gt_counts: array[5, seq[uint16]], charr_stats: seq[CharrStats],
+    L: var SampleLooker, infer: bool) =
   #var L = final.look(samples, stats, parent_child_pairs, sib_pairs)
   fh.write("#family_id\tsample_id\tpaternal_id\tmaternal_id\tsex\tphenotype\t")
-  fh.write("original_pedigree_sex\tgt_depth_mean\tgt_depth_sd\tdepth_mean\tdepth_sd\tab_mean\tab_std\tn_hom_ref\tn_het\tn_hom_alt\tn_unknown\tp_middling_ab\t")
+  fh.write("original_pedigree_sex\tgt_depth_mean\tgt_depth_sd\tdepth_mean\tdepth_sd\tab_mean\tab_std\tn_hom_ref\tn_het\tn_hom_alt\tn_unknown\tp_middling_ab\tcontamination_charr\tcontamination_charr_n_sites\t")
   fh.write("X_depth_mean\tX_n\tX_hom_ref\tX_het\tX_hom_alt\t")
   fh.write("Y_depth_mean\tY_n\n")
 
@@ -901,11 +960,11 @@ proc write_ped(fh: File, final: var relation_matrices, stats: seq[Stat4],
     final.remove_spurious_parent_ids(L, stats)
 
   for i, sample_name in L.sample_names:
-    fh.write_sample(stats, gt_counts, i, L)
+    fh.write_sample(stats, gt_counts, charr_stats, i, L)
   fh.close()
 
 proc toj(sample_names: seq[string], stats: seq[Stat4], gt_counts: array[5, seq[
-    uint16]], sample_sex: TableRef[string, string]): string =
+    uint16]], charr_stats: seq[CharrStats], sample_sex: TableRef[string, string]): string =
   result = newStringOfCap(10000)
   result.add("[")
   for i, s in sample_names:
@@ -927,6 +986,8 @@ proc toj(sample_names: seq[string], stats: seq[Stat4], gt_counts: array[5, seq[
       "n_known": gt_counts[0][i] + gt_counts[1][i] + gt_counts[2][i],
       "p_middling_ab": gt_counts[4][i].float / (gt_counts[0][i] + gt_counts[1][
           i] + gt_counts[2][i] + gt_counts[3][i] + gt_counts[4][i]).float,
+      "contamination_charr": charr_stats[i].contamination,
+      "contamination_charr_n_sites": charr_stats[i].n_sites_usable,
 
       "x_depth_mean": 2 * stats[i].x_dp.mean / stats[i].gtdp.mean,
       "x_hom_ref": stats[i].x_hom_ref,
@@ -964,6 +1025,23 @@ proc add_prefixed_samples(groups: var seq[pair], samples: seq[string],
         else:
           groups.add((B, A, 1.0))
 
+proc compute_charr_stats(sample_names: seq[string], allele_counts: seq[seq[allele_count]],
+    sites_path: string, min_depth: int, hom_minor_rate: float,
+    hom_alpha: float): seq[CharrStats] =
+  result = newSeq[CharrStats](sample_names.len)
+  if sites_path == "":
+    stderr.write_line "[somalier] WARNING: no --sites given to relate; contamination_charr will be NaN in samples output"
+    for i in 0..<result.len:
+      result[i].contamination = NaN
+    return
+
+  let site_data = readSitesWithAF(sites_path)
+  if allele_counts.len > 0 and allele_counts[0].len != site_data.pop_afs.len:
+    quit &"[somalier] extracted inputs have {allele_counts[0].len} autosomal sites, expected {site_data.pop_afs.len} from --sites"
+  for i in 0..<sample_names.len:
+    result[i] = estimate_charr(allele_counts[i], site_data.pop_afs, min_depth,
+        hom_minor_rate, hom_alpha)
+
 proc rel_main*() =
   ## need to track samples names from bams first, then vcfs since
   ## thats the order for the alts array.
@@ -973,6 +1051,8 @@ proc rel_main*() =
 
   var p = newParser("somalier relate"):
     help("calculate relatedness among samples from extracted, genotype-like information")
+    option("-s", "--sites",
+        help = "optional sites VCF with AF in INFO; when provided, contamination_charr is added to samples output")
     option("-g", "--groups", help = """optional path  to expected groups of samples (e.g. tumor normal pairs).
                              A group file is specified as comma-separated groups per line e.g.:
                                  normal1,tumor1a,tumor1b
@@ -983,6 +1063,10 @@ proc rel_main*() =
     option("-d", "--min-depth", default = "7",
         help = "only genotype sites with at least this depth.")
     option("--min-ab", default = "0.3", help = "hets sites must be between min-ab and 1 - min_ab. set this to 0.2 for RNA-Seq data")
+    option("--charr-hom-rate", default = $defaultCharrHomRate,
+        help = "tolerated minor-allele rate under the homozygous-like CHARR null model")
+    option("--charr-hom-alpha", default = $defaultCharrHomAlpha,
+        help = "minimum binomial tail probability required to keep a site as homozygous-like for CHARR")
     flag("-u", "--unknown", help = "set unknown genotypes to hom-ref. it is often preferable to use this with VCF samples that were not jointly called")
     flag("-i", "--infer", help = "infer relationships (https://github.com/brentp/somalier/wiki/pedigree-inference)")
     option("-o", "--output-prefix", help = "output prefix for results.",
@@ -1001,12 +1085,29 @@ proc rel_main*() =
       opts.extracted[0])):
     echo p.help
     quit "[somalier] specify at least 1 extracted somalier file"
+  if opts.sites != "" and not fileExists(opts.sites):
+    quit "[somalier] unable to open sites file: " & opts.sites
   var
     groups: seq[pair]
     samples: seq[Sample]
     min_depth = parseInt(opts.min_depth)
     min_ab = parseFloat(opts.min_ab)
+    charr_hom_rate: float
+    charr_hom_alpha: float
     unk2hr = opts.unknown
+
+  try:
+    charr_hom_rate = parseFloat(opts.charr_hom_rate)
+  except ValueError:
+    quit "[somalier] --charr-hom-rate must be a number"
+  if charr_hom_rate <= 0 or charr_hom_rate >= 0.5:
+    quit "[somalier] --charr-hom-rate must be greater than 0 and less than 0.5"
+  try:
+    charr_hom_alpha = parseFloat(opts.charr_hom_alpha)
+  except ValueError:
+    quit "[somalier] --charr-hom-alpha must be a number"
+  if charr_hom_alpha <= 0 or charr_hom_alpha >= 1:
+    quit "[somalier] --charr-hom-alpha must be greater than 0 and less than 1"
 
   if not opts.output_prefix.endswith(".") or opts.output_prefix.endswith("/"):
     opts.output_prefix &= '.'
@@ -1015,6 +1116,8 @@ proc rel_main*() =
 
   var t0 = cpuTime()
   var final = read_extracted(opts.extracted, min_ab, min_depth, unk2hr)
+  let charr_stats = compute_charr_stats(final.samples, final.allele_counts,
+      opts.sites, min_depth, charr_hom_rate, charr_hom_alpha)
   var n_samples = final.samples.len
   stderr.write_line &"[somalier] time to read files and get per-sample stats for {n_samples} samples: {cpuTime() - t0:.2f}"
   t0 = cpuTime()
@@ -1050,7 +1153,7 @@ proc rel_main*() =
 
   var tmpls = tmpl_html.split("<INPUT_JSON>")
   fh_html.write(tmpls[0].replace("<SAMPLE_JSON>", toj(final.samples,
-      final.stats, final.gt_counts, samples.to_sex_lookup)))
+      final.stats, final.gt_counts, charr_stats, samples.to_sex_lookup)))
 
   var rels: seq[relations]
 
@@ -1127,7 +1230,7 @@ proc rel_main*() =
       opts.output_prefix & "html")
 
   var L = final.look(samples, final.stats, parent_child_pair, sib_pairs, relGt0p2)
-  fh_samples.write_ped(final, final.stats, final.gt_counts, L, opts.infer)
+  fh_samples.write_ped(final, final.stats, final.gt_counts, charr_stats, L, opts.infer)
 
   fh_tsv.close()
   grouped.write(opts.output_prefix)

@@ -28,6 +28,23 @@ assert_in_stderr "[somalier] FORMAT field 'AD' not found for depth information. 
 assert_exit_code 0
 assert_in_stderr "[somalier] found 49 sites"
 
+ab_plot_fn() {
+    rm -rf test_ab_plot
+    mkdir -p test_ab_plot
+    $exe extract -s tests/test_sites.vcf -f tests/test.fa -d test_ab_plot tests/gt_only.vcf.gz
+    $exe AB_plot -s tests/test_sites.vcf -o test_ab_plot/out.html test_ab_plot/*.somalier
+}
+
+export -f ab_plot_fn
+
+run check_ab_plot ab_plot_fn
+assert_exit_code 0
+assert_equal "1" $(test -s test_ab_plot/out.html && echo 1 || echo 0)
+assert_equal "1" $(grep -c "Plotly.newPlot" test_ab_plot/out.html)
+assert_equal "1" $(grep -c "test_sample AB" test_ab_plot/out.html)
+assert_equal "1" $(grep -c "test_sample depth" test_ab_plot/out.html)
+rm -rf test_ab_plot
+
 rm -rf test_gt_only
 #rm -f tests/gt_only.vcf.gz
 
@@ -35,7 +52,7 @@ prefix_fn() {
 	pre
     $exe extract --sample-prefix AA -s tests/test_sites.vcf -f tests/test.fa -d test_prefix_A tests/gt_only.vcf.gz
     $exe extract --sample-prefix BB -s tests/test_sites.vcf -f tests/test.fa -d test_prefix_B tests/gt_only.vcf.gz
-    $exe relate -o test_prefix_A/out --sample-prefix BB --sample-prefix AA test_prefix_B/*.somalier test_prefix_A/*.somalier
+    $exe relate -s tests/test_sites.vcf -o test_prefix_A/out --sample-prefix BB --sample-prefix AA test_prefix_B/*.somalier test_prefix_A/*.somalier
 }
 
 export -f prefix_fn
@@ -45,9 +62,58 @@ assert_exit_code 0
 
 # checks that final column, expected relatedness is 1.
 assert_equal "1" $(awk 'NR == 1 && NR == 1.0' test_prefix_A/out.pairs.tsv | wc -l) 
+assert_equal "1" $(head -n 1 test_prefix_A/out.samples.tsv | grep -c "contamination_charr")
 rm -rf test_prefix_A test_prefix_B
 
 
 run check_gvcf_no_alt $exe extract -s tests/x.gvcf.gz -f tests/test.fa tests/x.gvcf.gz
 assert_exit_code 0
 
+prefix_contam_fn() {
+    mkdir -p test_contam
+    $exe extract --sample-prefix A- -s tests/test_sites.vcf -f tests/test.fa -d test_contam_A tests/gt_only.vcf.gz
+    $exe extract --sample-prefix B- -s tests/test_sites.vcf -f tests/test.fa -d test_contam_B tests/gt_only.vcf.gz
+    $exe contamination -s tests/test_sites.vcf test_contam_A/*.somalier test_contam_B/*.somalier -o test_contam/out.tsv
+}
+
+pair_contam_fn() {
+    mkdir -p test_contam
+    $exe extract --sample-prefix T- -s tests/test_sites.vcf -f tests/test.fa -d test_contam_T tests/gt_only.vcf.gz
+    $exe extract --sample-prefix N- -s tests/test_sites.vcf -f tests/test.fa -d test_contam_N tests/gt_only.vcf.gz
+    $exe contamination -s tests/test_sites.vcf -p test_contam_T/*.somalier test_contam_N/*.somalier
+}
+
+bad_sites_contam_fn() {
+    mkdir -p test_contam
+    $exe extract --sample-prefix BAD- -s tests/test_sites.vcf -f tests/test.fa -d test_contam_bad tests/gt_only.vcf.gz
+    awk 'BEGIN{n=0} /^#/ { print; next } n < 5 { print; n++ }' tests/test_sites.vcf > tests/bad_contam_sites.vcf
+    $exe contamination -s tests/bad_contam_sites.vcf test_contam_bad/*.somalier -o test_contam/bad.tsv
+}
+
+export -f prefix_contam_fn
+export -f pair_contam_fn
+export -f bad_sites_contam_fn
+
+run check_contamination_sample_rows prefix_contam_fn
+assert_exit_code 0
+assert_in_stderr "wrote test_contam/out.samples.tsv and test_contam/out.pairs.tsv"
+assert_equal "3" $(wc -l < test_contam/out.samples.tsv | tr -d ' ')
+assert_equal "3" $(wc -l < test_contam/out.pairs.tsv | tr -d ' ')
+assert_equal $'#sample_name\tanchor_sample\tn_sites_usable\tcontamination_mle' "$(head -n 1 test_contam/out.pairs.tsv)"
+assert_equal "1" $(awk '$1 == "A-test_sample" && $2 == "B-test_sample"' test_contam/out.pairs.tsv | wc -l | tr -d ' ')
+assert_equal "1" $(awk '$1 == "B-test_sample" && $2 == "A-test_sample"' test_contam/out.pairs.tsv | wc -l | tr -d ' ')
+rm -rf test_contam_A test_contam_B test_contam
+
+run check_contamination_tumor_normal_pair pair_contam_fn
+assert_exit_code 0
+assert_equal "1" "$(wc -l < "$STDOUT_FILE" | tr -d ' ')"
+assert_equal "1" "$(awk '$1 == "T-test_sample" && $2 == "N-test_sample" {print 1}' "$STDOUT_FILE" | wc -l | tr -d ' ')"
+assert_equal "0" "$(test -e test_contam.samples.tsv && echo 1 || echo 0)"
+assert_equal "0" "$(test -e test_contam.pairs.tsv && echo 1 || echo 0)"
+rm -rf test_contam_T test_contam_N test_contam
+
+run check_contamination_bad_sites bad_sites_contam_fn
+assert_exit_code 1
+assert_in_stderr "expected 5 from --sites"
+rm -rf test_contam_bad test_contam
+rm -f tests/bad_contam_sites.vcf

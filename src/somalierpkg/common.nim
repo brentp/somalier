@@ -17,6 +17,7 @@ type Site* = object
   ## counts if swap is true.
   flip*:bool
 
+type SiteAF* = tuple[site: Site, af: float32]
 
 proc update_with_glob*(files: var seq[string]) =
   var toadd = newSeqOfCap[string](256)
@@ -57,6 +58,33 @@ proc siteOrder(a:Site, b:Site): int =
     return cmp(a.position, b.position)
   return cmp(a.chrom, b.chrom)
 
+proc siteAFOrder(a: SiteAF, b: SiteAF): int =
+  siteOrder(a.site, b.site)
+
+proc isAutosomal*(site: Site): bool =
+  site.chrom notin ["X", "chrX", "NC_000023.10", "NC_000023.11",
+                    "Y", "chrY", "NC_000024.9", "NC_000024.10"]
+
+proc stored_alt_af*(site: Site, vcf_af: float32): float32 =
+  ## Somalier stores counts in alphabetical A/B allele order, so sites whose
+  ## REF/ALT order was flipped during extraction need the population AF flipped
+  ## here as well to stay aligned with the stored B allele counts.
+  if site.flip: 1'f32 - vcf_af else: vcf_af
+
+proc parse_info_af(info: string, path: string): float32 =
+  for field in info.split(';'):
+    if not field.startsWith("AF="):
+      continue
+    let value = field[3 .. field.high]
+    if value.len == 0:
+      break
+    try:
+      return parseFloat(value.split(',')[0]).float32
+    except ValueError:
+      quit "malformed AF in sites file: " & path
+
+  quit "missing AF in sites file: " & path
+
 proc readSites*(path: string): seq[Site] =
   result = newSeqOfCap[Site](8192)
   var kstr = kstring_t(l:0, m:0, s:nil)
@@ -78,6 +106,38 @@ proc readSites*(path: string): seq[Site] =
     stderr.write_line "warning:cant use more than 65535 sites"
   sort(result, siteOrder)
   # check reference after sorting so we get much faster access.
+
+proc readSitesWithAF*(path: string): tuple[sites: seq[Site], pop_afs: seq[float32]] =
+  var pairs = newSeqOfCap[SiteAF](8192)
+  var kstr = kstring_t(l:0, m:0, s:nil)
+  var hf = hts_open(path.cstring, "r")
+
+  while hts_getline(hf, cint(10), kstr.addr) > 0:
+    var line = $kstr.s
+    if line.len == 0 or line[0] == '#':
+      continue
+    if '\t' notin line:
+      quit "sites with AF must be tab-delimited VCF/BCF-like records: " & path
+
+    let toks = line.strip().split('\t')
+    if toks.len < 8:
+      quit "expected at least 8 columns in sites file: " & path
+
+    let site = toSite(toks)
+    if not site.isAutosomal:
+      continue
+    # Parse AF before sorting, then sort the (site, af) pairs together so the
+    # returned AF vector stays in exactly the same order as the autosomal sketch.
+    pairs.add((site: site, af: stored_alt_af(site, parse_info_af(toks[7], path))))
+
+  if pairs.len > 65535:
+    stderr.write_line "warning:cant use more than 65535 sites"
+  sort(pairs, siteAFOrder)
+  result.sites = newSeq[Site](pairs.len)
+  result.pop_afs = newSeq[float32](pairs.len)
+  for i, pair in pairs:
+    result.sites[i] = pair.site
+    result.pop_afs[i] = pair.af
 
 type allele_count* = object
   nref*: uint32

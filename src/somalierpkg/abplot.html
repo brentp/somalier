@@ -1,0 +1,134 @@
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Somalier AB Plot</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    body {
+      font-family: Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 24px;
+      color: #222;
+    }
+    .controls {
+      margin-bottom: 16px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+    .controls label {
+      font-weight: 600;
+    }
+    #sample-select {
+      min-width: 280px;
+      min-height: 160px;
+    }
+    #plot {
+      width: 100%;
+      height: 88vh;
+    }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <div>
+      <label for="sample-select">Samples</label><br>
+      <select id="sample-select" multiple></select>
+    </div>
+  </div>
+  <div id="plot"></div>
+  <script>
+    const traces = <INPUT_TRACES>;
+    const sampleSelect = document.getElementById("sample-select");
+    const sampleNames = Array.from(new Set(traces.map((trace) =>
+      trace.name.replace(/ (depth|AB)$/, "")
+    ))).sort();
+
+    for (const [idx, sample] of sampleNames.entries()) {
+      const option = document.createElement("option");
+      option.value = sample;
+      option.textContent = sample;
+      option.selected = idx === 0;
+      sampleSelect.appendChild(option);
+    }
+
+    function selectedSamples() {
+      return new Set(Array.from(sampleSelect.selectedOptions, (option) => option.value));
+    }
+
+    function traceSample(trace) {
+      return trace.name.replace(/ (depth|AB)$/, "");
+    }
+
+    function depthTrace(trace) {
+      return trace.name.endsWith(" depth");
+    }
+
+    function percentile(values, p) {
+      if (values.length === 0) return null;
+      const sorted = [...values].sort((a, b) => a - b);
+      const idx = Math.max(0, Math.min(sorted.length - 1, Math.ceil((p / 100) * sorted.length) - 1));
+      return sorted[idx];
+    }
+
+    function visibleDepthMax() {
+      const selected = selectedSamples();
+      const values = [];
+      for (const trace of traces) {
+        if (!depthTrace(trace)) continue;
+        if (!selected.has(traceSample(trace))) continue;
+        for (const y of trace.y) {
+          if (typeof y === "number" && Number.isFinite(y)) {
+            values.push(y);
+          }
+        }
+      }
+      const p99 = percentile(values, 99);
+      if (p99 === null) return null;
+      return Math.max(1, p99);
+    }
+
+    function updateVisibleTraces() {
+      const selected = selectedSamples();
+      const visibility = traces.map((trace) =>
+        selected.has(traceSample(trace)) ? true : "legendonly"
+      );
+      const depthMax = visibleDepthMax();
+      const update = {visible: visibility};
+      Plotly.restyle("plot", update).then(() => {
+        Plotly.relayout("plot", {
+          "yaxis.range": depthMax === null ? null : [0, depthMax]
+        });
+      });
+    }
+
+    const xaxis = {
+      title: "Site index in sites file",
+      anchor: "y2",
+      ...<INPUT_XAXIS>
+    };
+    const layout = {
+      title: "Depth and allele balance by site index",
+      hovermode: "x unified",
+      xaxis,
+      yaxis: {
+        title: "Depth",
+        domain: [0.54, 1.0]
+      },
+      yaxis2: {
+        title: "Allele balance",
+        range: [0, 1],
+        domain: [0.0, 0.46]
+      },
+      legend: {orientation: "h"},
+      margin: {l: 70, r: 30, t: 60, b: 60}
+    };
+    const config = {responsive: true};
+    Plotly.newPlot("plot", traces, layout, config).then(() => {
+      updateVisibleTraces();
+    });
+    sampleSelect.addEventListener("change", updateVisibleTraces);
+  </script>
+</body>
+</html>
