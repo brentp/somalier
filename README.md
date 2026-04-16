@@ -123,6 +123,7 @@ Commands:
   relate       :   aggregate `extract`ed information and calculate relatedness among samples.
   ancestry     :   perform ancestry prediction on a set of samples, given a set of labeled samples
   AB_plot      :   make an html plot of autosomal allele balance and depth across sites.
+  contamination :   estimate contamination from extracted somalier files.
   find-sites   :   create a new sites.vcf.gz file from a population VCF (this is rarely needed).
 ```
 ### somalier extract
