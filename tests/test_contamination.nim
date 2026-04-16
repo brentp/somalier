@@ -268,6 +268,19 @@ suite "Contamination outputs":
     ])
     check cfg.tumor_normal_pair_mode
     check cfg.extracted == @[tumor_path, normal_path]
+    check cfg.output_prefix.len == 0
+
+    let cfg_with_output = parse_contamination_args(@[
+      "contamination",
+      "-s", "tests/test_sites.vcf",
+      "-p",
+      "-o", "pair.tsv",
+      tumor_path,
+      normal_path
+    ])
+    check cfg_with_output.tumor_normal_pair_mode
+    check cfg_with_output.extracted == @[tumor_path, normal_path]
+    check cfg_with_output.output_prefix == "pair.tsv"
 
   test "output prefix strips tsv suffix and falls back to default":
     check normalize_output_prefix("cont.tsv") == "cont"

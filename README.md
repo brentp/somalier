@@ -176,6 +176,14 @@ balloon the size of the output. By default, pairs that are expected to be unrela
 If you wish to force all samples to be reported, then set the environment variable `SOMALIER_REPORT_ALL_PAIRS` to any non-empty
 value, e.g. `export SOMALIER_REPORT_ALL_PAIRS=1`
 
+### somalier contamination
+
+estimate contamination from extracted `.somalier` files.
+
+For tumor-normal use, CNV-robust concordance, CHARR, and the paired
+`somalier contamination` workflow, see
+[Cancer, Concordance, Contamination](cancer-concordance-contamination.md).
+
 ## find-sites
 
 To create a set of new sites, use `somalier find-sites` on a population VCF. More info on this tool is available in [the wiki](https://github.com/brentp/somalier/wiki/find-sites)

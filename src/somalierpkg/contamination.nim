@@ -176,7 +176,7 @@ proc parse_contamination_args(argv: seq[string]): ContaminationConfig =
       help = "per-read sequencing error rate used by the exact pairwise likelihood")
     flag("-p", "--tumor-normal-pair",
       help = "emit a single tumor-target normal-reference contamination line using exactly 2 extracted .somalier inputs; the first is assumed to be the tumor")
-    option("-o", "--output", default = defaultOutputPrefix,
+    option("-o", "--output", default = "",
       help = "output prefix for PREFIX.samples.tsv and PREFIX.pairs.tsv")
     arg("extracted", nargs = -1,
       help = "$sample.somalier files for each sample. the first 10 are tested as glob patterns")
@@ -246,7 +246,12 @@ proc parse_contamination_args(argv: seq[string]): ContaminationConfig =
     quit "[somalier] --exact-error-rate must be at least 0 and less than 0.5"
 
   result.sites = opts.sites
-  result.output_prefix = normalize_output_prefix(opts.output)
+  result.output_prefix = if result.tumor_normal_pair_mode and opts.output.len == 0:
+      ""
+    elif result.tumor_normal_pair_mode:
+      opts.output
+    else:
+      normalize_output_prefix(opts.output)
 
 proc validate_counts(cnt: counts, meta: SketchMeta, expected_autosomal_sites: int) =
   if cnt.sample_name != meta.sample_name:
@@ -599,6 +604,14 @@ proc write_pair_rows(rows: openArray[PairRow], output: string) =
 proc pair_row_line(row: PairRow): string =
   &"{row.sample_name}\t{row.anchor_sample}\t{row.stats.n_sites_usable}\t{format_contamination(row.stats.contamination)}"
 
+proc write_pair_row(row: PairRow, output: string) =
+  var fh: File
+  if not open(fh, output, fmWrite):
+    quit "[somalier] couldn't open output file: " & output
+  defer:
+    fh.close()
+  fh.write_line(pair_row_line(row))
+
 proc tumor_normal_pair_row(loaded: LoadedContaminationInputs,
     exact_error_rate: float): PairRow =
   doAssert loaded.sketches.len == 2
@@ -611,10 +624,11 @@ proc contamination_main*() =
   let loaded = load_contamination_inputs(cfg.extracted, cfg.sites, cfg.min_depth,
       cfg.exact_hom_rate, cfg.exact_hom_alpha)
   if cfg.tumor_normal_pair_mode:
-    if cfg.output_prefix != defaultOutputPrefix:
-      quit "[somalier] --tumor-normal-pair writes a single line to stdout; omit -o/--output"
     let row = tumor_normal_pair_row(loaded, cfg.exact_error_rate)
-    stdout.write_line(pair_row_line(row))
+    if cfg.output_prefix.len == 0:
+      stdout.write_line(pair_row_line(row))
+    else:
+      write_pair_row(row, cfg.output_prefix)
     return
   let sample_rows = charr_rows(loaded.sketches, loaded.pop_afs, cfg.min_depth,
       cfg.charr_hom_rate, cfg.charr_hom_alpha)
