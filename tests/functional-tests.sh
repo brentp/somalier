@@ -106,8 +106,8 @@ rm -rf test_contam_A test_contam_B test_contam
 
 run check_contamination_tumor_normal_pair pair_contam_fn
 assert_exit_code 0
-assert_equal "1" "$(echo "$stdout" | wc -l | tr -d ' ')"
-assert_equal "1" "$(echo "$stdout" | awk '$1 == "T-test_sample" && $2 == "N-test_sample" {print 1}' | wc -l | tr -d ' ')"
+assert_equal "1" "$(wc -l < "$STDOUT_FILE" | tr -d ' ')"
+assert_equal "1" "$(awk '$1 == "T-test_sample" && $2 == "N-test_sample" {print 1}' "$STDOUT_FILE" | wc -l | tr -d ' ')"
 assert_equal "0" "$(test -e test_contam.samples.tsv && echo 1 || echo 0)"
 assert_equal "0" "$(test -e test_contam.pairs.tsv && echo 1 || echo 0)"
 rm -rf test_contam_T test_contam_N test_contam
