@@ -1,1 +1,1 @@
-let somalierVersion* = "0.3.1"
+let somalierVersion* = "0.3.2"
