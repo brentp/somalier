@@ -99,7 +99,7 @@ assert_exit_code 0
 assert_in_stderr "wrote test_contam/out.samples.tsv and test_contam/out.pairs.tsv"
 assert_equal "3" $(wc -l < test_contam/out.samples.tsv | tr -d ' ')
 assert_equal "3" $(wc -l < test_contam/out.pairs.tsv | tr -d ' ')
-assert_equal "#sample_name\tanchor_sample\tn_sites_usable\tcontamination_mle" "$(head -n 1 test_contam/out.pairs.tsv)"
+assert_equal $'#sample_name\tanchor_sample\tn_sites_usable\tcontamination_mle' "$(head -n 1 test_contam/out.pairs.tsv)"
 assert_equal "1" $(awk '$1 == "A-test_sample" && $2 == "B-test_sample"' test_contam/out.pairs.tsv | wc -l | tr -d ' ')
 assert_equal "1" $(awk '$1 == "B-test_sample" && $2 == "A-test_sample"' test_contam/out.pairs.tsv | wc -l | tr -d ' ')
 rm -rf test_contam_A test_contam_B test_contam
