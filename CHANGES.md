@@ -1,3 +1,10 @@
+v0.3.2
+======
++ `relate` now outputs `concordance` instead of `homozygous_concordance`.
++ `relate` now estimates CHARR contamination
++ `contamination` sub-command for conpair-like pairwise (or all-vs-all) inter-sample contamination
++ `AB_plot` sub-command to plot depth and allele balance across sites to show major deletions and duplications
+
 v0.3.1
 ======
 + add new `pedrel` command to report kinship value for samples from a pedigree file
