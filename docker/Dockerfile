@@ -27,20 +27,21 @@ RUN cd /somalier && mkdir -p /load && \
 
 FROM alpine:3.21
 
-# for nextflow
-RUN apk add --no-cache bash procps
+# for nextflow and arraymancer/OpenBLAS runtime loading
+RUN apk add --no-cache bash procps openblas
 
 # Copy HTS libraries from build stage
 COPY --from=build /usr/local/lib /usr/local/lib
 COPY --from=build /usr/local/lib64 /usr/local/lib64
 COPY --from=build /usr/lib /usr/lib
+COPY --from=build /lib/libcrypto.so.1.1 /lib/libcrypto.so.1.1
+COPY --from=build /lib/libssl.so.1.1 /lib/libssl.so.1.1
 
 # Update dynamic linker cache
 RUN ldconfig /usr/local/lib /usr/local/lib64 /usr/lib || true
+ENV LD_LIBRARY_PATH=/usr/local/lib:/usr/local/lib64:/usr/lib
 
 COPY --from=build /load/somalier /usr/bin/somalier
 COPY --from=build /somalier/scripts/ancestry-labels-1kg.tsv /
 
 ENV somalier_ancestry_labels=/ancestry_labels-1kg.tsv
-
-
