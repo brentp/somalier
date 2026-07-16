@@ -4,6 +4,17 @@ import pedfile
 import unittest
 
 suite "somalier groups":
+  test "expand .list arguments into somalier paths":
+    let list_path = "_somalier_files.list"
+    writeFile(list_path, " first.somalier \n\nsecond path.somalier\r\n")
+    defer: removeFile(list_path)
+
+    var paths = @["before.somalier", list_path, "after.somalier"]
+    paths.update_with_lists
+
+    check paths == @["before.somalier", "first.somalier",
+        "second path.somalier", "after.somalier"]
+
   test "that pairs added in groups update relatedness for those added by pedigree file":
     var fh:File
     doAssert open(fh, "_grps.txt", fmWrite)
@@ -27,7 +38,6 @@ FAM001	normal2	0	0	2	-9
 
     check (a: "normal1", b: "tumor0", rel: 0.5) in groups
     check (a: "normal2", b: "tumor0", rel: 0.5) in groups
-
 
 
 

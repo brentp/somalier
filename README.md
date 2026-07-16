@@ -56,7 +56,8 @@ For example to add the **n + 1th** samples, just run `somalier extract` on the n
 the already extracted data from the `n` original samples.
 
 For *huge* sample-sets, if you run into a bash error for *argument list too long*, you can pass the somalier files as quoted
-glob strings like:  `"/path/to/set-a/*.somalier" "/path/to/set-b/*.somalier"`.
+glob strings like:  `"/path/to/set-a/*.somalier" "/path/to/set-b/*.somalier"`, or use a `.list` file containing one
+`.somalier` path per line: `somalier relate samples.list`.
 
 ## Example Output
 

@@ -1042,6 +1042,22 @@ proc compute_charr_stats(sample_names: seq[string], allele_counts: seq[seq[allel
     result[i] = estimate_charr(allele_counts[i], site_data.pop_afs, min_depth,
         hom_minor_rate, hom_alpha)
 
+proc update_with_lists(files: var seq[string]) =
+  var expanded = newSeqOfCap[string](files.len)
+  for path in files:
+    if not path.endsWith(".list"):
+      expanded.add(path)
+      continue
+
+    try:
+      for line in path.lines:
+        let listed_path = line.strip
+        if listed_path.len > 0:
+          expanded.add(listed_path)
+    except IOError:
+      quit "[somalier] unable to open list file: " & path
+  files = expanded
+
 proc rel_main*() =
   ## need to track samples names from bams first, then vcfs since
   ## thats the order for the alts array.
@@ -1071,13 +1087,14 @@ proc rel_main*() =
     flag("-i", "--infer", help = "infer relationships (https://github.com/brentp/somalier/wiki/pedigree-inference)")
     option("-o", "--output-prefix", help = "output prefix for results.",
         default = "somalier")
-    arg("extracted", nargs = -1, help = "$sample.somalier files for each sample. the first 10 are tested as a glob patterns")
+    arg("extracted", nargs = -1, help = "$sample.somalier files for each sample, or .list files with one path per line. the first 10 paths are tested as glob patterns")
 
 
   var opts = p.parse(argv)
   if opts.help:
     quit 0
-  # first given 10 "files" could be a glob.
+  opts.extracted.update_with_lists
+  # First 10 paths, including those read from lists, could be globs.
   opts.extracted.update_with_glob
 
   stderr.write_line &"[somalier] starting read of {opts.extracted.len} samples"

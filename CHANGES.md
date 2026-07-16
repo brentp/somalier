@@ -1,3 +1,7 @@
+v0.3.3
+======
++ `relate` will now check for files ending in `.list` and then read that expecting a single somalier path per line (can be mixed with other .somalier arguments)
+
 v0.3.2
 ======
 + `relate` now outputs `concordance` instead of `homozygous_concordance`.
