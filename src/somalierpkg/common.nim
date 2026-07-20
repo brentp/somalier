@@ -49,7 +49,7 @@ proc toSite(toks: seq[string]): Site =
 proc checkSiteRef*(s:Site, fai:Fai) =
   var fa_allele = fai.get(s.chrom, s.position, s.position + s.A_allele.len - 1).toUpperAscii
   if s.A_allele != fa_allele and s.B_allele != fa_allele:
-    quit "neither allele from sites file:" & s.A_allele & "/" & s.B_allele & " matches that from reference: " & fa_allele
+    quit "neither allele from sites file:" & s.A_allele & "/" & s.B_allele & " at locus " & s.chrom & ":" & s.position & "matches that from reference: " & fa_allele
 {.pop.}
 
 
