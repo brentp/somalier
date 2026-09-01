@@ -1,3 +1,8 @@
+v0.3.4
+======
++ fixes long standing bug in allele counting for **long reads**. See: https://github.com/brentp/hileup/issues/1
+  thanks @3megabytesofhotram for providing a fix
+
 v0.3.3
 ======
 + `relate` will now check for files ending in `.list` and then read that expecting a single somalier path per line (can be mixed with other .somalier arguments)
