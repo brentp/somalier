@@ -45,3 +45,4 @@ COPY --from=build /load/somalier /usr/bin/somalier
 COPY --from=build /somalier/scripts/ancestry-labels-1kg.tsv /
 
 ENV somalier_ancestry_labels=/ancestry_labels-1kg.tsv
+RUN apk fix readline
