@@ -63,6 +63,10 @@ assert_exit_code 0
 # checks that final column, expected relatedness is 1.
 assert_equal "1" $(awk 'NR == 1 && NR == 1.0' test_prefix_A/out.pairs.tsv | wc -l) 
 assert_equal "1" $(head -n 1 test_prefix_A/out.samples.tsv | grep -c "contamination_charr")
+
+run check_relate_without_sites_warning $exe relate -o test_prefix_A/no_sites test_prefix_A/*.somalier
+assert_exit_code 0
+assert_in_stderr "WARNING: no --sites given to relate; hom-ref and hom-alt counts will not be correct"
 rm -rf test_prefix_A test_prefix_B
 
 

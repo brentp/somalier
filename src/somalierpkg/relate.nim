@@ -1162,7 +1162,7 @@ proc rel_main*() =
 
   var t0 = cpuTime()
   if opts.sites == "":
-    stderr.write_line "[somalier] WARNING: no --sites given to relate; sample hom-ref/hom-alt counts use alphabetical A/B allele order"
+    stderr.write_line "[somalier] WARNING: no --sites given to relate; hom-ref and hom-alt counts will not be correct (stored counts use alphabetical A/B allele order)"
   var final = read_extracted(opts.extracted, min_ab, min_depth, unk2hr, opts.sites)
   let charr_stats = compute_charr_stats(final.samples, final.allele_counts,
       opts.sites, min_depth, charr_hom_rate, charr_hom_alpha)
