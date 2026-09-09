@@ -37,7 +37,7 @@ the [releases](https://github.com/brentp/somalier/releases) but any set of commo
 The next step is to calculate relatedness on the extracted data:
 
 ```
-somalier relate --ped $pedigree extracted/*.somalier
+somalier relate --sites sites.vcf.gz --ped $pedigree extracted/*.somalier
 ```
 This will create text and interactive HTML output
 that makes it fast and easy to detect mismatched samples and sample-swaps.
@@ -57,7 +57,7 @@ the already extracted data from the `n` original samples.
 
 For *huge* sample-sets, if you run into a bash error for *argument list too long*, you can pass the somalier files as quoted
 glob strings like:  `"/path/to/set-a/*.somalier" "/path/to/set-b/*.somalier"`, or use a `.list` file containing one
-`.somalier` path per line: `somalier relate samples.list`.
+`.somalier` path per line: `somalier relate --sites sites.vcf.gz samples.list`.
 
 ## Example Output
 
@@ -68,7 +68,7 @@ glob strings like:  `"/path/to/set-a/*.somalier" "/path/to/set-b/*.somalier"`, o
 
 `somalier` can also infer first-degree relationships (parent-child) when both-parents
 are present and can often build entire pedigrees on high-qualty data. To do this, use
- `somalier relate --infer ...` and the **samples.tsv** output will be a pedigree file
+ `somalier relate --sites sites.vcf.gz --infer ...` and the **samples.tsv** output will be a pedigree file
 indicating the inferred relationships.
 
 See [wiki](https://github.com/brentp/somalier/wiki/pedigree-inference) for more detail.
@@ -103,7 +103,7 @@ header, then it will use the genotypes only and use a total depth of 20 (10,10 f
 
 Then run:
 ```
-somalier relate --ped $pedigree_file cohort/*.somalier
+somalier relate --sites sites.hg38.vcf.gz --ped $pedigree_file cohort/*.somalier
 ```
 This will create an html file for QC in a few seconds. 
 
@@ -157,6 +157,7 @@ Arguments:
   [extracted ...]  $sample.somalier files for each sample. the first 10 are tested as a glob patterns
 
 Options:
+  -s, --sites=SITES          matching sites VCF with INFO/AF; required for correct sample hom-ref/hom-alt counts and contamination_charr
   -g, --groups=GROUPS        optional path  to expected groups of samples (e.g. tumor normal pairs).
 specified as comma-separated groups per line e.g.:
     normal1,tumor1a,tumor1b
@@ -170,6 +171,14 @@ specified as comma-separated groups per line e.g.:
   -i, --infer                infer relationships (https://github.com/brentp/somalier/wiki/pedigree-inference)
   -o, --output-prefix=OUTPUT_PREFIX
                              output prefix for results. (default: somalier)
+```
+
+`--sites` is required for correct sample hom-ref and hom-alt counts, including X
+counts, in the TSV and HTML. Without it, counts use alphabetical A/B allele order.
+Pass the matching sites VCF (with INFO/AF for CHARR):
+
+```sh
+somalier relate --sites sites.hg38.vcf.gz extracted/*.somalier
 ```
 
 Note that for large cohorts, by default, `somalier relate` will subset to interesting sample-pairs so as not to
@@ -261,7 +270,7 @@ By default `somalier` will only consider variants that have a "PASS" or "RefCall
 the environment variable `SOMALIER_ALLOWED_FILTERS` to a comma-delimited list of additional filters to allow.
 
 by default sites with an allele balance < 0.01 will be considered homozygous reference. To adjust this, use e.g. : 
-`SOMALIER_AB_HOM_CUTOFF=0.04 somalier relate ...`
+`SOMALIER_AB_HOM_CUTOFF=0.04 somalier relate --sites sites.vcf.gz ...`
  
 ## Other Work
 

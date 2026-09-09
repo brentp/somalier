@@ -25,6 +25,9 @@ type Stat4 = object
   gtdp: RunningStat # depth of genotyped sites
   un: RunningStat
   ab: RunningStat
+  # Shift homozygous counts to REF/ALT order for reporting; keep A/B counts internally.
+  hom_ref_adjustment: int32
+  x_hom_ref_adjustment: int32
 
   x_dp: RunningStat
   x_hom_ref: int
@@ -393,7 +396,8 @@ proc alts*(c: allele_count, min_ab: float,
 {.pop.}
 
 proc fill_sample_info(r: var relation_matrices, sample_i: int, min_ab: float,
-    min_depth: int, unk2hr: bool) =
+    min_depth: int, unk2hr: bool, flips: seq[bool] = @[],
+    x_flips: seq[bool] = @[]) =
 
   var n = r.allele_counts[sample_i].len
   r.genotypes[sample_i].hom_ref = create_bitset(n)
@@ -403,6 +407,10 @@ proc fill_sample_info(r: var relation_matrices, sample_i: int, min_ab: float,
   var stat = r.stats[sample_i]
   for k, c in r.allele_counts[sample_i]:
     var abi = c.ab(min_depth)
+    # At flipped sites, A/A removes one hom-ref and B/B adds one; hets and unknowns stay put.
+    if flips.len > 0 and flips[k]:
+      let alt = abi.alts(min_ab)
+      if alt >= 0: stat.hom_ref_adjustment += alt.int32 - 1
     if abi < 0 and unk2hr: abi = 0
     stat.dp.push(int(c.nref + c.nalt))
     if c.nref > 0'u32 or c.nalt > 0'u32 or c.nother > 0'u32:
@@ -436,6 +444,8 @@ proc fill_sample_info(r: var relation_matrices, sample_i: int, min_ab: float,
     var alt = c.alts(min_ab)
     if alt == -1: continue
     stat.x_dp.push(c.depth.float)
+    if x_flips.len > 0 and x_flips[k]:
+      stat.x_hom_ref_adjustment += alt.int32 - 1
     if alt == 0:
       stat.x_hom_ref.inc
       r.x_genotypes[sample_i].hom_ref.set(k)
@@ -454,7 +464,18 @@ proc fill_sample_info(r: var relation_matrices, sample_i: int, min_ab: float,
 
 
 proc read_extracted*(paths: seq[string], min_ab: float, min_depth: int,
-    unk2hr: bool): relation_matrices =
+    unk2hr: bool, sites_path: string = ""): relation_matrices =
+  var flips, x_flips: seq[bool]
+  var expected_y_sites = 0
+  if sites_path != "":
+    for site in readSites(sites_path):
+      case site.chrom:
+        of ["X", "chrX", "NC_000023.10", "NC_000023.11"]:
+          x_flips.add(site.flip)
+        of ["Y", "chrY", "NC_000024.9", "NC_000024.10"]:
+          expected_y_sites.inc
+        else:
+          flips.add(site.flip)
   var n_samples = paths.len
 
   # aggregated from all samples
@@ -498,6 +519,14 @@ proc read_extracted*(paths: seq[string], min_ab: float, min_depth: int,
     discard f.readData(nsites.addr, nsites.sizeof.int)
     discard f.readData(nxsites.addr, nxsites.sizeof.int)
     discard f.readData(nysites.addr, nysites.sizeof.int)
+    if sites_path != "":
+      for bucket in [("autosomal", nsites.int, flips.len),
+                     ("X", nxsites.int, x_flips.len),
+                     ("Y", nysites.int, expected_y_sites)]:
+        if bucket[1] != bucket[2]:
+          f.close()
+          raise newException(ValueError,
+              &"[somalier] extracted input {p} has {bucket[1]} {bucket[0]} sites, expected {bucket[2]} from --sites")
     if i > 0:
       doAssert nsites == last_nsites
       doAssert nxsites == last_nxsites
@@ -524,7 +553,7 @@ proc read_extracted*(paths: seq[string], min_ab: float, min_depth: int,
 
     f.close()
 
-    result.fill_sample_info(i, min_ab, min_depth, unk2hr)
+    result.fill_sample_info(i, min_ab, min_depth, unk2hr, flips, x_flips)
 
 const missing = [".", "0", "-9", ""]
 
@@ -852,12 +881,12 @@ proc write_sample(fh: File, stats: seq[Stat4], gt_counts: array[5, seq[uint16]],
   fh.write(&"{L.sample_sex.getOrDefault(sample.id, \"-9\")}\t")
   fh.write(&"{stats[i].gtdp.mean:.1f}\t{stats[i].gtdp.standard_deviation():.1f}\t")
   fh.write(&"{stats[i].dp.mean:.1f}\t{stats[i].dp.standard_deviation():.1f}\t")
-  fh.write(&"{stats[i].ab.mean:.2f}\t{stats[i].ab.standard_deviation():.2f}\t{gt_counts[0][i]}\t{gt_counts[1][i]}\t{gt_counts[2][i]}\t{gt_counts[3][i]}\t")
+  fh.write(&"{stats[i].ab.mean:.2f}\t{stats[i].ab.standard_deviation():.2f}\t{gt_counts[0][i].int32 + stats[i].hom_ref_adjustment}\t{gt_counts[1][i]}\t{gt_counts[2][i].int32 - stats[i].hom_ref_adjustment}\t{gt_counts[3][i]}\t")
   fh.write(&"{gt_counts[4][i].float / (gt_counts[0][i] + gt_counts[1][i] + gt_counts[2][i] + gt_counts[3][i] + gt_counts[4][i]).float:.3f}\t")
   let charr_str = if charr_stats[i].contamination.classify == fcNan: "NaN" else:
       formatFloatClean(charr_stats[i].contamination.float32)
   fh.write(&"{charr_str}\t{charr_stats[i].n_sites_usable}\t")
-  fh.write(&"{stats[i].x_dp.mean:.2f}\t{stats[i].x_dp.n}\t{stats[i].x_hom_ref}\t{stats[i].x_het}\t{stats[i].x_hom_alt}\t")
+  fh.write(&"{stats[i].x_dp.mean:.2f}\t{stats[i].x_dp.n}\t{stats[i].x_hom_ref + stats[i].x_hom_ref_adjustment}\t{stats[i].x_het}\t{stats[i].x_hom_alt - stats[i].x_hom_ref_adjustment}\t")
   fh.write(&"{stats[i].y_dp.mean:.2f}\t{stats[i].y_dp.n}\n")
 
 proc look(final: relation_matrices, samples: var seq[Sample], stats: seq[Stat4],
@@ -979,9 +1008,9 @@ proc toj(sample_names: seq[string], stats: seq[Stat4], gt_counts: array[5, seq[
 
       "ab_mean": stats[i].ab.mean,
       "pct_other_alleles": 100.0 * stats[i].un.mean,
-      "n_hom_ref": gt_counts[0][i],
+      "n_hom_ref": gt_counts[0][i].int32 + stats[i].hom_ref_adjustment,
       "n_het": gt_counts[1][i],
-      "n_hom_alt": gt_counts[2][i],
+      "n_hom_alt": gt_counts[2][i].int32 - stats[i].hom_ref_adjustment,
       "n_unknown": gt_counts[3][i],
       "n_known": gt_counts[0][i] + gt_counts[1][i] + gt_counts[2][i],
       "p_middling_ab": gt_counts[4][i].float / (gt_counts[0][i] + gt_counts[1][
@@ -990,9 +1019,9 @@ proc toj(sample_names: seq[string], stats: seq[Stat4], gt_counts: array[5, seq[
       "contamination_charr_n_sites": charr_stats[i].n_sites_usable,
 
       "x_depth_mean": 2 * stats[i].x_dp.mean / stats[i].gtdp.mean,
-      "x_hom_ref": stats[i].x_hom_ref,
+      "x_hom_ref": stats[i].x_hom_ref + stats[i].x_hom_ref_adjustment,
       "x_het": stats[i].x_het,
-      "x_hom_alt": stats[i].x_hom_alt,
+      "x_hom_alt": stats[i].x_hom_alt - stats[i].x_hom_ref_adjustment,
 
       "y_depth_mean": 2 * stats[i].y_dp.mean / stats[i].gtdp.mean,
     }
@@ -1068,7 +1097,7 @@ proc rel_main*() =
   var p = newParser("somalier relate"):
     help("calculate relatedness among samples from extracted, genotype-like information")
     option("-s", "--sites",
-        help = "optional sites VCF with AF in INFO; when provided, contamination_charr is added to samples output")
+        help = "matching sites VCF with INFO/AF; required for correct sample hom-ref/hom-alt counts and contamination_charr")
     option("-g", "--groups", help = """optional path  to expected groups of samples (e.g. tumor normal pairs).
                              A group file is specified as comma-separated groups per line e.g.:
                                  normal1,tumor1a,tumor1b
@@ -1132,7 +1161,9 @@ proc rel_main*() =
   let include_all = getEnv("SOMALIER_REPORT_ALL_PAIRS") != ""
 
   var t0 = cpuTime()
-  var final = read_extracted(opts.extracted, min_ab, min_depth, unk2hr)
+  if opts.sites == "":
+    stderr.write_line "[somalier] WARNING: no --sites given to relate; sample hom-ref/hom-alt counts use alphabetical A/B allele order"
+  var final = read_extracted(opts.extracted, min_ab, min_depth, unk2hr, opts.sites)
   let charr_stats = compute_charr_stats(final.samples, final.allele_counts,
       opts.sites, min_depth, charr_hom_rate, charr_hom_alpha)
   var n_samples = final.samples.len
