@@ -20,6 +20,7 @@ nim c \
   -d:useGcAssert \
   -d:somalier_usearch \
   -d:somalier_q4_candidate_mode=q4-hnsw \
+  -d:somalier_q4_threads=2 \
   "-d:somalier_q4_candidate_output=$candidate_manifest" \
   --lineDir:on \
   --debuginfo \
@@ -66,6 +67,7 @@ cat "$workdir/q4.stderr" >&2
 
 grep -Fq "Q4 candidate mode is experimental" "$workdir/q4.stderr"
 grep -Fq "mode=q4-hnsw" "$workdir/q4.stderr"
+grep -Fq "Q4 queried with 2 thread(s)" "$workdir/q4.stderr"
 grep -Fq "Q4 candidates reciprocal=" "$workdir/q4.stderr"
 
 test "$(wc -l < "$candidate_manifest")" -eq 2
