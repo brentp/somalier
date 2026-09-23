@@ -9,12 +9,14 @@ license       = "MIT"
 
 # Dependencies
 
-requires "https://github.com/brentp/zip#dev", "nim >= 1.2.0", "hts >= 0.3.20", "https://github.com/brentp/pedfile >= 0.0.3", "https://github.com/brentp/hileup >= 0.1.0", "argparse >=0.10.1 & < 0.10.2", "lapper", "arraymancer <= 0.7.32", "https://github.com/brentp/slivar >= 0.3.4"
+requires "https://github.com/brentp/zip#dev", "nim >= 1.2.0", "hts >= 0.3.20", "https://github.com/brentp/pedfile >= 0.0.3", "https://github.com/brentp/hileup >= 0.1.0", "argparse >=0.10.1 & < 0.10.2", "lapper", "arraymancer <= 0.7.32", "https://github.com/brentp/slivar >= 0.3.4", "https://github.com/brentp/usearch-nim#v0.1.1"
 srcDir = "src"
 
 bin = @["somalier"]
 
 task test, "run the tests":
+  exec "nim c  -d:useSysAssert -d:useGcAssert --lineDir:on --debuginfo -r tests/test_pairwise"
+  exec "nim c  -d:useSysAssert -d:useGcAssert --lineDir:on --debuginfo -r tests/test_q4_config"
   exec "nim c  -d:useSysAssert -d:useGcAssert --lineDir:on --debuginfo -r tests/test_groups"
   exec "nim c  -d:useSysAssert -d:useGcAssert --lineDir:on --debuginfo -r tests/test_format_float_clean"
   exec "nim c  -d:useSysAssert -d:useGcAssert --lineDir:on --debuginfo -r tests/test_concordance.nim"
@@ -22,3 +24,4 @@ task test, "run the tests":
   exec "nim c  -d:useSysAssert -d:useGcAssert --lineDir:on --debuginfo tests/test_contamination.nim"
   exec "DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib ./tests/test_contamination"
   exec "bash tests/functional-tests.sh"
+  exec "bash tests/usearch-functional-tests.sh"
