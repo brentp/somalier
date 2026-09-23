@@ -8,6 +8,10 @@ import arraymancer
 import usearch_q4
 import std/atomics
 
+static:
+  doAssert compileOption("threads"),
+    "somalier_usearch requires Nim thread support"
+
 const
   q4_projection_version = "splitmix64-rademacher-v1"
 
@@ -286,10 +290,17 @@ proc q4_load_and_index(paths: seq[string], sites_path: string,
 
   let projection_started = epochTime()
   var projection = q4_projection_matrix(panel.sites.len)
-  let query_threads = min(threads, max(1, sample_count))
+  let requested_query_threads = min(threads, max(1, sample_count))
   var index = createQ4Index(sample_count, connectivity = hnsw_connectivity,
     expansionAdd = hnsw_ef_construction, expansionSearch = hnsw_ef_search,
-    searchThreads = query_threads)
+    searchThreads = requested_query_threads)
+  # USearch fails rather than waits when all search slots are occupied. Read
+  # back the effective capacity so a wrapper/backend adjustment cannot cause
+  # Somalier to launch more concurrent searches than the index can serve.
+  let search_slots = index.searchThreads
+  if search_slots < 1:
+    raise newException(ValueError, "USearch index has no query slots")
+  let query_workers = min(requested_query_threads, search_slots)
   var first = 0
   while first < sample_count:
     let stop = min(sample_count, first + batch_size)
@@ -316,7 +327,7 @@ proc q4_load_and_index(paths: seq[string], sites_path: string,
       sample_count: sample_count,
       wanted: wanted)
     job.next_sample.store(0)
-    var workers = newSeq[Thread[ptr q4_query_job]](query_threads)
+    var workers = newSeq[Thread[ptr q4_query_job]](query_workers)
     for worker in workers.mitems:
       createThread(worker, q4_query_worker, addr job)
     joinThreads(workers)
@@ -363,7 +374,7 @@ proc q4_load_and_index(paths: seq[string], sites_path: string,
     stderr.write_line "[somalier] wrote Q4 candidate manifest to: " &
       candidate_output_path
   result.candidates.sort
-  stderr.write_line &"[somalier] Q4 queried with {query_threads} thread(s) and filtered candidates in {epochTime() - query_started:.2f}s"
+  stderr.write_line &"[somalier] Q4 queried with {query_workers} thread(s) and filtered candidates in {epochTime() - query_started:.2f}s"
 
 proc add_forced_pairs(candidates: var seq[uint64], groups: openArray[pair],
     sample_names: openArray[string]) =

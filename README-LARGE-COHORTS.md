@@ -19,6 +19,11 @@ nimble build -d:somalier_usearch
 nim c -d:release -d:somalier_usearch src/somalier.nim
 ```
 
+The project configuration automatically enables Nim thread support for these
+builds. `somalier_q4_threads` controls both the number of query workers and the
+number of USearch search slots reserved for them; the worker count never
+exceeds that slot capacity.
+
 ## Selecting exhaustive or sparse scoring
 
 
