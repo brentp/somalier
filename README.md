@@ -59,6 +59,13 @@ For *huge* sample-sets, if you run into a bash error for *argument list too long
 glob strings like:  `"/path/to/set-a/*.somalier" "/path/to/set-b/*.somalier"`, or use a `.list` file containing one
 `.somalier` path per line: `somalier relate --sites sites.vcf.gz samples.list`.
 
+Large-cohort Q4/HNSW candidate search is available in builds made with
+`-d:somalier_usearch`. See [Large-cohort relatedness](README-LARGE-COHORTS.md)
+for build instructions, method and output behavior, validation results, memory
+estimates, and all compile-time controls. The authoritative defaults and
+detailed constraints live in the
+[Q4 configuration reference](src/somalierpkg/usearch/q4_config.nim).
+
 ## Example Output
 
 + Interactive output from `somalier relate` is [here](https://brentp.github.io/somalier/ex.html)

@@ -45,7 +45,7 @@ jobs:
         with:
           nim-version: "2.2.4"
 
-      - name: Run Tests
+      - name: Run exhaustive and USearch test suites
         env:
           LD_LIBRARY_PATH: /usr/local/lib
         run: nimble test -y

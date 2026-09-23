@@ -1,8 +1,9 @@
 import os
 import strformat
 import random
-import bitops
 import bitset
+import pairwise
+import ./usearch/q4_config
 import times
 import streams
 import algorithm
@@ -52,6 +53,12 @@ type relation_matrices = object
   gt_counts: array[5, seq[uint16]]
   genotypes: seq[genotypes]
   x_genotypes: seq[genotypes]
+  # Q4 candidate mode stores fixed-width genotype words in two flat arenas.
+  # The exhaustive path continues to use genotypes/x_genotypes unchanged.
+  autosomal_arena: seq[uint64]
+  x_arena: seq[uint64]
+  autosomal_words: int
+  x_words: int
 
 type relation = object
   sample_a: string
@@ -88,65 +95,9 @@ type relations = object
   relatedness: seq[float32]
   n: seq[uint16]
 
-proc clamp01(x: float32): float32 {.inline.} =
-  result = max(0'f32, min(1'f32, x))
-
-proc stretch_concordance(x: float32): float32 {.inline.} =
-  const anchor = 0.4'f32
-  if x <= anchor:
-    return x
-  let scaled = (x - anchor) / (1'f32 - anchor)
-  result = anchor + (1'f32 - anchor) * cbrt(scaled)
-
-proc raw_hom_alt_concordance(r: relation): float32 {.inline.} =
-  result = (r.shared_hom_alts.float32 - 2'f32 * r.ibs0.float32) / max(1'u16,
-      min(r.hom_alts_a, r.hom_alts_b)).float32
-
-proc p_middling_ab(rm: relation_matrices, i: int): float32 {.inline.} =
-  let total = max(1'u16, rm.gt_counts[0][i] + rm.gt_counts[1][i] +
-      rm.gt_counts[2][i] + rm.gt_counts[3][i] + rm.gt_counts[4][i]).float32
-  result = rm.gt_counts[4][i].float32 / total
-
-## Estimate pairwise genotype concordance from homozygous marker agreement.
-## This stays useful for noisy tumor/RNA comparisons by restricting the denominator
-## to homozygous sites that are callable in both samples, so missingness and
-## heterozygous dropout do not dominate the score.
-proc inferred_hom_concordance(rm: relation_matrices, j: int, k: int): float32 {.inline.} =
-  let gj = rm.genotypes[j]
-  let gk = rm.genotypes[k]
-  var j_ref_sites = 0
-  var k_ref_sites = 0
-  var matches = 0
-  for idx in 0..gj.hom_ref.high:
-    let j_known = gj.hom_ref[idx] or gj.het[idx] or gj.hom_alt[idx]
-    let k_known = gk.hom_ref[idx] or gk.het[idx] or gk.hom_alt[idx]
-    let j_hom = gj.hom_ref[idx] or gj.hom_alt[idx]
-    let k_hom = gk.hom_ref[idx] or gk.hom_alt[idx]
-    # Count homozygous sites in each sample only when the other sample is callable there.
-    # The denominator later uses the smaller callable-homozygous set to stay symmetric.
-    j_ref_sites += countSetBits(j_hom and k_known).int
-    k_ref_sites += countSetBits(k_hom and j_known).int
-    # A concordant site is a matching homozygous state, either ref/ref or alt/alt.
-    matches += countSetBits((gj.hom_ref[idx] and gk.hom_ref[idx]) or
-        (gj.hom_alt[idx] and gk.hom_alt[idx])).int
-  let denom = max(1, min(j_ref_sites, k_ref_sites))
-  result = matches.float32 / denom.float32
-
 proc rel(r: relation): float64 {.inline.} =
   return 2 * (r.shared_hets.float64 - 2 * r.ibs0.float64) / max(1,
       r.het_ab.float64)
-
-proc adjusted_concordance(rm: relation_matrices, rel: relation, j: int,
-    k: int): float32 {.inline.} =
-  let base = rm.inferred_hom_concordance(j, k)
-  let hom_alt = clamp01(rel.raw_hom_alt_concordance)
-  let pm = (rm.p_middling_ab(j) + rm.p_middling_ab(k)) / 2'f32
-  # Low hom-alt concordance is a useful discordance signal, and p_middling_ab
-  # captures noisy allele balances that often accompany problematic tumor/RNA pairs.
-  let low_hom_alt_penalty = max(0'f32, 0.70'f32 - hom_alt + 2'f32 * pm)
-  # Stretch only the upper range so clearly matching pairs cluster near 1.0 while
-  # leaving the low-concordance region anchored around the 0.4 cutoff.
-  result = stretch_concordance(clamp01(base - low_hom_alt_penalty))
 
 proc add*(rt: var seq[relations], rel: relation, expected_relatedness: float) =
 
@@ -279,6 +230,52 @@ proc readGroups(path: string, existing_groups: var seq[pair]): seq[pair] =
 proc n_samples(r: relation_matrices): int {.inline.} =
   return r.samples.len
 
+proc make_pair_sample(r: relation_matrices, index: int): pair_sample {.inline.} =
+  if r.autosomal_arena.len > 0:
+    let base = index * 3 * r.autosomal_words
+    result.autosomal.hom_ref = bitset_view(
+      words: cast[ptr UncheckedArray[uint64]](unsafeAddr r.autosomal_arena[base]),
+      len: r.autosomal_words)
+    result.autosomal.het = bitset_view(
+      words: cast[ptr UncheckedArray[uint64]](unsafeAddr r.autosomal_arena[base + r.autosomal_words]),
+      len: r.autosomal_words)
+    result.autosomal.hom_alt = bitset_view(
+      words: cast[ptr UncheckedArray[uint64]](unsafeAddr r.autosomal_arena[base + 2 * r.autosomal_words]),
+      len: r.autosomal_words)
+    let x_base = index * 3 * r.x_words
+    if r.x_words > 0:
+      result.x.hom_ref = bitset_view(
+        words: cast[ptr UncheckedArray[uint64]](unsafeAddr r.x_arena[x_base]),
+        len: r.x_words)
+      result.x.het = bitset_view(
+        words: cast[ptr UncheckedArray[uint64]](unsafeAddr r.x_arena[x_base + r.x_words]),
+        len: r.x_words)
+      result.x.hom_alt = bitset_view(
+        words: cast[ptr UncheckedArray[uint64]](unsafeAddr r.x_arena[x_base + 2 * r.x_words]),
+        len: r.x_words)
+  else:
+    result.autosomal = r.genotypes[index].to_genotype_view
+    result.x = r.x_genotypes[index].to_genotype_view
+  for genotype in 0 ..< r.gt_counts.len:
+    result.gt_counts[genotype] = r.gt_counts[genotype][index]
+
+proc to_relation(score: pair_score): relation {.inline.} =
+  relation(
+    concordance: score.concordance,
+    hets_a: score.hets_a,
+    hets_b: score.hets_b,
+    hom_alts_a: score.hom_alts_a,
+    hom_alts_b: score.hom_alts_b,
+    shared_hom_alts: score.shared_hom_alts,
+    shared_hets: score.shared_hets,
+    het_ab: score.het_ab,
+    ibs0: score.ibs0,
+    ibs2: score.ibs2,
+    x_ibs0: score.x_ibs0,
+    x_ibs2: score.x_ibs2,
+    n: score.n,
+  )
+
 proc relatedness(r: var relation_matrices, j: int,
     k: int): relation {.inline.} =
   var j = j
@@ -287,14 +284,14 @@ proc relatedness(r: var relation_matrices, j: int,
     let tmp = j
     j = k
     k = tmp
-  let hets_k = r.gt_counts[1][k]
-  let hets_j = r.gt_counts[1][j]
+  let
+    first = r.make_pair_sample(j)
+    second = r.make_pair_sample(k)
 
-  if r.n[j * r.n_samples + k] > 0'u16: # used previously calculated data
-    return relation( #sample_a: sample_names[j],
-                 #sample_b: sample_names[k],
-      hets_a: hets_j, hets_b: hets_k,
-      hom_alts_a: r.gt_counts[2][j], hom_alts_b: r.gt_counts[2][k],
+  if r.n.len > 0 and r.n[j * r.n_samples + k] > 0'u16: # used previously calculated data
+    var score = pair_score(
+      hets_a: first.gt_counts[1], hets_b: second.gt_counts[1],
+      hom_alts_a: first.gt_counts[2], hom_alts_b: second.gt_counts[2],
       ibs0: r.ibs[j * r.n_samples + k],
       shared_hets: r.ibs[k * r.n_samples + j],
       shared_hom_alts: r.shared_hom_alts[j * r.n_samples + k],
@@ -304,34 +301,23 @@ proc relatedness(r: var relation_matrices, j: int,
       x_ibs0: r.x[j * r.n_samples + k],
       x_ibs2: r.x[k * r.n_samples + j],
     )
+    score.concordance = adjusted_concordance(first, second, score)
+    return score.to_relation
 
-  let ir = r.genotypes[j].IBS(r.genotypes[k])
+  let score = score_pair(first, second)
+  # Sparse Q4 mode deliberately has no N*N matrices.
+  if r.n.len == 0:
+    return score.to_relation
   # now fill the matrices so they can be used from javascript
-  r.ibs[j * r.n_samples + k] = ir.IBS0.uint16
-  r.ibs[k * r.n_samples + j] = ir.shared_hets.uint16
-  r.n[j * r.n_samples + k] = ir.N.uint16
-  r.n[k * r.n_samples + j] = ir.IBS2.uint16
-  r.shared_hom_alts[j * r.n_samples + k] = ir.shared_hom_alts.uint16
-  r.shared_hom_alts[k * r.n_samples + j] = min(uint16.high.int32,
-      ir.het_ab).uint16
-
-  let xir = r.x_genotypes[j].XIBS(r.x_genotypes[k])
-  r.x[j * r.n_samples + k] = xir.IBS0.uint16
-  r.x[k * r.n_samples + j] = xir.IBS2.uint16
-
-  result = relation( #sample_a: sample_names[j],
-                 #sample_b: sample_names[k],
-    hets_a: hets_j, hets_b: hets_k,
-    hom_alts_a: r.gt_counts[2][j], hom_alts_b: r.gt_counts[2][k],
-    ibs0: ir.IBS0.uint16,
-    shared_hets: ir.shared_hets.uint16,
-    shared_hom_alts: ir.shared_hom_alts.uint16,
-    ibs2: ir.IBS2.uint16,
-    n: ir.N.uint16,
-    het_ab: min(uint16.high.int32, ir.het_ab).uint16,
-    x_ibs0: xir.IBS0.uint16,
-    x_ibs2: xir.IBS2.uint16,
-    )
+  r.ibs[j * r.n_samples + k] = score.ibs0
+  r.ibs[k * r.n_samples + j] = score.shared_hets
+  r.n[j * r.n_samples + k] = score.n
+  r.n[k * r.n_samples + j] = score.ibs2
+  r.shared_hom_alts[j * r.n_samples + k] = score.shared_hom_alts
+  r.shared_hom_alts[k * r.n_samples + j] = score.het_ab
+  r.x[j * r.n_samples + k] = score.x_ibs0
+  r.x[k * r.n_samples + j] = score.x_ibs2
+  result = score.to_relation
 
 iterator relatedness(r: var relation_matrices, grouped: var seq[pair]): tuple[
     r: relation, i: int, j: int] =
@@ -343,7 +329,6 @@ iterator relatedness(r: var relation_matrices, grouped: var seq[pair]): tuple[
       var rel = r.relatedness(j, k)
       rel.sample_a = sample_a
       rel.sample_b = sample_names[k]
-      rel.concordance = r.adjusted_concordance(rel, j, k)
       if rel.rel > 0.125:
         grouped.add((rel.sample_a, rel.sample_b, rel.rel))
       yield (rel, j, k)
@@ -1087,6 +1072,9 @@ proc update_with_lists(files: var seq[string]) =
       quit "[somalier] unable to open list file: " & path
   files = expanded
 
+when defined(somalier_usearch):
+  include ./usearch/sparse_relate
+
 proc rel_main*() =
   ## need to track samples names from bams first, then vcfs since
   ## thats the order for the alts array.
@@ -1157,6 +1145,21 @@ proc rel_main*() =
 
   if not opts.output_prefix.endswith(".") or opts.output_prefix.endswith("/"):
     opts.output_prefix &= '.'
+
+  if use_q4_prefilter(opts.extracted.len):
+    when defined(somalier_usearch):
+      if opts.sites == "":
+        quit &"[somalier] --sites is required for Q4/HNSW pair filtering, selected for {opts.extracted.len} samples by the compiled Q4 configuration"
+      if unk2hr:
+        quit "[somalier] -u/--unknown is incompatible with Q4/HNSW pair filtering"
+      if getEnv("SOMALIER_AB_HOM_CUTOFF") != "":
+        quit "[somalier] SOMALIER_AB_HOM_CUTOFF is incompatible with Q4/HNSW pair filtering; use the Q4 compile-time hom cutoffs"
+      run_q4_relate(opts.extracted, opts.sites, opts.groups, opts.ped,
+        opts.output_prefix, opts.sample_prefix, min_depth, min_ab,
+        charr_hom_rate, charr_hom_alpha, opts.infer)
+      return
+    else:
+      quit &"[somalier] {opts.extracted.len} samples require Q4/HNSW pair filtering under the compiled configuration, but this binary was built without USearch; rebuild with -d:somalier_usearch or explicitly compile somalier_q4_candidate_mode=exhaustive"
 
   let include_all = getEnv("SOMALIER_REPORT_ALL_PAIRS") != ""
 
