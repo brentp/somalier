@@ -3,6 +3,7 @@
 [![Actions Status](https://github.com/brentp/somalier/workflows/Docker%20Image%20CI/badge.svg)](https://github.com/brentp/somalier/actions)
 [![Cite](https://img.shields.io/badge/cite-genome%20medicine-blue)](https://genomemedicine.biomedcentral.com/articles/10.1186/s13073-020-00761-2)
 [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/somalier/README.html)
+[![Homebrew](https://img.shields.io/homebrew/v/somalier)](https://formulae.brew.sh/formula/somalier)
 
 ## Quick Start 
 `somalier` makes checking any number of samples for identity easy **directly from the alignments** or from jointly-called VCFs:
