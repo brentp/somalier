@@ -20,6 +20,7 @@ suite "Q4 compile-time defaults":
     check neighbor_count == 40
     check require_reciprocal
     check direct_cosine_floor == 0.20'f32
+    check one_sided_cosine_floor == 0.30'f32
     check rescue_cosine_floor == 0.11'f32
     check quantization_clip == 3.5
     check quantization_scale == 2.0

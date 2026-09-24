@@ -89,18 +89,22 @@ const
   ## with `-d:somalier_q4_ef_search=120`.
   hnsw_ef_search* {.intdefine: "somalier_q4_ef_search".} = 80
 
-  ## Number of non-self neighbors requested for each sample. With reciprocal
-  ## admission, the undirected graph contains at most `N * topK / 2` pairs;
-  ## union admission contains at most `N * topK`. Raising top-K can recover
-  ## relatives hidden by dense local neighborhoods, while increasing query
+  ## Number of non-self neighbors requested for each sample. Admitted pairs are
+  ## bounded by `N * topK` in either mode; with reciprocal admission, pairs in
+  ## the rescue band are further bounded by `N * topK / 2`. A run logs how many
+  ## samples filled all top-K slots above the one-sided floor. Raising top-K
+  ## can recover relatives hidden by dense local neighborhoods, while increasing query
   ## output, neighbor-list memory, and exact candidate checks. Override with
   ## `-d:somalier_q4_top_k=60`.
   neighbor_count* {.intdefine: "somalier_q4_top_k".} = 40
 
   ## Candidate queue rule, encoded as an integer compile-time define. `1`
-  ## admits an edge only when both samples retrieve each other; `0` admits the
-  ## union of directed top-K results. Reciprocal mode is substantially more
-  ## selective. Override with `-d:somalier_q4_reciprocal=0` for union mode.
+  ## requires both samples to retrieve each other below the one-sided cosine
+  ## floor. Stronger pairs are admitted when either sample retrieves the other,
+  ## so they are not lost to a top-K list crowded by ties or a large cluster.
+  ## `0` admits the union of directed top-K results at every cosine. Reciprocal
+  ## mode is substantially more selective for weak pairs. Override with
+  ## `-d:somalier_q4_reciprocal=0` for union mode.
   require_reciprocal_int* {.intdefine: "somalier_q4_reciprocal".} = 1
 
   ## Exact packed-Q4 cosine at or above this value is sent directly to exact
@@ -109,6 +113,14 @@ const
   ## usually increases recall and candidate count. Override with
   ## `-d:somalier_q4_direct_cosine_milli=180`.
   direct_cosine_milli* {.intdefine: "somalier_q4_direct_cosine_milli".} = 200
+
+  ## Higher direct-scoring threshold for a pair retrieved by only one sample
+  ## when reciprocal mode is enabled. This limits candidate growth from dense
+  ## neighborhoods while retaining very strong one-sided matches. It must be
+  ## at least `direct_cosine_milli`. Override with
+  ## `-d:somalier_q4_one_sided_cosine_milli=250`.
+  one_sided_cosine_milli* {.
+    intdefine: "somalier_q4_one_sided_cosine_milli".} = 300
 
   ## Lower edge of the positional-rescue band, in cosine thousandths. Pairs
   ## below this value are discarded. Pairs from this value up to, but not
@@ -199,6 +211,8 @@ const
   require_reciprocal* = require_reciprocal_int == 1
   ## Direct cosine threshold converted from thousandths to float32.
   direct_cosine_floor* = direct_cosine_milli.float32 / 1000'f32
+  ## One-sided direct cosine threshold converted from thousandths to float32.
+  one_sided_cosine_floor* = one_sided_cosine_milli.float32 / 1000'f32
   ## Rescue cosine threshold converted from thousandths to float32.
   rescue_cosine_floor* = rescue_cosine_milli.float32 / 1000'f32
   ## Quantization clipping limit converted from thousandths to float64.
@@ -238,6 +252,7 @@ const
     ";top_k=" & $neighbor_count &
     ";reciprocal=" & $require_reciprocal_int &
     ";direct_milli=" & $direct_cosine_milli &
+    ";one_sided_milli=" & $one_sided_cosine_milli &
     ";rescue_milli=" & $rescue_cosine_milli &
     ";clip_milli=" & $quantization_clip_milli &
     ";scale_milli=" & $quantization_scale_milli &
@@ -278,7 +293,9 @@ static:
   doAssert require_reciprocal_int in 0 .. 1,
     "somalier_q4_reciprocal must be 0 or 1"
   doAssert rescue_cosine_milli >= -1000 and direct_cosine_milli <= 1000 and
-    rescue_cosine_milli < direct_cosine_milli,
+    one_sided_cosine_milli <= 1000 and
+    rescue_cosine_milli < direct_cosine_milli and
+    direct_cosine_milli <= one_sided_cosine_milli,
     "Q4 cosine thresholds must be ordered and within cosine range"
   doAssert quantization_clip_milli > 0 and quantization_scale_milli > 0 and
     quantization_clip_milli * quantization_scale_milli <= 7_000_000,

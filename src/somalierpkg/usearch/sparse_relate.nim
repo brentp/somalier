@@ -26,6 +26,8 @@ type
     direct_count: int
     rescued_count: int
     reciprocal_count: int
+    one_sided_direct_count: int
+    saturated_count: int
 
   q4_query_job = object
     index: ptr Q4Index
@@ -346,23 +348,39 @@ proc q4_load_and_index(paths: seq[string], sites_path: string,
         candidate_output_path)
     candidate_output.write_line "sample_a\tsample_b\tq4_cosine\tadmission"
   for first in 0 ..< sample_count:
+    # A full top-K list whose last neighbor still clears the one-sided floor may
+    # have dropped equally strong neighbors (e.g. many copies of one control
+    # sample). Count these so saturation is visible in the log.
+    if wanted < sample_count - 1 and counts[first] == wanted and
+        index.cosineById(first.uint32,
+        directed[first * wanted + wanted - 1]) >= one_sided_cosine_floor:
+      result.saturated_count.inc
     for i in 0 ..< counts[first]:
       let second = directed[first * wanted + i].int
       let reciprocal = q4_contains(directed, second * wanted, counts[second],
         first.uint32)
-      if require_reciprocal:
-        if second <= first or not reciprocal: continue
-      elif reciprocal and second < first:
-        continue
+      # Each edge is visited once: a mutual edge from its lower index, a
+      # one-sided edge from the only sample that retrieved it.
+      if reciprocal and second < first: continue
       let low = min(first, second)
       let high = max(first, second)
-      result.reciprocal_count.inc
+      if reciprocal: result.reciprocal_count.inc
       let cosine = index.cosineById(low.uint32, high.uint32)
-      if cosine >= direct_cosine_floor:
+      let one_sided = require_reciprocal and not reciprocal
+      if cosine >= direct_cosine_floor and
+          (not one_sided or cosine >= one_sided_cosine_floor):
+        # Reciprocity is a specificity control for weak pairs only. A strong
+        # pair must not be lost because the other sample's top-K list is
+        # crowded by ties or a large cluster, so direct pairs are admitted
+        # from either direction.
         result.direct_count.inc
         result.candidates.add(pack_pair(low, high))
+        if one_sided: result.one_sided_direct_count.inc
+        let reason = if one_sided: "direct_one_sided" else: "direct"
         if candidate_output_path.len > 0:
-          candidate_output.write_line &"{result.final.samples[low]}\t{result.final.samples[high]}\t{cosine:.7f}\tdirect"
+          candidate_output.write_line &"{result.final.samples[low]}\t{result.final.samples[high]}\t{cosine:.7f}\t{reason}"
+      elif require_reciprocal and not reciprocal:
+        continue
       elif cosine >= rescue_cosine_floor and
           q4_passes_rescue(result.final, low, high, windows):
         result.rescued_count.inc
@@ -375,6 +393,9 @@ proc q4_load_and_index(paths: seq[string], sites_path: string,
       candidate_output_path
   result.candidates.sort
   stderr.write_line &"[somalier] Q4 queried with {query_workers} thread(s) and filtered candidates in {epochTime() - query_started:.2f}s"
+  if result.saturated_count > 0:
+    stderr.write_line &"[somalier] WARNING: {result.saturated_count} sample(s) had all {wanted} Q4 neighbors at cosine >= {one_sided_cosine_floor:.3f}; " &
+      "some strong pairs involving them may be missing (raise somalier_q4_top_k)"
 
 proc add_forced_pairs(candidates: var seq[uint64], groups: openArray[pair],
     sample_names: openArray[string]) =
@@ -509,7 +530,7 @@ proc run_q4_relate(paths: seq[string], sites_path, groups_path,
     loaded.final.gt_counts, loaded.charr_stats, looker, infer)
   fh_tsv.close()
   grouped.write(output_prefix)
-  stderr.write_line &"[somalier] Q4 candidates reciprocal={loaded.reciprocal_count} direct={loaded.direct_count} rescued={loaded.rescued_count} scored={loaded.candidates.len} written={written_pairs} possible={loaded.final.samples.len.int64 * (loaded.final.samples.len - 1).int64 div 2}"
+  stderr.write_line &"[somalier] Q4 candidates reciprocal={loaded.reciprocal_count} direct={loaded.direct_count} one_sided_direct={loaded.one_sided_direct_count} saturated_samples={loaded.saturated_count} rescued={loaded.rescued_count} scored={loaded.candidates.len} written={written_pairs} possible={loaded.final.samples.len.int64 * (loaded.final.samples.len - 1).int64 div 2}"
   stderr.write_line "[somalier] wrote groups to: " & output_prefix & "groups.tsv"
   stderr.write_line "[somalier] wrote samples to: " & output_prefix & "samples.tsv"
   stderr.write_line "[somalier] wrote pair-wise relatedness metrics to: " &
