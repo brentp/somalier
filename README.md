@@ -210,7 +210,7 @@ This creates an HTML page with a Plotly plot where the x-axis is the autosomal s
 
 ## Install
 
-Somalier is available via bioconda, see [here](https://bioconda.github.io/recipes/somalier/README.html).
+Somalier is available via bioconda, see [here](https://bioconda.github.io/recipes/somalier/README.html), or via Homebrew with `brew install somalier`.
 
 Alternatively, you can get a static binary from [here](https://github.com/brentp/somalier/releases).
 
