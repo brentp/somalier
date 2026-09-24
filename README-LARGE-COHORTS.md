@@ -55,11 +55,15 @@ The validated default method:
 3. Normalizes, clips, quantizes, and packs two signed 4-bit coordinates per
    byte. Each default sketch occupies 2,052 bytes including its squared norm.
 4. Builds an in-memory HNSW index with `M=32` and `efConstruction=400`.
-5. Queries 40 neighbors per sample with `efSearch=80` and keeps reciprocal
-   neighbors.
-6. Sends pairs with packed-Q4 cosine at least 0.20 directly to exact scoring.
-7. For cosine from 0.11 through less than 0.20, admits pairs only when one of
-   the two 176-site positional-window tilings passes the rescue rules.
+5. Queries 40 neighbors per sample with `efSearch=80`.
+6. Sends reciprocal pairs with packed-Q4 cosine at least 0.20 directly to exact
+   scoring. A one-sided retrieval requires cosine at least 0.30, so a very
+   strong pair survives when one sample's top-K list is filled by ties or a
+   large cluster (for example, many copies of one control sample) without
+   broadly admitting weaker one-sided neighbors.
+7. For cosine from 0.11 through less than 0.20, admits pairs only when both
+   samples retrieved each other and one of the two 176-site positional-window
+   tilings passes the rescue rules.
 8. Scores every admitted or pedigree-forced pair with Somalier's exact
    relatedness implementation.
 
@@ -95,15 +99,16 @@ compile-time defines are integers.
 | `somalier_q4_projection_batch_size` | `256` | Samples per projection batch; trades working memory for throughput without changing candidates. |
 | `somalier_q4_threads` | `1` | Concurrent HNSW queries and reserved search slots. |
 | `somalier_q4_html_max_samples` | `10000` | Largest sparse cohort receiving HTML; zero disables sparse HTML. |
-| `somalier_q4_candidate_output` | empty | Optional TSV path for every admitted pair, Q4 cosine, and direct/rescue reason. The file is overwritten each run. |
+| `somalier_q4_candidate_output` | empty | Optional TSV path for every admitted pair, Q4 cosine, and admission reason (`direct`, `direct_one_sided`, or `rescue`). The file is overwritten each run. |
 | `usearchQ4Dimensions` | `4096` | Projection coordinates and packed-sketch size; must be positive and even. |
 | `somalier_q4_projection_seed` | `1729` | Seed for the deterministic Rademacher projection. |
 | `somalier_q4_m` | `32` | HNSW graph connectivity; affects index memory, construction, and retrieval. |
 | `somalier_q4_ef_construction` | `400` | HNSW candidate breadth while constructing the graph. |
 | `somalier_q4_ef_search` | `80` | HNSW expansion during neighbor queries; normally at least top K. |
 | `somalier_q4_top_k` | `40` | Non-self neighbors requested for each sample. |
-| `somalier_q4_reciprocal` | `1` | `1` requires mutual retrieval; `0` uses the union of directed neighbors. |
+| `somalier_q4_reciprocal` | `1` | `1` requires mutual retrieval below the one-sided cosine floor; `0` uses the union of directed neighbors at every cosine. |
 | `somalier_q4_direct_cosine_milli` | `200` | Q4 cosine threshold for direct exact scoring; `200` means 0.200. |
+| `somalier_q4_one_sided_cosine_milli` | `300` | Higher direct threshold for one-sided retrievals in reciprocal mode; `300` means 0.300. |
 | `somalier_q4_rescue_cosine_milli` | `110` | Lower cosine boundary for positional rescue; pairs below it are discarded. |
 | `somalier_q4_clip_milli` | `3500` | Absolute normalized-coordinate clipping limit; `3500` means 3.5. |
 | `somalier_q4_scale_milli` | `2000` | Multiplier before rounding to signed Q4; `2000` means 2.0. |
@@ -145,26 +150,32 @@ The most useful parameters to vary are:
 3. **`somalier_q4_top_k`:** controls how many neighbors each sample retrieves
    before reciprocity and cosine filtering. Larger K can recover relatives
    hidden in dense neighborhoods, but increases query storage and the maximum
-   reciprocal candidate count (`N*K/2`).
-4. **`somalier_q4_reciprocal`:** `1` requires both samples to retrieve each
-   other and is the main specificity control. `0` accepts the directed-neighbor
-   union, usually improving recall while substantially increasing candidates.
-5. **`usearchQ4Dimensions`:** controls projection capacity and packed-vector
+   candidate count (`N*K`). The run log reports `saturated_samples`, samples
+   whose entire top-K list clears the one-sided floor; a nonzero count means K
+   may be too small for that cohort.
+4. **`somalier_q4_one_sided_cosine_milli`:** controls the stronger threshold
+   for non-reciprocal pairs when reciprocal mode is enabled. Lowering it can
+   recover asymmetric retrievals but may substantially increase candidates.
+5. **`somalier_q4_reciprocal`:** `1` requires both samples to retrieve each
+   other below the one-sided floor. `0` accepts the directed-neighbor union at
+   every cosine, usually improving recall while substantially increasing
+   candidates.
+6. **`usearchQ4Dimensions`:** controls projection capacity and packed-vector
    size. More dimensions may preserve relatedness signal better, while index
    memory, projection work, and vector-distance work grow approximately
    linearly.
-6. **`somalier_q4_projection_seed`:** changes the deterministic random
+7. **`somalier_q4_projection_seed`:** changes the deterministic random
    projection without changing its size. Sweep several fixed seeds and report
    worst-seed performance; selecting the best seed on one cohort risks
    overfitting.
-7. **`somalier_q4_ef_search`:** controls how broadly HNSW explores the graph at
+8. **`somalier_q4_ef_search`:** controls how broadly HNSW explores the graph at
    query time. Increasing it can recover true top-K neighbors missed by the
    approximate search, but does not change K and costs query time.
-8. **`somalier_q4_m` and `somalier_q4_ef_construction`:** M controls graph
+9. **`somalier_q4_m` and `somalier_q4_ef_construction`:** M controls graph
    connectivity and persistent index memory; `ef_construction` controls search
    breadth while building that graph. Increasing either can improve graph
    quality, with M costing more memory and both costing build time.
-9. **`somalier_q4_rescue_width` and `somalier_q4_rescue_offset`:** width is the
+10. **`somalier_q4_rescue_width` and `somalier_q4_rescue_offset`:** width is the
    number of ordered panel sites per rescue window; offset starts the second
    tiling. Wider windows are generally more specific but more sensitive to
    missing calls and errors. When changing width, normally keep the offset near
