@@ -2,9 +2,10 @@ include somalierpkg/relate
 
 import unittest
 
-proc sample_json(r: relation_matrices): JsonNode =
-  parseJson(toj(r.samples, r.stats, r.gt_counts, @[CharrStats()],
-      newTable[string, string]()))[0]
+proc sample_json(r: relation_matrices, sample_i: int = 0): JsonNode =
+  parseJson(toj(r.samples, r.stats, r.gt_counts,
+      newSeq[CharrStats](r.samples.len),
+      newTable[string, string]()))[sample_i]
 
 proc reported_counts(r: relation_matrices, prefix: string = "n_"): seq[int] =
   let sample = r.sample_json
@@ -67,8 +68,34 @@ suite "reference-oriented sample counts":
     check imputed.reported_counts == @[21, 0, 0]
     check imputed.gt_counts[3][0] == 0
     let legacy_unknown = read_extracted(@[sketch_path], 0.3, 7, true)
-    check imputed.gt_counts == legacy_unknown.gt_counts
-    check imputed.genotypes == legacy_unknown.genotypes
+    check imputed.gt_counts[0][0] == legacy_unknown.gt_counts[0][0] - 1
+    check imputed.gt_counts[2][0] == legacy_unknown.gt_counts[2][0] + 1
+
+  test "unknowns are imputed as reference in pairwise comparisons":
+    writeFile(sites_path, "1\t1\t.\tG\tC\n1\t2\t.\tG\tT\n")
+    let called_path = workdir / "called.somalier"
+    let unknown_path = workdir / "unknown.somalier"
+    # The called sample is hom-alt in REF/ALT orientation at both sites. In
+    # stored A/B orientation that is A/A at the flipped site and B/B otherwise.
+    counts(sites: @[allele_count(nref: 80), allele_count(nalt: 80)]).
+        write_counts("called", called_path)
+    counts(sites: @[allele_count(), allele_count()]).
+        write_counts("unknown", unknown_path)
+
+    var oriented = read_extracted(@[called_path, unknown_path], 0.3, 7, true,
+        sites_path)
+    let pair = oriented.relatedness(0, 1)
+    check pair.ibs0 == 2
+    check pair.ibs2 == 0
+    check pair.tsv.split('\t')[3..4] == @["2", "0"]
+    check oriented.reported_counts == @[0, 0, 2]
+    check oriented.sample_json["n_hom_ref"].getInt == 0
+    check oriented.sample_json(1)["n_hom_ref"].getInt == 2
+
+    var legacy = read_extracted(@[called_path, unknown_path], 0.3, 7, true)
+    let legacy_pair = legacy.relatedness(0, 1)
+    check legacy_pair.ibs0 == 1
+    check legacy_pair.ibs2 == 1
 
   test "hom-alt, het, unknown and X counts use the correct orientation":
     writeFile(sites_path, "1\t1\t.\tT\tA\n1\t2\t.\tG\tA\n" &

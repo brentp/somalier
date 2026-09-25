@@ -406,12 +406,17 @@ proc fill_sample_info(r: var relation_matrices, sample_i: int, min_ab: float,
 
   var stat = r.stats[sample_i]
   for k, c in r.allele_counts[sample_i]:
+    let flipped = flips.len > 0 and flips[k]
     var abi = c.ab(min_depth)
-    # At flipped sites, A/A removes one hom-ref and B/B adds one; hets and unknowns stay put.
-    if flips.len > 0 and flips[k]:
-      let alt = abi.alts(min_ab)
+    if abi < 0 and unk2hr:
+      # Counts are stored in alphabetical A/B order. At flipped sites REF is B,
+      # so imputing an unknown as hom-ref means B/B rather than A/A.
+      abi = if flipped: 1 else: 0
+    var alt = abi.alts(min_ab)
+    if alt < 0 and unk2hr: alt = if flipped: 2 else: 0
+    # At flipped sites, A/A removes one hom-ref and B/B adds one; hets stay put.
+    if flipped:
       if alt >= 0: stat.hom_ref_adjustment += alt.int32 - 1
-    if abi < 0 and unk2hr: abi = 0
     stat.dp.push(int(c.nref + c.nalt))
     if c.nref > 0'u32 or c.nalt > 0'u32 or c.nother > 0'u32:
       stat.un.push(c.nother.float64 / float64(c.nref + c.nalt + c.nother))
@@ -420,8 +425,6 @@ proc fill_sample_info(r: var relation_matrices, sample_i: int, min_ab: float,
       stat.ab.push(abi)
     if abi != -1:
       stat.gtdp.push(int(c.nref + c.nalt))
-    var alt = abi.alts(min_ab)
-    if alt < 0 and unk2hr: alt = 0
     if abi > 0.02 and abi < 0.98 and (abi < 0.1 or abi > 0.9):
       r.gt_counts[4][sample_i].inc
     if alt == -1:
