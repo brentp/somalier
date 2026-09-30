@@ -19,4 +19,7 @@ tests/test.fa.fai
 tests/test_concordance
 tests/test_contamination
 tests/test_format_float_clean
+tests/test_reference_counts
+tests/test_pairwise
+tests/test_q4_config
 tests/test_groups

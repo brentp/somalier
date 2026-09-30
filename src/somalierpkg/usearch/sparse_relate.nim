@@ -344,7 +344,12 @@ proc q4_load_and_index(paths: seq[string], sites_path: string,
     var projected = values * projection
     values = Tensor[float32]()
     for sample in first ..< stop:
-      discard index.add(q4_quantize(projected, sample - first))
+      try:
+        doAssert index.add(q4_quantize(projected, sample - first)) == sample.uint32,
+          "Q4 index ID does not match sample '" & result.final.samples[sample] & "'"
+      except ValueError as error:
+        error.msg &= " for sample '" & result.final.samples[sample] & "'"
+        raise
     projected = Tensor[float32]()
     first = stop
   projection = Tensor[float32]()
