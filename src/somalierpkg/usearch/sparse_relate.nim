@@ -172,19 +172,53 @@ proc q4_rescue_windows(sites: openArray[Site]): seq[q4_rescue_window] =
 
 proc q4_passes_rescue(final: relation_matrices, first, second: int,
     windows: openArray[q4_rescue_window]): bool =
+  # Windows are scored 64 sites at a time with popcounts over the genotype
+  # arena's three bitsets, instead of testing each site separately. A window
+  # starts and stops at an arbitrary site, so the first and last block are
+  # masked to the window bounds; bits past the last panel site are never set.
+  #
+  # `opposite` only grows as the window is scanned, and the window is already
+  # rejected once it passes `rescue_max_ibs0`, so the scan stops as soon as
+  # that is certain. Unrelated pairs carry IBS0 at about a fifth of their
+  # jointly called sites, so nearly every window is settled in its first block.
+  let
+    stride = final.autosomal_words
+    arena = final.autosomal_arena
+    aRef = first * 3 * stride
+    bRef = second * 3 * stride
   for window in windows:
+    let
+      firstWord = window.start shr 6
+      lastWord = (window.stop - 1) shr 6
+      lowBits = window.start and 63
+      highBits = ((window.stop - 1) and 63) + 1
+      lowMask = if lowBits == 0: high(uint64) else: not ((1'u64 shl lowBits) - 1)
+      highMask = if highBits == 64: high(uint64) else: (1'u64 shl highBits) - 1
     var joint, first_hom, second_hom, matching_hom, opposite: int
-    for site in window.start ..< window.stop:
-      let a = final.arena_call(first, site)
-      let b = final.arena_call(second, site)
-      if a < 0 or b < 0: continue
-      joint.inc
-      if a != 1: first_hom.inc
-      if b != 1: second_hom.inc
-      if a != 1 and b != 1:
-        if a == b: matching_hom.inc
-        else: opposite.inc
-    if opposite <= rescue_max_ibs0 and joint >= rescue_min_joint and
+    var over_ibs0 = false
+    for w in firstWord .. lastWord:
+      let mask = (if w == firstWord: lowMask else: high(uint64)) and
+                 (if w == lastWord: highMask else: high(uint64))
+      let
+        a0 = arena[aRef + w] and mask
+        a1 = arena[aRef + stride + w] and mask
+        a2 = arena[aRef + 2 * stride + w] and mask
+        b0 = arena[bRef + w] and mask
+        b1 = arena[bRef + stride + w] and mask
+        b2 = arena[bRef + 2 * stride + w] and mask
+      opposite += countSetBits((a0 and b2) or (a2 and b0))
+      if opposite > rescue_max_ibs0:
+        over_ibs0 = true
+        break
+      let
+        calledA = a0 or a1 or a2
+        calledB = b0 or b1 or b2
+      joint += countSetBits(calledA and calledB)
+      first_hom += countSetBits((a0 or a2) and calledB)
+      second_hom += countSetBits((b0 or b2) and calledA)
+      matching_hom += countSetBits((a0 and b0) or (a2 and b2))
+    # a window that never went over the IBS0 limit has complete counts
+    if not over_ibs0 and joint >= rescue_min_joint and
         first_hom >= rescue_min_hom and second_hom >= rescue_min_hom and
         matching_hom >= rescue_min_match:
       return true
