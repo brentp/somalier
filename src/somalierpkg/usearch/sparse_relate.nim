@@ -6,7 +6,7 @@
 
 import arraymancer
 import usearch_q4
-import std/atomics
+import std/[atomics, bitops]
 
 static:
   doAssert compileOption("threads"),
