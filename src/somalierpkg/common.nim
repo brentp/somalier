@@ -25,8 +25,11 @@ proc update_with_glob*(files: var seq[string]) =
     if files[i] == "++":
       toadd.add(files[i])
       continue
+    let nbefore = toadd.len
     for w in files[i].walkFiles:
       toadd.add(w)
+    if toadd.len == nbefore:
+      quit &"[somalier] no file found matching: {files[i]}"
 
   if files.len > 10:
     files = toadd & files[10..files.high]
