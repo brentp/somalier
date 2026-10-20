@@ -67,6 +67,10 @@ assert_equal "1" $(head -n 1 test_prefix_A/out.samples.tsv | grep -c "contaminat
 run check_relate_without_sites_warning $exe relate -o test_prefix_A/no_sites test_prefix_A/*.somalier
 assert_exit_code 0
 assert_in_stderr "WARNING: no --sites given to relate; hom-ref and hom-alt counts will not be correct"
+
+run check_relate_missing_file $exe relate -o test_prefix_A/missing test_prefix_A/*.somalier test_prefix_A/does_not_exist.somalier
+assert_exit_code 1
+assert_in_stderr "no file found matching: test_prefix_A/does_not_exist.somalier"
 rm -rf test_prefix_A test_prefix_B
 
 
