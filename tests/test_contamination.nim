@@ -111,6 +111,23 @@ suite "Exact pairwise estimator":
     check anchor_from_receiver.contamination.classify == fcNan or
         anchor_from_receiver.contamination + 0.03 < receiver_from_anchor.contamination
 
+  test "refinement lands on the likelihood maximum between coarse grid points":
+    var sites: seq[PairSiteObservation]
+    for i in 0..<100:
+      sites.add(PairSiteObservation(receiver_nref: 976, receiver_nalt: 24,
+          anchor_gt: 0'i8, log_contam_priors: log_gt_prior(0.5)))
+    var best_alpha = 0'f64
+    var best_ll = NegInf
+    for i in 0..1000:
+      let alpha = i.float64 / 1000'f64
+      let ll = pair_total_log_likelihood(sites, alpha, defaultExactErrorRate)
+      if ll > best_ll:
+        best_ll = ll
+        best_alpha = alpha
+    let stats = estimate_pair_contamination_from_sites(sites, defaultExactErrorRate)
+    check best_alpha notin [0'f64, 0.01, 0.02, 0.05, 0.1]
+    check abs(stats.contamination - best_alpha) < 0.002
+
   test "zero usable sites returns NaN":
     let stats = estimate_pair_contamination(
       @[ac(6, 0, 0)],
