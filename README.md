@@ -186,6 +186,8 @@ Note that for large cohorts, by default, `somalier relate` will subset to intere
 balloon the size of the output. By default, pairs that are expected to be unrelated and have a relatedness <= 0.05.
 If you wish to force all samples to be reported, then set the environment variable `SOMALIER_REPORT_ALL_PAIRS` to any non-empty
 value, e.g. `export SOMALIER_REPORT_ALL_PAIRS=1`
+The pairs kept beyond those are a random subset, drawn anew on each run. To draw the same subset every time, set
+the environment variable `SOMALIER_SEED` to an integer, e.g. `export SOMALIER_SEED=42`
 
 ### somalier contamination
 
