@@ -1,3 +1,8 @@
+v0.3.6
+======
++ fixes contamination search (thanks @clintval)
++ allow setting seed for subsampling (thanks @clintval)
+
 v0.3.4
 ======
 + fixes long standing bug in allele counting for **long reads**. See: https://github.com/brentp/hileup/issues/1
