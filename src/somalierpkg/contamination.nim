@@ -84,7 +84,7 @@ const
   # Approximate per-read sequencing error used in the exact likelihood.
   defaultExactErrorRate = 0.002
   # Constant used by golden-section search to shrink the refinement interval.
-  goldenRatioConjugate = 0.3819660112501051
+  goldenRatioConjugate = 0.6180339887498949
 
 proc site_log_likelihood*(nref, nalt: int, p: float64): float64
 proc to_exact_site(ac: allele_count, min_depth: int,
