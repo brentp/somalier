@@ -1093,7 +1093,14 @@ proc update_with_lists(files: var seq[string]) =
 proc rel_main*() =
   ## need to track samples names from bams first, then vcfs since
   ## thats the order for the alts array.
-  randomize()
+  let seed = getEnv("SOMALIER_SEED")
+  if seed == "":
+    randomize()
+  else:
+    try:
+      randomize(parseBiggestInt(seed))
+    except ValueError:
+      quit &"[somalier] SOMALIER_SEED must be an integer, got: {seed}"
   var argv = commandLineParams()
   if argv[0] == "relate": argv = argv[1..argv.high]
 
