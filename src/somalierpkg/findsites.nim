@@ -101,6 +101,8 @@ proc findsites_main*() =
     min_AF = parseFloat(opts.min_AF)
     field_AN = opts.AN_field
     field_AF = opts.AF_field
+    normalize_AN = field_AN != "AN"
+    normalize_AF = field_AF != "AF"
     gno:Gnotater
 
   var exclude_regions = newTable[string, seq[region]]()
@@ -118,6 +120,16 @@ proc findsites_main*() =
   if not open(vcf, opts.vcf, threads=2):
     quit "couldn't open " & opts.vcf
   vcf.set_samples(@["^"])
+  if normalize_AN:
+    try:
+      discard vcf.header.get("AN", BCF_HEADER_TYPE.BCF_HL_INFO)
+    except KeyError:
+      doAssert vcf.header.add_info("AN", "1", "Integer", "Total number of alleles in called genotypes") == Status.OK
+  if normalize_AF:
+    try:
+      discard vcf.header.get("AF", BCF_HEADER_TYPE.BCF_HL_INFO)
+    except KeyError:
+      doAssert vcf.header.add_info("AF", "A", "Float", "Alternate allele frequency in samples") == Status.OK
   var out_path = opts.output_vcf
   if not open(wtr, out_path, mode="wz", threads=1):
     quit "couldn't open stdout for writing sites"
@@ -314,12 +326,15 @@ proc findsites_main*() =
     )
     for v in us:
       var info = v.info
+      if normalize_AN:
+        if info.get(field_AN, ans) == Status.OK:
+          doAssert info.set("AN", ans) == Status.OK
+      if normalize_AF:
+        if info.get(field_AF, afs) == Status.OK:
+          doAssert info.set("AF", afs) == Status.OK
       for f in info.fields:
-        if f.name in [field_AN, field_AF]: continue
-        try:
-          discard info.delete(f.name)
-        except:
-          discard
+        if f.name in ["AN", "AF"]: continue
+        doAssert info.delete(f.name) == Status.OK
       # these make the compressed vcf smaller
       v.ID = "."
       v.QUAL = 100
