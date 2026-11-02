@@ -315,7 +315,7 @@ proc findsites_main*() =
     for v in us:
       var info = v.info
       for f in info.fields:
-        if f.name in ["AF", "AC"]: continue
+        if f.name in [field_AN, field_AF]: continue
         try:
           discard info.delete(f.name)
         except:
