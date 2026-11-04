@@ -1,3 +1,6 @@
+v0.3.7
+======
++ ensures that the correct AF and AN fields are written in `find-sites` (thanks @johanneskoester)
 v0.3.6
 ======
 + fixes contamination search (thanks @clintval)
