@@ -330,12 +330,12 @@ proc findsites_main*() =
         if info.get(field_AN, ans) == Status.OK:
           doAssert info.set("AN", ans) == Status.OK
         else:
-          info.delete("AN")
+          discard info.delete("AN")
       if normalize_AF:
         if info.get(field_AF, afs) == Status.OK:
           doAssert info.set("AF", afs) == Status.OK
         else:
-          info.delete("AF")
+          discard info.delete("AF")
       for f in info.fields:
         if f.name in ["AN", "AF"]: continue
         doAssert info.delete(f.name) == Status.OK
